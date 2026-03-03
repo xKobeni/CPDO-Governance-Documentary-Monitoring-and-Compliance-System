@@ -1,0 +1,14 @@
+import { Router } from "express";
+import { loginLimiter } from "../middlewares/rateLimit.js";
+import { requireCsrf } from "../utils/csrf.js";
+import { login, refresh, logout, me } from "../controllers/auth.controller.js";
+import { requireAuth } from "../middlewares/auth.js";
+
+const router = Router();
+
+router.post("/login", loginLimiter, login);
+router.post("/refresh", requireCsrf, refresh);
+router.post("/logout", requireCsrf, logout);
+router.get("/me", requireAuth, me);
+
+export default router;
