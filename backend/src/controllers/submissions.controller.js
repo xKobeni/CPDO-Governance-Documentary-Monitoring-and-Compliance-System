@@ -4,6 +4,7 @@ import {
   createSubmission, getSubmissionById, listSubmissions, setSubmissionStatus
 } from "../models/submissions.model.js";
 import { createReview, addVerificationCheck } from "../models/reviews.model.js";
+import { createNotification } from "../models/notifications.model.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
 const createSubmissionSchema = z.object({
@@ -120,6 +121,52 @@ export async function reviewSubmissionHandler(req, res) {
     "REVISION_REQUESTED";
 
   await setSubmissionStatus({ submissionId, status: newStatus });
+
+  // Create notification for the office user(s) who submitted
+  const notificationType = 
+    parsed.data.action === "APPROVE" ? "APPROVED" :
+    parsed.data.action === "DENY" ? "DENIED" :
+    "REVISION_REQUESTED";
+
+  const notificationTitle = 
+    parsed.data.action === "APPROVE" ? "Submission Approved" :
+    parsed.data.action === "DENY" ? "Submission Denied" :
+    "Revision Requested";
+
+  const notificationBody = parsed.data.decisionNotes || 
+    `Your submission for ${submission.item_title} has been ${notificationTitle.toLowerCase()}.`;
+
+  // Notify the user who submitted (if not the reviewer)
+  if (submission.submitted_by !== req.user.sub) {
+    await createNotification({
+      userId: submission.submitted_by,
+      type: notificationType,
+      title: notificationTitle,
+      body: notificationBody,
+      linkSubmissionId: submissionId,
+    });
+  }
+
+  // Notify other STAFF/ADMIN users (optional - so they know it's been reviewed)
+  // Get all ADMIN and STAFF users
+  const { rows: staffUsers } = await pool.query(
+    `SELECT DISTINCT u.id FROM users u
+     JOIN roles r ON r.id = u.role_id
+     WHERE r.code IN ('ADMIN', 'STAFF')
+     AND u.id != $1
+     AND u.is_active = TRUE`,
+    [req.user.sub]
+  );
+
+  for (const user of staffUsers) {
+    await createNotification({
+      userId: user.id,
+      type: notificationType,
+      title: `${notificationTitle} - ${submission.office_name}`,
+      body: `${submission.item_title} from ${submission.office_name}`,
+      linkSubmissionId: submissionId,
+    });
+  }
 
   return res.json({ review, status: newStatus });
 }
