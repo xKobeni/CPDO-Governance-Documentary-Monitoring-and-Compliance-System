@@ -56,7 +56,7 @@ export async function setSubmissionStatus({ submissionId, status }) {
   return rows[0] || null;
 }
 
-export async function listSubmissions(filters = {}) {
+export async function listSubmissions(filters = {}, limit = 20, offset = 0) {
   const { year, governanceAreaId, officeId, status } = filters;
 
   const params = [];
@@ -66,6 +66,13 @@ export async function listSubmissions(filters = {}) {
   if (officeId) { params.push(officeId); where.push(`s.office_id = $${params.length}`); }
   if (status) { params.push(status); where.push(`s.status = $${params.length}`); }
 
+  // Get total count
+  const countQuery = `SELECT COUNT(*) as total FROM submissions s ${where.length ? "WHERE " + where.join(" AND ") : ""}`;
+  const { rows: countRows } = await pool.query(countQuery, params);
+  const total = parseInt(countRows[0].total, 10);
+
+  // Get paginated data
+  params.push(limit, offset);
   const { rows } = await pool.query(
     `SELECT s.id, s.year, s.status, s.submitted_at,
             o.name as office_name,
@@ -76,9 +83,10 @@ export async function listSubmissions(filters = {}) {
      JOIN governance_areas ga ON ga.id = s.governance_area_id
      JOIN checklist_items ci ON ci.id = s.checklist_item_id
      ${where.length ? "WHERE " + where.join(" AND ") : ""}
-     ORDER BY s.submitted_at DESC`,
+     ORDER BY s.submitted_at DESC
+     LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
 
-  return rows;
+  return { rows, total };
 }

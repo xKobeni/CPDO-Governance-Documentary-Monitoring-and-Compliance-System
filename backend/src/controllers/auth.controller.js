@@ -1,8 +1,8 @@
 import { z } from "zod";
+import { nanoid } from "nanoid";
 import { env } from "../config/env.js";
 import { verifyPassword } from "../utils/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/jwt.js";
-import { setCsrfCookie } from "../utils/csrf.js";
 import { sha256 } from "../utils/tokenHash.js";
 
 import { findUserAuthByEmail, updateLastLogin } from "../models/users.model.js";
@@ -26,7 +26,6 @@ function setRefreshCookie(res, token) {
 
 function clearAuthCookies(res) {
   res.clearCookie("refresh_token", { path: "/api/auth" });
-  res.clearCookie("csrf_token", { path: "/" });
 }
 
 export async function login(req, res) {
@@ -69,13 +68,13 @@ export async function login(req, res) {
 
   // We used sid independent of DB id; that's fine. If you want DB session id as sid, tell me.
   setRefreshCookie(res, refreshToken);
-  setCsrfCookie(res, { secure: env.cookieSecure });
   await updateLastLogin(user.id);
 
   const accessToken = signAccessToken(accessPayload);
 
   return res.json({
     accessToken,
+    sessionId: session.id,
     user: {
       id: user.id,
       fullName: user.full_name,
@@ -87,8 +86,8 @@ export async function login(req, res) {
 }
 
 function cryptoRandomId() {
-  // no extra dep
-  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+  // Use nanoid for cryptographically secure random ID generation
+  return nanoid(32);
 }
 
 export async function refresh(req, res) {

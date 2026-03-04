@@ -29,3 +29,10 @@ export async function findValidSessionByHash(refreshTokenHash) {
   );
   return rows[0] || null;
 }
+
+export async function updateSessionActivity(sessionId) {
+  await pool.query(
+    `UPDATE auth_sessions SET last_activity_at = now() WHERE id = $1`,
+    [sessionId]
+  );
+}

@@ -4,6 +4,7 @@ import {
   createSubmission, getSubmissionById, listSubmissions, setSubmissionStatus
 } from "../models/submissions.model.js";
 import { createReview, addVerificationCheck } from "../models/reviews.model.js";
+import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
 const createSubmissionSchema = z.object({
   year: z.number().int().min(2000).max(2100),
@@ -71,8 +72,9 @@ export async function listSubmissionsHandler(req, res) {
   let officeId = req.query.officeId || undefined;
   if (req.user.role === "OFFICE") officeId = req.user.officeId;
 
-  const submissions = await listSubmissions({ year, governanceAreaId, officeId, status });
-  return res.json({ submissions });
+  const { limit, offset, page } = getPaginationParams(req, 20, 100);
+  const { rows, total } = await listSubmissions({ year, governanceAreaId, officeId, status }, limit, offset);
+  return res.json(formatPaginatedResponse(rows, total, page, limit));
 }
 
 const reviewSchema = z.object({

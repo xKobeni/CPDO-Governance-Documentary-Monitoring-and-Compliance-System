@@ -2,6 +2,7 @@ import { z } from "zod";
 import { hashPassword } from "../utils/password.js";
 import { getRoleByCode } from "../models/roles.model.js";
 import { createUser, listUsers, setUserActive, findUserById } from "../models/users.model.js";
+import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
 const createUserSchema = z.object({
   email: z.string().email(),
@@ -38,8 +39,9 @@ export async function createUserHandler(req, res) {
 }
 
 export async function listUsersHandler(req, res) {
-  const users = await listUsers();
-  return res.json({ users });
+  const { limit, offset, page } = getPaginationParams(req, 20, 100);
+  const { rows, total } = await listUsers(limit, offset);
+  return res.json(formatPaginatedResponse(rows, total, page, limit));
 }
 
 export async function setUserActiveHandler(req, res) {

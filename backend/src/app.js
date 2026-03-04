@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import morgan from "morgan";
 import pinoHttp from "pino-http";
+import compression from "compression";
 
 import { env } from "./config/env.js";
 import { logger } from "./config/logger.js";
@@ -17,6 +18,9 @@ export function createApp() {
   if (env.nodeEnv === "production") app.set("trust proxy", 1);
 
   app.use(helmet());
+  
+  // Compression middleware - gzip responses over 1kb
+  app.use(compression({ threshold: 1024 }));
 
   app.use(cors({
     origin: env.corsOrigin,

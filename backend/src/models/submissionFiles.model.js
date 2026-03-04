@@ -1,5 +1,18 @@
 import { pool } from "../config/db.js";
 
+export async function getSubmissionFileById(fileId) {
+  const { rows } = await pool.query(
+    `SELECT sf.id, sf.submission_id, sf.version_no, sf.file_name, sf.mime_type,
+            sf.file_size_bytes, sf.storage_key, sf.sha256, sf.uploaded_by, sf.uploaded_at,
+            s.office_id
+     FROM submission_files sf
+     JOIN submissions s ON s.id = sf.submission_id
+     WHERE sf.id = $1`,
+    [fileId]
+  );
+  return rows[0] || null;
+}
+
 export async function listFiles(submissionId) {
   const { rows } = await pool.query(
     `SELECT id, version_no, file_name, mime_type, file_size_bytes, storage_key, sha256,

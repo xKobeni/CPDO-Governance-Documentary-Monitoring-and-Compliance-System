@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
 import { audit } from "../middlewares/audit.js";
+import { longCache } from "../middlewares/caching.js";
 import {
   listTemplatesByYearHandler,
   createTemplateHandler,
@@ -13,9 +14,9 @@ const r = Router();
 
 r.use(requireAuth);
 
-// read: ADMIN/STAFF/OFFICE
-r.get("/", listTemplatesByYearHandler);
-r.get("/:templateId/items", listTemplateItemsHandler);
+// read: ADMIN/STAFF/OFFICE - cached for 1 hour
+r.get("/", longCache, listTemplatesByYearHandler);
+r.get("/:templateId/items", longCache, listTemplateItemsHandler);
 
 // write: ADMIN only
 r.post("/", requireRole("ADMIN"), audit("CREATE_TEMPLATE", "TEMPLATE"), createTemplateHandler);
