@@ -6,6 +6,7 @@ import submissionsRoutes from "./submissions.routes.js";
 import filesRoutes from "./files.routes.js";
 import notificationsRoutes from "./notifications.routes.js";
 import reportsRoutes from "./reports.routes.js";
+import dashboardRoutes from "./dashboard.routes.js";
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use("/submissions", submissionsRoutes);
 router.use("/files", filesRoutes);
 router.use("/notifications", notificationsRoutes);
 router.use("/reports", reportsRoutes);
+router.use("/dashboard", dashboardRoutes);
 
 export default router;

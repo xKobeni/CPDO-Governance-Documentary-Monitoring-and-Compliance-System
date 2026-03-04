@@ -7,6 +7,13 @@ const createCommentSchema = z.object({
   comment: z.string().min(1).max(5000),
 });
 
+function sanitizeCommentText(value) {
+  return value
+    .replace(/<[^>]*>/g, "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .trim();
+}
+
 /**
  * Create a comment on a submission
  */
@@ -29,10 +36,15 @@ export async function createCommentHandler(req, res) {
     return res.status(403).json({ message: "Forbidden" });
   }
 
+  const sanitizedComment = sanitizeCommentText(parsed.data.comment);
+  if (!sanitizedComment) {
+    return res.status(400).json({ message: "Comment cannot be empty after sanitization" });
+  }
+
   const comment = await createComment({
     submissionId,
     authorUserId: req.user.sub,
-    comment: parsed.data.comment,
+    comment: sanitizedComment,
   });
 
   return res.status(201).json({ comment });
@@ -57,8 +69,12 @@ export async function getCommentsHandler(req, res) {
 
   const { limit, offset, page } = getPaginationParams(req, 50, 100);
   const { comments, total } = await getSubmissionComments(submissionId, limit, offset);
+  const sanitizedComments = comments.map((comment) => ({
+    ...comment,
+    comment: sanitizeCommentText(comment.comment),
+  }));
 
-  return res.json(formatPaginatedResponse(comments, total, page, limit));
+  return res.json(formatPaginatedResponse(sanitizedComments, total, page, limit));
 }
 
 /**

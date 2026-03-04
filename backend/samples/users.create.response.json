@@ -1,0 +1,13 @@
+{
+  "user": {
+    "id": "b482f67d-cf8e-4bc0-a39d-dc7d8f4be7b8",
+    "email": "new.office.user@cpdo.gov.ph",
+    "full_name": "Ana Villanueva",
+    "role_id": "f3f57c44-44b4-4900-b286-7d2df97c16fb",
+    "office_id": "9b8cfa62-3bb0-4e4b-b99f-4cd6a5c14b1e",
+    "is_active": true,
+    "last_login_at": null,
+    "created_at": "2026-03-04T11:05:02.520Z",
+    "updated_at": "2026-03-04T11:05:02.520Z"
+  }
+}

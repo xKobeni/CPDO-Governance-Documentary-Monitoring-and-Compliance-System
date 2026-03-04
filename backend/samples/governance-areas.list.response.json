@@ -1,0 +1,28 @@
+{
+  "governanceAreas": [
+    {
+      "id": "2d15ec8d-e465-4ff3-bc85-b50c66f67e4a",
+      "code": "GA01",
+      "name": "Transparency and Accountability",
+      "description": "Public disclosure and accountability measures",
+      "sort_order": 1,
+      "is_active": true
+    },
+    {
+      "id": "f3e5d2f0-5320-4f17-8c58-6c6309c2d11e",
+      "code": "GA03",
+      "name": "Financial Stewardship",
+      "description": "Budget discipline and fiscal controls",
+      "sort_order": 3,
+      "is_active": true
+    },
+    {
+      "id": "98e402f8-8d7d-47a6-a15c-a0e0802d14c5",
+      "code": "GA06",
+      "name": "Service Delivery",
+      "description": "Public service quality and responsiveness",
+      "sort_order": 6,
+      "is_active": true
+    }
+  ]
+}

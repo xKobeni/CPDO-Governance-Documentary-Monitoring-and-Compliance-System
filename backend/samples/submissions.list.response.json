@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "id": "8b5a5f4a-b7cd-43cd-a98f-4e2828cfb4e5",
+      "year": 2026,
+      "status": "PENDING",
+      "submitted_at": "2026-03-04T08:25:12.120Z",
+      "office_name": "City Planning Office",
+      "governance_code": "GA01",
+      "item_code": "1.1",
+      "item_title": "Annual planning disclosure report"
+    },
+    {
+      "id": "16ab7b3e-c9d0-48fd-9a84-9d9d8059fc2c",
+      "year": 2026,
+      "status": "APPROVED",
+      "submitted_at": "2026-03-03T12:14:44.092Z",
+      "office_name": "City Planning Office",
+      "governance_code": "GA03",
+      "item_code": "2.3",
+      "item_title": "Budget utilization statement"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 184,
+    "pages": 10,
+    "hasMore": true
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "submission": {
+    "id": "8b5a5f4a-b7cd-43cd-a98f-4e2828cfb4e5",
+    "year": 2026,
+    "office_id": "9b8cfa62-3bb0-4e4b-b99f-4cd6a5c14b1e",
+    "governance_area_id": "2d15ec8d-e465-4ff3-bc85-b50c66f67e4a",
+    "template_id": "b8f4ec4a-aa36-4c04-83dc-a7af48327f5f",
+    "checklist_item_id": "68bca5c7-f60b-44f7-a8f0-b3483c0f198d",
+    "status": "PENDING",
+    "submitted_by": "1bd13f5b-fbdf-43d6-933d-4ab45eb030f5",
+    "submitted_at": "2026-03-04T08:25:12.120Z",
+    "office_remarks": "Initial submission for compliance review"
+  }
+}

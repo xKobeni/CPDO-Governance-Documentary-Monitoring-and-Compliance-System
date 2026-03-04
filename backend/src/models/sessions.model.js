@@ -17,6 +17,16 @@ export async function revokeSession(sessionId) {
   );
 }
 
+export async function revokeAllSessionsByUserId(userId) {
+  await pool.query(
+    `UPDATE auth_sessions
+     SET revoked_at = now()
+     WHERE user_id = $1
+       AND revoked_at IS NULL`,
+    [userId]
+  );
+}
+
 export async function findValidSessionByHash(refreshTokenHash) {
   const { rows } = await pool.query(
     `SELECT *

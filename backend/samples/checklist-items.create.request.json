@@ -1,0 +1,13 @@
+{
+  "parentItemId": null,
+  "itemCode": "1.1",
+  "title": "Annual planning disclosure report",
+  "description": "Submit the signed annual planning disclosure report.",
+  "isRequired": true,
+  "frequency": "ANNUAL",
+  "dueDate": "2026-12-31",
+  "allowedFileTypes": ["pdf", "docx"],
+  "maxFiles": 2,
+  "sortOrder": 1,
+  "isActive": true
+}

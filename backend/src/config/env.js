@@ -13,6 +13,7 @@ export const env = {
   accessTtl: process.env.ACCESS_TOKEN_TTL ?? "15m",
   refreshTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 30),
   inactivityTimeoutMinutes: Number(process.env.INACTIVITY_TIMEOUT_MINUTES ?? 30),
+  uploadQuotaBytes: Number(process.env.UPLOAD_QUOTA_BYTES ?? 262144000),
 
   cookieSecure: String(process.env.COOKIE_SECURE ?? "false") === "true",
   cookieDomain: process.env.COOKIE_DOMAIN || undefined,

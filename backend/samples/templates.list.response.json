@@ -1,0 +1,30 @@
+{
+  "templates": [
+    {
+      "id": "b8f4ec4a-aa36-4c04-83dc-a7af48327f5f",
+      "governance_area_id": "2d15ec8d-e465-4ff3-bc85-b50c66f67e4a",
+      "year": 2026,
+      "title": "Governance Compliance Template 2026 - GA01",
+      "notes": "Core compliance checklist for Transparency and Accountability.",
+      "status": "ACTIVE",
+      "created_by": "f5789e3c-e2d8-4b0f-9d0a-f578b9d67165",
+      "created_at": "2026-01-03T02:14:22.900Z",
+      "updated_at": "2026-01-03T02:14:22.900Z",
+      "governance_code": "GA01",
+      "governance_name": "Transparency and Accountability"
+    },
+    {
+      "id": "4ea96257-f25e-4675-9f5b-5647e4dc6f12",
+      "governance_area_id": "f3e5d2f0-5320-4f17-8c58-6c6309c2d11e",
+      "year": 2026,
+      "title": "Governance Compliance Template 2026 - GA03",
+      "notes": null,
+      "status": "ACTIVE",
+      "created_by": "f5789e3c-e2d8-4b0f-9d0a-f578b9d67165",
+      "created_at": "2026-01-03T02:21:11.502Z",
+      "updated_at": "2026-01-03T02:21:11.502Z",
+      "governance_code": "GA03",
+      "governance_name": "Financial Stewardship"
+    }
+  ]
+}

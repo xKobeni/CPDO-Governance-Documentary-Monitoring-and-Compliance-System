@@ -1,0 +1,23 @@
+{
+  "nodes": [
+    { "id": "login", "label": "User Login", "group": "auth" },
+    { "id": "token", "label": "Access + Refresh Tokens", "group": "auth" },
+    { "id": "createSubmission", "label": "Create Submission", "group": "submission" },
+    { "id": "uploadFile", "label": "Upload Versioned File", "group": "files" },
+    { "id": "review", "label": "Staff/Admin Review", "group": "review" },
+    { "id": "notify", "label": "Create Notification", "group": "notification" },
+    { "id": "comment", "label": "Comment Exchange", "group": "comment" },
+    { "id": "reports", "label": "Reports Summary/No Upload", "group": "report" },
+    { "id": "dashboard", "label": "Dashboard Overview", "group": "dashboard" }
+  ],
+  "edges": [
+    { "from": "login", "to": "token", "label": "auth success" },
+    { "from": "token", "to": "createSubmission", "label": "authorized request" },
+    { "from": "createSubmission", "to": "uploadFile", "label": "attach evidence" },
+    { "from": "uploadFile", "to": "review", "label": "ready for review" },
+    { "from": "review", "to": "notify", "label": "decision event" },
+    { "from": "notify", "to": "comment", "label": "discussion/revision" },
+    { "from": "review", "to": "reports", "label": "aggregated status" },
+    { "from": "reports", "to": "dashboard", "label": "visual KPIs/charts" }
+  ]
+}

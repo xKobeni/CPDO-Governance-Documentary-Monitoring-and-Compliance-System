@@ -1,0 +1,16 @@
+{
+  "action": "REQUEST_REVISION",
+  "decisionNotes": "Please attach the signed version and update section 3.2.",
+  "verificationChecks": [
+    {
+      "checkKey": "SIGNED",
+      "isPassed": false,
+      "notes": "Missing signature from department head"
+    },
+    {
+      "checkKey": "CORRECT_YEAR",
+      "isPassed": true,
+      "notes": null
+    }
+  ]
+}

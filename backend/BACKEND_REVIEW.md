@@ -93,7 +93,7 @@ router.post("/", asyncHandler(createSubmissionHandler));
 **Total:** 26 async route handlers protected
 
 ### 3. Server Startup Error Handling
-**Status:** ⚠️ MINOR
+**Status:** ✅ FIXED
 
 **File:** src/server.js
 ```javascript
@@ -104,7 +104,7 @@ router.post("/", asyncHandler(createSubmissionHandler));
 })();
 ```
 
-**Issue:** Unhandled promise rejection if DB check fails. Should log properly.
+**Issue (Resolved):** Startup now safely handles DB healthcheck failures and exits cleanly with structured error logging.
 
 **Fix:**
 ```javascript
@@ -141,7 +141,7 @@ pool.query(...).catch((err) => {
 ```
 
 ### 5. No Input Sanitization for Comments
-**Status:** ⚠️ MINOR
+**Status:** ✅ FIXED
 
 **File:** src/controllers/comments.controller.js
 ```javascript
@@ -150,38 +150,41 @@ const createCommentSchema = z.object({
 });
 ```
 
-**Issue:** No XSS protection. Comments could contain malicious HTML if frontend doesn't sanitize.
+**Issue (Resolved):** Comments are sanitized server-side before save and again before response output.
 
-**Recommendation:** Add on response, frontend should sanitize before rendering.
+**Implementation:**
+- Strip HTML tags from comment payloads before persistence
+- Remove unsafe control characters
+- Reject empty comments after sanitization
 
 ### 6. File Upload Security
-**Status:** ⚠️ MINOR
+**Status:** ✅ PARTIALLY FIXED
 
 **File:** src/middlewares/upload.js
 
 **Issue:**
-- No file size validation in multer config (has 25MB limit - good)
-- No user quota checking (one user could upload 1000x25MB files)
-- No virus scanning
+- Multer already enforces 25MB per-file limit
+- User quota enforcement was missing
+- MIME + extension consistency check was missing
+- Virus scanning is still not implemented
 
-**Recommendation:**
+**Implementation:**
 ```javascript
-// Add per-user quota check in uploadSubmissionFileHandler
-const userFiles = await pool.query(
-  `SELECT COALESCE(SUM(file_size_bytes), 0) as total FROM submission_files WHERE uploaded_by = $1`,
-  [req.user.sub]
-);
-if (userFiles.rows[0].total + req.file.size > USER_QUOTA) {
+const totalUploaded = await getUserTotalUploadedBytes(req.user.sub);
+if (totalUploaded + req.file.size > env.uploadQuotaBytes) {
+  await cleanupTempUpload(req.file.path);
   return res.status(413).json({ message: "Storage quota exceeded" });
 }
 ```
 
+**Remaining:** Add antivirus scanning pipeline (ClamAV or cloud scanner) for full hardening.
+
 ### 7. Missing Logout Notification
-**Status:** ⚠️ MINOR
+**Status:** ✅ FIXED
 
-**Issue:** When user logs out, no cleanup of active sessions shown anywhere.
+**Issue (Resolved):** Logout now revokes all active sessions for that user, not only the current session.
 
-**Recommendation:** After logout, delete/revoke all sessions for that user instead of just current one.
+**Implementation:** Added `revokeAllSessionsByUserId(userId)` and used it in logout flow.
 
 ---
 
@@ -205,16 +208,16 @@ if (userFiles.rows[0].total + req.file.size > USER_QUOTA) {
 
 ### HIGH PRIORITY
 - [x] Add try-catch to all async controllers (✅ COMPLETED - asyncHandler covers all)
-- [ ] Fix server startup error handling
+- [x] Fix server startup error handling
 - [x] Add async error wrapper middleware (✅ COMPLETED - src/middlewares/asyncHandler.js)
 
 ### MEDIUM PRIORITY
-- [ ] Add user file storage quota check
+- [x] Add user file storage quota check
 - [ ] Log instead of silently ignore DB errors
-- [ ] Improve logout to revoke all sessions
+- [x] Improve logout to revoke all sessions
 
 ### LOW PRIORITY
-- [ ] Add XSS sanitization note to comments
+- [x] Add XSS sanitization for comments
 - [ ] Consider rate limiting on file upload
 - [ ] Add request timeout middleware
 

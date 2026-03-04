@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "id": "c0fbbf90-cd80-46ab-9578-fec8f4228bad",
+      "submission_id": "8b5a5f4a-b7cd-43cd-a98f-4e2828cfb4e5",
+      "author_user_id": "1bd13f5b-fbdf-43d6-933d-4ab45eb030f5",
+      "comment": "Updated evidence uploaded. Please re-check item 3.2.",
+      "created_at": "2026-03-04T09:44:30.001Z",
+      "full_name": "Juan Dela Cruz",
+      "email": "office.user@cpdo.gov.ph",
+      "role_code": "OFFICE",
+      "role_name": "Office User"
+    },
+    {
+      "id": "6bb72308-9835-42f2-bf03-f7a66f9e9fc1",
+      "submission_id": "8b5a5f4a-b7cd-43cd-a98f-4e2828cfb4e5",
+      "author_user_id": "d9c026dc-8a53-4eec-b0ac-6d0e95b30786",
+      "comment": "Thanks. We will re-evaluate by tomorrow.",
+      "created_at": "2026-03-04T10:01:14.501Z",
+      "full_name": "Maria Santos",
+      "email": "staff.reviewer@cpdo.gov.ph",
+      "role_code": "STAFF",
+      "role_name": "Staff Reviewer"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 2,
+    "pages": 1,
+    "hasMore": false
+  }
+}

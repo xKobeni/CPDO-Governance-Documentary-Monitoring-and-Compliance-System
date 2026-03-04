@@ -1,0 +1,115 @@
+{
+  "year": 2026,
+  "filters": {
+    "governanceAreaId": null,
+    "officeId": "9b8cfa62-3bb0-4e4b-b99f-4cd6a5c14b1e"
+  },
+  "kpis": {
+    "totalSubmissions": 184,
+    "pendingSubmissions": 38,
+    "approvedSubmissions": 112,
+    "deniedSubmissions": 14,
+    "revisionRequestedSubmissions": 20,
+    "reviewedSubmissions": 146,
+    "approvalRate": 76.71,
+    "reviewCompletionRate": 79.35,
+    "missingUploadsCount": 9,
+    "unreadNotifications": 4
+  },
+  "charts": {
+    "statusBreakdown": [
+      { "status": "APPROVED", "count": 112 },
+      { "status": "DENIED", "count": 14 },
+      { "status": "PENDING", "count": 38 },
+      { "status": "REVISION_REQUESTED", "count": 20 }
+    ],
+    "monthlySubmissionTrend": [
+      { "month": 1, "count": 12 },
+      { "month": 2, "count": 16 },
+      { "month": 3, "count": 14 },
+      { "month": 4, "count": 11 },
+      { "month": 5, "count": 18 },
+      { "month": 6, "count": 17 },
+      { "month": 7, "count": 22 },
+      { "month": 8, "count": 19 },
+      { "month": 9, "count": 21 },
+      { "month": 10, "count": 15 },
+      { "month": 11, "count": 10 },
+      { "month": 12, "count": 9 }
+    ],
+    "topGovernanceAreas": [
+      {
+        "governance_code": "GA01",
+        "governance_name": "Transparency and Accountability",
+        "count": 44
+      },
+      {
+        "governance_code": "GA03",
+        "governance_name": "Financial Stewardship",
+        "count": 37
+      },
+      {
+        "governance_code": "GA06",
+        "governance_name": "Service Delivery",
+        "count": 33
+      },
+      {
+        "governance_code": "GA08",
+        "governance_name": "Digital Governance",
+        "count": 29
+      },
+      {
+        "governance_code": "GA10",
+        "governance_name": "People and Culture",
+        "count": 22
+      }
+    ]
+  },
+  "recentSubmissions": [
+    {
+      "id": "8b5a5f4a-b7cd-43cd-a98f-4e2828cfb4e5",
+      "status": "PENDING",
+      "submitted_at": "2026-03-04T07:45:18.120Z",
+      "office_name": "City Planning Office",
+      "governance_code": "GA01",
+      "item_code": "1.1",
+      "item_title": "Annual planning disclosure report"
+    },
+    {
+      "id": "16ab7b3e-c9d0-48fd-9a84-9d9d8059fc2c",
+      "status": "APPROVED",
+      "submitted_at": "2026-03-03T12:14:44.092Z",
+      "office_name": "City Planning Office",
+      "governance_code": "GA03",
+      "item_code": "2.3",
+      "item_title": "Budget utilization statement"
+    },
+    {
+      "id": "f4dbad5d-d4dd-4f47-a684-7e95bf58fb10",
+      "status": "REVISION_REQUESTED",
+      "submitted_at": "2026-03-02T16:22:10.441Z",
+      "office_name": "City Planning Office",
+      "governance_code": "GA06",
+      "item_code": "4.2",
+      "item_title": "Community engagement outcomes"
+    },
+    {
+      "id": "f0bce53d-e373-49db-a2fd-cf9adf45fbe3",
+      "status": "DENIED",
+      "submitted_at": "2026-03-01T09:07:35.882Z",
+      "office_name": "City Planning Office",
+      "governance_code": "GA08",
+      "item_code": "6.4",
+      "item_title": "Data privacy compliance attestation"
+    },
+    {
+      "id": "1f82e6ea-8e8f-41eb-af26-c2f4d3ca7f11",
+      "status": "APPROVED",
+      "submitted_at": "2026-02-28T13:55:02.003Z",
+      "office_name": "City Planning Office",
+      "governance_code": "GA10",
+      "item_code": "7.1",
+      "item_title": "Workforce capability development plan"
+    }
+  ]
+}

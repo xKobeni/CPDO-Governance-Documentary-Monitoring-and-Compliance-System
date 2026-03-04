@@ -1,6 +1,16 @@
 import path from "path";
+import fs from "fs/promises";
 import { getSubmissionById } from "../models/submissions.model.js";
-import { addNewFileVersion, listFiles } from "../models/submissionFiles.model.js";
+import { addNewFileVersion, listFiles, getUserTotalUploadedBytes } from "../models/submissionFiles.model.js";
+import { env } from "../config/env.js";
+
+async function cleanupTempUpload(filePath) {
+  if (!filePath) return;
+  try {
+    await fs.unlink(filePath);
+  } catch {
+  }
+}
 
 export async function listSubmissionFilesHandler(req, res) {
   const submissionId = req.params.submissionId;
@@ -31,6 +41,16 @@ export async function uploadSubmissionFileHandler(req, res) {
   }
 
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+  const totalUploaded = await getUserTotalUploadedBytes(req.user.sub);
+  const projectedTotal = totalUploaded + req.file.size;
+  if (projectedTotal > env.uploadQuotaBytes) {
+    await cleanupTempUpload(req.file.path);
+    return res.status(413).json({
+      message: "Storage quota exceeded",
+      quotaBytes: env.uploadQuotaBytes,
+    });
+  }
 
   const storedKey = path.join("uploads", req.file.filename).replace(/\\/g, "/");
 

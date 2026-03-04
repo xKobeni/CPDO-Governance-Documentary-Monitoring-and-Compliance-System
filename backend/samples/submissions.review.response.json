@@ -1,0 +1,11 @@
+{
+  "review": {
+    "id": "7f5d5234-9011-44f9-9cc6-165a3cd51299",
+    "submission_id": "8b5a5f4a-b7cd-43cd-a98f-4e2828cfb4e5",
+    "reviewed_by": "d9c026dc-8a53-4eec-b0ac-6d0e95b30786",
+    "action": "REQUEST_REVISION",
+    "decision_notes": "Please attach the signed version and update section 3.2.",
+    "reviewed_at": "2026-03-04T09:40:10.450Z"
+  },
+  "status": "REVISION_REQUESTED"
+}

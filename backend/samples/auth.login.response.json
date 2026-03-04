@@ -1,0 +1,11 @@
+{
+  "accessToken": "<JWT_ACCESS_TOKEN>",
+  "sessionId": "8f4e1ca7-143a-46d8-a026-eaef31188c61",
+  "user": {
+    "id": "1bd13f5b-fbdf-43d6-933d-4ab45eb030f5",
+    "fullName": "Juan Dela Cruz",
+    "email": "office.user@cpdo.gov.ph",
+    "role": "OFFICE",
+    "officeId": "9b8cfa62-3bb0-4e4b-b99f-4cd6a5c14b1e"
+  }
+}

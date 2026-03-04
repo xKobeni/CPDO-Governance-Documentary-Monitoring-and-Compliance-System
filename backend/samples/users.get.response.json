@@ -1,0 +1,15 @@
+{
+  "user": {
+    "id": "1bd13f5b-fbdf-43d6-933d-4ab45eb030f5",
+    "email": "office.user@cpdo.gov.ph",
+    "full_name": "Juan Dela Cruz",
+    "role_code": "OFFICE",
+    "role_name": "Office User",
+    "office_id": "9b8cfa62-3bb0-4e4b-b99f-4cd6a5c14b1e",
+    "office_name": "City Planning Office",
+    "is_active": true,
+    "last_login_at": "2026-03-04T07:50:00.003Z",
+    "created_at": "2026-01-15T05:40:11.001Z",
+    "updated_at": "2026-03-04T07:50:00.003Z"
+  }
+}

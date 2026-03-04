@@ -1,0 +1,28 @@
+{
+  "files": [
+    {
+      "id": "55f49c60-734f-4243-bf3f-bf345c64934f",
+      "version_no": 2,
+      "file_name": "updated-disclosure-2026.pdf",
+      "mime_type": "application/pdf",
+      "file_size_bytes": 1244821,
+      "storage_key": "uploads/1741079292123-z8PMwY8mY3wQ9h2T.pdf",
+      "sha256": null,
+      "uploaded_by": "1bd13f5b-fbdf-43d6-933d-4ab45eb030f5",
+      "uploaded_at": "2026-03-04T09:12:21.102Z",
+      "is_current": true
+    },
+    {
+      "id": "b06978d3-4fd4-49e4-bc23-d34b83f93c84",
+      "version_no": 1,
+      "file_name": "disclosure-2026.pdf",
+      "mime_type": "application/pdf",
+      "file_size_bytes": 1199012,
+      "storage_key": "uploads/1740992211822-S6JfRn02e9n1asx3.pdf",
+      "sha256": null,
+      "uploaded_by": "1bd13f5b-fbdf-43d6-933d-4ab45eb030f5",
+      "uploaded_at": "2026-03-03T08:16:58.912Z",
+      "is_current": false
+    }
+  ]
+}

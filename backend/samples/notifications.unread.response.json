@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "id": "be25ecf7-79f6-48d6-a2f8-3b7e2b9101a0",
+      "user_id": "1bd13f5b-fbdf-43d6-933d-4ab45eb030f5",
+      "type": "REVISION_REQUESTED",
+      "title": "Revision Requested",
+      "body": "Please attach the signed version and update section 3.2.",
+      "link_submission_id": "8b5a5f4a-b7cd-43cd-a98f-4e2828cfb4e5",
+      "is_read": false,
+      "created_at": "2026-03-04T09:40:11.002Z"
+    },
+    {
+      "id": "44e8ab88-f5e7-4d6c-b976-26ef99c3dcd6",
+      "user_id": "1bd13f5b-fbdf-43d6-933d-4ab45eb030f5",
+      "type": "SUBMISSION_RECEIVED",
+      "title": "Submission Received",
+      "body": "Your submission has been queued for review.",
+      "link_submission_id": "16ab7b3e-c9d0-48fd-9a84-9d9d8059fc2c",
+      "is_read": false,
+      "created_at": "2026-03-03T12:14:45.313Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 2,
+    "pages": 1,
+    "hasMore": false
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "year": 2026,
+  "governanceAreaId": null,
+  "officeId": "9b8cfa62-3bb0-4e4b-b99f-4cd6a5c14b1e",
+  "breakdown": [
+    { "status": "APPROVED", "count": 112 },
+    { "status": "DENIED", "count": 14 },
+    { "status": "PENDING", "count": 38 },
+    { "status": "REVISION_REQUESTED", "count": 20 }
+  ]
+}

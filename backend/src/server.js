@@ -6,10 +6,15 @@ import { logger } from "./config/logger.js";
 const app = createApp();
 
 (async () => {
-  const ok = await dbHealthcheck();
-  if (!ok) throw new Error("DB healthcheck failed");
+  try {
+    const ok = await dbHealthcheck();
+    if (!ok) throw new Error("DB healthcheck failed");
 
-  app.listen(env.port, () => {
-    logger.info({ port: env.port }, "API server running");
-  });
+    app.listen(env.port, () => {
+      logger.info({ port: env.port }, "API server running");
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to start server");
+    process.exit(1);
+  }
 })();

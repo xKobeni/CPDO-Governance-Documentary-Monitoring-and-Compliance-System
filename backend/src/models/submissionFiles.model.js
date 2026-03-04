@@ -25,6 +25,16 @@ export async function listFiles(submissionId) {
   return rows;
 }
 
+export async function getUserTotalUploadedBytes(userId) {
+  const { rows } = await pool.query(
+    `SELECT COALESCE(SUM(file_size_bytes), 0)::BIGINT AS total
+     FROM submission_files
+     WHERE uploaded_by = $1`,
+    [userId]
+  );
+  return Number(rows[0]?.total ?? 0);
+}
+
 /**
  * Adds a new file version and makes it current (transaction-safe).
  */

@@ -1,0 +1,23 @@
+{
+  "year": 2026,
+  "officeId": "9b8cfa62-3bb0-4e4b-b99f-4cd6a5c14b1e",
+  "governanceAreaId": null,
+  "missing": [
+    {
+      "governance_code": "GA01",
+      "governance_name": "Transparency and Accountability",
+      "template_id": "b8f4ec4a-aa36-4c04-83dc-a7af48327f5f",
+      "checklist_item_id": "a6dfd327-46af-4f6f-bd68-a5f0a1f9a8f6",
+      "item_code": "1.4",
+      "item_title": "Citizen feedback consolidation"
+    },
+    {
+      "governance_code": "GA03",
+      "governance_name": "Financial Stewardship",
+      "template_id": "4ea96257-f25e-4675-9f5b-5647e4dc6f12",
+      "checklist_item_id": "63d9aacb-6e0d-4df4-aab1-c13ad2075a50",
+      "item_code": "2.7",
+      "item_title": "Quarterly budget variance explanation"
+    }
+  ]
+}

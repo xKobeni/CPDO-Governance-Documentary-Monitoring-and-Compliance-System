@@ -6,7 +6,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/
 import { sha256 } from "../utils/tokenHash.js";
 
 import { findUserAuthByEmail, updateLastLogin } from "../models/users.model.js";
-import { createSession, findValidSessionByHash, revokeSession } from "../models/sessions.model.js";
+import { createSession, findValidSessionByHash, revokeSession, revokeAllSessionsByUserId } from "../models/sessions.model.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -142,7 +142,20 @@ export async function logout(req, res) {
   const token = req.cookies?.refresh_token;
   if (token) {
     const session = await findValidSessionByHash(sha256(token));
-    if (session) await revokeSession(session.id);
+    if (session?.user_id) {
+      await revokeAllSessionsByUserId(session.user_id);
+    } else {
+      try {
+        const payload = verifyRefreshToken(token);
+        if (payload?.sub) {
+          await revokeAllSessionsByUserId(payload.sub);
+        }
+      } catch {
+        if (session?.id) {
+          await revokeSession(session.id);
+        }
+      }
+    }
   }
   clearAuthCookies(res);
   return res.json({ ok: true });
