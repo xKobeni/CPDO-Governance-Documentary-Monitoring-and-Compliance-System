@@ -5,7 +5,7 @@ import { verifyPassword } from "../utils/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/jwt.js";
 import { sha256 } from "../utils/tokenHash.js";
 
-import { findUserAuthByEmail, updateLastLogin } from "../models/users.model.js";
+import { findUserAuthByEmail, updateLastLogin, recordFailedLoginAttempt, resetFailedLoginAttempts, getFailedLoginAttempts } from "../models/users.model.js";
 import { createSession, findValidSessionByHash, revokeSession, revokeAllSessionsByUserId } from "../models/sessions.model.js";
 
 const loginSchema = z.object({
@@ -35,10 +35,44 @@ export async function login(req, res) {
   const { email, password } = parsed.data;
 
   const user = await findUserAuthByEmail(email);
-  if (!user || !user.is_active) return res.status(401).json({ message: "Invalid credentials" });
+  if (!user || !user.is_active) {
+    return res.status(401).json({ message: "Invalid credentials" });
+  }
 
+  // Check if account is locked
+  if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
+    const minutesRemaining = Math.ceil((new Date(user.account_locked_until) - new Date()) / 60000);
+    return res.status(423).json({
+      message: `Account is locked. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
+      lockedUntil: user.account_locked_until,
+      attemptsRemaining: 0
+    });
+  }
+
+  // Verify password
   const ok = await verifyPassword(user.password_hash, password);
-  if (!ok) return res.status(401).json({ message: "Invalid credentials" });
+  if (!ok) {
+    // Record failed attempt
+    const updated = await recordFailedLoginAttempt(user.id);
+    const attemptsRemaining = Math.max(0, 5 - (updated?.failed_login_attempts || 0));
+    
+    if (updated?.account_locked_until && new Date(updated.account_locked_until) > new Date()) {
+      return res.status(423).json({
+        message: "Account locked due to too many failed login attempts. Try again in 15 minutes.",
+        lockedUntil: updated.account_locked_until,
+        attemptsRemaining: 0
+      });
+    }
+
+    return res.status(401).json({
+      message: "Invalid credentials",
+      attemptsRemaining,
+      failedAttempts: updated?.failed_login_attempts || 0
+    });
+  }
+
+  // Reset failed login attempts on successful login
+  await resetFailedLoginAttempts(user.id);
 
   // Access token payload
   const accessPayload = {

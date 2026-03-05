@@ -4,7 +4,7 @@ export async function findUserAuthByEmail(email) {
   const { rows } = await pool.query(
     `SELECT
         u.id, u.email, u.password_hash, u.full_name, u.is_active,
-        u.office_id,
+        u.office_id, u.failed_login_attempts, u.account_locked_until,
         r.code as role_code, r.name as role_name
      FROM users u
      JOIN roles r ON r.id = u.role_id
@@ -75,4 +75,52 @@ export async function updateLastLogin(userId) {
     `UPDATE users SET last_login_at = now() WHERE id = $1`,
     [userId]
   );
+}
+
+export async function recordFailedLoginAttempt(userId) {
+  // Increment failed attempts and record timestamp
+  // Lock account for 15 minutes after 5 failed attempts
+  const MAX_ATTEMPTS = 5;
+  const LOCK_DURATION_MINUTES = 15;
+
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET 
+       failed_login_attempts = failed_login_attempts + 1,
+       last_failed_attempt = now(),
+       account_locked_until = CASE
+         WHEN (failed_login_attempts + 1) >= $2
+         THEN now() + INTERVAL '${LOCK_DURATION_MINUTES} minutes'
+         ELSE account_locked_until
+       END
+     WHERE id = $1
+     RETURNING id, failed_login_attempts, account_locked_until`,
+    [userId, MAX_ATTEMPTS]
+  );
+  return rows[0] || null;
+}
+
+export async function resetFailedLoginAttempts(userId) {
+  // Clear failed attempts and lock on successful login
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET 
+       failed_login_attempts = 0,
+       last_failed_attempt = NULL,
+       account_locked_until = NULL
+     WHERE id = $1
+     RETURNING id, failed_login_attempts`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
+export async function getFailedLoginAttempts(userId) {
+  const { rows } = await pool.query(
+    `SELECT id, failed_login_attempts, account_locked_until
+     FROM users
+     WHERE id = $1`,
+    [userId]
+  );
+  return rows[0] || null;
 }

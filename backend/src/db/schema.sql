@@ -80,16 +80,19 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 -- USERS
 -- =========================
 CREATE TABLE IF NOT EXISTS users (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email         TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  full_name     TEXT NOT NULL,
-  role_id       UUID NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
-  office_id     UUID NULL REFERENCES offices(id) ON DELETE SET NULL,
-  is_active     BOOLEAN NOT NULL DEFAULT TRUE,
-  last_login_at TIMESTAMPTZ NULL,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email                 TEXT UNIQUE NOT NULL,
+  password_hash         TEXT NOT NULL,
+  full_name             TEXT NOT NULL,
+  role_id               UUID NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
+  office_id             UUID NULL REFERENCES offices(id) ON DELETE SET NULL,
+  is_active             BOOLEAN NOT NULL DEFAULT TRUE,
+  last_login_at         TIMESTAMPTZ NULL,
+  failed_login_attempts INT NOT NULL DEFAULT 0,
+  last_failed_attempt   TIMESTAMPTZ NULL,
+  account_locked_until  TIMESTAMPTZ NULL,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_role_id ON users(role_id);
