@@ -23,21 +23,21 @@ export default function ErrorPage({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-violet-50 to-purple-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-base-200 text-base-content p-4">
       <div className="max-w-2xl w-full text-center">
         
         {/* Error Illustration */}
         <div className="mb-8 flex justify-center">
           <div className="relative">
             {/* Large Error Code */}
-            <div className="text-[150px] font-bold text-violet-200 leading-none select-none">
+            <div className="text-[150px] font-bold text-primary/25 leading-none select-none">
               {errorCode}
             </div>
             
             {/* Sad Face Icon Overlay */}
             <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
               <svg 
-                className="w-24 h-24 text-violet-600" 
+                className="w-24 h-24 text-primary" 
                 fill="none" 
                 stroke="currentColor" 
                 viewBox="0 0 24 24"
@@ -54,12 +54,12 @@ export default function ErrorPage({
         </div>
 
         {/* Error Title */}
-        <h1 className="text-4xl font-bold text-gray-800 mb-4">
+        <h1 className="text-4xl font-bold text-base-content mb-4">
           {title}
         </h1>
 
         {/* Error Message */}
-        <p className="text-gray-600 text-lg mb-8 max-w-md mx-auto">
+        <p className="text-base-content/70 text-lg mb-8 max-w-md mx-auto">
           {message}
         </p>
 
@@ -69,7 +69,7 @@ export default function ErrorPage({
           {showRetry && (
             <button
               onClick={handleRetry}
-              className="btn bg-violet-600 hover:bg-violet-700 text-white border-none px-6 normal-case"
+              className="btn btn-primary px-6 normal-case"
             >
               <svg 
                 className="w-5 h-5 mr-2" 
@@ -90,7 +90,7 @@ export default function ErrorPage({
 
           <button
             onClick={handleGoBack}
-            className="btn btn-outline border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white hover:border-violet-600 px-6 normal-case"
+            className="btn btn-outline btn-primary px-6 normal-case"
           >
             <svg 
               className="w-5 h-5 mr-2" 
@@ -110,7 +110,7 @@ export default function ErrorPage({
 
           <button
             onClick={handleGoHome}
-            className="btn btn-ghost text-violet-600 hover:bg-violet-100 px-6 normal-case"
+            className="btn btn-ghost text-primary hover:bg-base-300 px-6 normal-case"
           >
             <svg 
               className="w-5 h-5 mr-2" 
@@ -130,13 +130,13 @@ export default function ErrorPage({
         </div>
 
         {/* Additional Help */}
-        <div className="mt-12 pt-8 border-t border-violet-200">
-          <p className="text-gray-600 text-sm mb-2">
+        <div className="mt-12 pt-8 border-t border-base-300">
+          <p className="text-base-content/70 text-sm mb-2">
             Need assistance?
           </p>
           <a 
             href="#contact" 
-            className="text-violet-600 hover:text-violet-700 font-semibold text-sm hover:underline"
+            className="text-primary hover:text-primary/80 font-semibold text-sm hover:underline"
           >
             Contact Support
           </a>

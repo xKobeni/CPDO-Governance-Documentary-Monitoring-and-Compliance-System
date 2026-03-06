@@ -154,10 +154,10 @@ export default function Notifications() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="pb-6 border-b border-gray-200 flex items-center justify-between">
+      <div className="pb-6 border-b border-base-300 flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-bold text-gray-800">Notifications</h1>
-          <p className="text-gray-600 mt-2">Stay updated with system and submission activities</p>
+          <h1 className="text-4xl font-bold text-base-content">Notifications</h1>
+          <p className="text-base-content/70 mt-2">Stay updated with system and submission activities</p>
         </div>
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
@@ -169,39 +169,39 @@ export default function Notifications() {
       {/* Stats Cards at Top */}
       {notifications.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="card bg-linear-to-br from-violet-50 to-purple-50 shadow-sm border border-violet-200 rounded-2xl">
+          <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
             <div className="card-body">
-              <p className="text-gray-600 text-sm font-semibold">Total</p>
+              <p className="text-base-content/70 text-sm font-semibold">Total</p>
               <p className="text-3xl font-bold text-violet-600">{notifications.length}</p>
-              <p className="text-xs text-gray-500 mt-2">All notifications</p>
+              <p className="text-xs text-base-content/60 mt-2">All notifications</p>
             </div>
           </div>
-          <div className="card bg-linear-to-br from-red-50 to-pink-50 shadow-sm border border-red-200 rounded-2xl">
+          <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
             <div className="card-body">
-              <p className="text-gray-600 text-sm font-semibold">Unread</p>
+              <p className="text-base-content/70 text-sm font-semibold">Unread</p>
               <p className="text-3xl font-bold text-red-600">{unreadCount}</p>
-              <p className="text-xs text-gray-500 mt-2">Require attention</p>
+              <p className="text-xs text-base-content/60 mt-2">Require attention</p>
             </div>
           </div>
-          <div className="card bg-linear-to-br from-green-50 to-emerald-50 shadow-sm border border-green-200 rounded-2xl">
+          <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
             <div className="card-body">
-              <p className="text-gray-600 text-sm font-semibold">Read</p>
+              <p className="text-base-content/70 text-sm font-semibold">Read</p>
               <p className="text-3xl font-bold text-green-600">{readCount}</p>
-              <p className="text-xs text-gray-500 mt-2">Already viewed</p>
+              <p className="text-xs text-base-content/60 mt-2">Already viewed</p>
             </div>
           </div>
-          <div className="card bg-linear-to-br from-blue-50 to-cyan-50 shadow-sm border border-blue-200 rounded-2xl">
+          <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
             <div className="card-body">
-              <p className="text-gray-600 text-sm font-semibold">Displayed</p>
+              <p className="text-base-content/70 text-sm font-semibold">Displayed</p>
               <p className="text-3xl font-bold text-blue-600">{filteredNotifications.length}</p>
-              <p className="text-xs text-gray-500 mt-2">Current view</p>
+              <p className="text-xs text-base-content/60 mt-2">Current view</p>
             </div>
           </div>
         </div>
       )}
 
       {/* Actions Bar */}
-      <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl">
+      <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
         <div className="card-body">
           <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
             {/* Search */}
@@ -211,7 +211,7 @@ export default function Notifications() {
                 placeholder="Search notifications..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="input input-bordered w-full bg-gray-50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 rounded-lg"
+                className="input input-bordered w-full bg-base-100 rounded-lg"
               />
             </div>
 
@@ -220,7 +220,7 @@ export default function Notifications() {
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="select select-bordered select-sm bg-gray-50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 rounded-lg flex-1 lg:flex-none"
+                className="select select-bordered select-sm bg-base-100 rounded-lg flex-1 lg:flex-none"
               >
                 <option value="all">All Types</option>
                 <option value="SUBMISSION_RECEIVED">Submission Received</option>
@@ -232,7 +232,7 @@ export default function Notifications() {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="select select-bordered select-sm bg-gray-50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 rounded-lg flex-1 lg:flex-none"
+                className="select select-bordered select-sm bg-base-100 rounded-lg flex-1 lg:flex-none"
               >
                 <option value="all">All Status</option>
                 <option value="unread">Unread</option>
@@ -245,7 +245,7 @@ export default function Notifications() {
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
-                  className="btn btn-sm btn-outline border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white rounded-lg"
+                  className="btn btn-sm btn-outline btn-primary rounded-lg"
                 >
                   Mark All Read
                 </button>
@@ -253,7 +253,7 @@ export default function Notifications() {
               {notifications.length > 0 && (
                 <button
                   onClick={clearAll}
-                  className="btn btn-sm btn-outline border-red-600 text-red-600 hover:bg-red-600 hover:text-white rounded-lg"
+                  className="btn btn-sm btn-outline btn-error rounded-lg"
                 >
                   Clear All
                 </button>
@@ -271,8 +271,8 @@ export default function Notifications() {
               key={notif.id}
               className={`card shadow-sm border-l-4 rounded-2xl transition-all overflow-hidden ${
                 !notif.is_read
-                  ? 'bg-linear-to-r from-violet-50 to-purple-50 border-l-violet-600'
-                  : 'bg-white border-l-gray-300 hover:border-l-gray-400'
+                    ? 'bg-base-200 border-l-primary'
+                    : 'bg-base-100 border-l-base-300 hover:border-l-base-content/40'
               }`}
             >
               <div className="card-body p-5">
@@ -280,7 +280,7 @@ export default function Notifications() {
                   {/* Left Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 className={`font-bold text-base ${!notif.is_read ? 'text-gray-900' : 'text-gray-800'}`}>
+                      <h3 className={`font-bold text-base ${!notif.is_read ? 'text-base-content' : 'text-base-content/85'}`}>
                         {notif.title}
                       </h3>
                       <span className={`badge badge-sm ${getBadgeColor(notif.type)} whitespace-nowrap`}>
@@ -290,11 +290,11 @@ export default function Notifications() {
                         <span className="badge badge-sm badge-error text-white whitespace-nowrap">New</span>
                       )}
                     </div>
-                    <p className={`text-sm mt-2 leading-relaxed ${!notif.is_read ? 'text-gray-700' : 'text-gray-600'}`}>
+                    <p className={`text-sm mt-2 leading-relaxed ${!notif.is_read ? 'text-base-content/80' : 'text-base-content/70'}`}>
                       {notif.body}
                     </p>
                     <div className="flex items-center gap-2 mt-3">
-                      <p className="text-xs text-gray-500">{formatTimestamp(notif.created_at)}</p>
+                      <p className="text-xs text-base-content/60">{formatTimestamp(notif.created_at)}</p>
                       {notif.link_submission_id && (
                         <span className="text-xs text-violet-600">• View Submission</span>
                       )}
@@ -315,7 +315,7 @@ export default function Notifications() {
                       <button
                         onClick={() => markAsUnread(notif.id)}
                         title="Mark as unread"
-                        className="btn btn-ghost btn-sm px-3 text-gray-400 hover:bg-gray-100 rounded-lg"
+                        className="btn btn-ghost btn-sm px-3 text-base-content/50 hover:bg-base-200 rounded-lg"
                       >
                         ◯
                       </button>
@@ -333,13 +333,13 @@ export default function Notifications() {
             </div>
           ))
         ) : (
-          <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl">
+          <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
             <div className="card-body flex flex-col items-center justify-center py-12">
-              <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-16 h-16 text-base-content/30 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              <p className="text-gray-500 font-medium text-lg">No notifications</p>
-              <p className="text-gray-400 text-sm mt-1">You're all caught up!</p>
+              <p className="text-base-content/70 font-medium text-lg">No notifications</p>
+              <p className="text-base-content/50 text-sm mt-1">You're all caught up!</p>
             </div>
           </div>
         )}

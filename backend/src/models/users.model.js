@@ -124,3 +124,17 @@ export async function getFailedLoginAttempts(userId) {
   );
   return rows[0] || null;
 }
+
+export async function updateUserProfile(userId, { fullName }) {
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET full_name = $2,
+         updated_at = now()
+     WHERE id = $1
+     RETURNING id`,
+    [userId, fullName]
+  );
+
+  if (!rows[0]) return null;
+  return findUserById(userId);
+}

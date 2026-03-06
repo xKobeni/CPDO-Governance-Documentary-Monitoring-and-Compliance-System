@@ -21,7 +21,17 @@ export const API_ENDPOINTS = {
     CREATE: '/users',
     UPDATE: (id) => `/users/${id}`,
     DELETE: (id) => `/users/${id}`,
-    SET_ACTIVE: (id) => `/users/${id}/set-active`,
+    SET_ACTIVE: (id) => `/users/${id}/active`,
+  },
+
+  // Office endpoints
+  OFFICES: {
+    LIST: '/offices',
+    GET: (id) => `/offices/${id}`,
+    CREATE: '/offices',
+    UPDATE: (id) => `/offices/${id}`,
+    DELETE: (id) => `/offices/${id}`,
+    SET_ACTIVE: (id) => `/offices/${id}/active`,
   },
 
   // Submission endpoints
@@ -49,10 +59,23 @@ export const API_ENDPOINTS = {
     EXPORT: (format) => `/reports/export?format=${format}`,
   },
 
+  // Dashboard endpoints
+  DASHBOARD: {
+    OVERVIEW: '/dashboard/overview',
+  },
+
+  // Analytics endpoints
+  ANALYTICS: {
+    USER_STATS: '/analytics/user-stats',
+    RECENT_ACTIVITY: '/analytics/recent-activity',
+    OFFICE_PERFORMANCE: '/analytics/office-performance',
+    REVIEWER_PERFORMANCE: '/analytics/reviewer-performance',
+  },
+
   // Notifications endpoints
   NOTIFICATIONS: {
     LIST: '/notifications',
-    COUNT: '/notifications/count',
+    COUNT: '/notifications/unread/count',
     MARK_AS_READ: (id) => `/notifications/${id}/read`,
   },
 

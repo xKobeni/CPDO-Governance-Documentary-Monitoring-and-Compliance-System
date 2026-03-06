@@ -1,8 +1,42 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { getUnreadCountService } from '../services/notificationsService';
+import { canAccessPage } from '../config/rbac';
 
 export default function MainLayout({ children, currentPage, onNavigate, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [unreadNotifications] = useState(2); // Dummy count - in real app, this would come from props or context
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchUnreadCount = async () => {
+      try {
+        const count = await getUnreadCountService();
+        if (mounted) setUnreadNotifications(count);
+      } catch {
+        if (mounted) setUnreadNotifications(0);
+      }
+    };
+
+    fetchUnreadCount();
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentPage]);
+
+  const userDisplayName = user?.fullName || 'User';
+  const userRoleLabel = user?.role || 'N/A';
+  const userRole = user?.role;
+
+  const userInitials = useMemo(() => {
+    const parts = userDisplayName.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return 'U';
+    if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }, [userDisplayName]);
 
   const menuItems = [
     {
@@ -51,6 +85,15 @@ export default function MainLayout({ children, currentPage, onNavigate, onLogout
       )
     },
     {
+      id: 'offices',
+      label: 'Offices',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+      )
+    },
+    {
       id: 'settings',
       label: 'Settings',
       icon: (
@@ -62,10 +105,15 @@ export default function MainLayout({ children, currentPage, onNavigate, onLogout
     }
   ];
 
+  const visibleMenuItems = useMemo(
+    () => menuItems.filter((item) => canAccessPage(userRole, item.id)),
+    [menuItems, userRole]
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-base-200 text-base-content">
       {/* Top Bar */}
-      <div className="navbar bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50 shadow-sm">
+      <div className="navbar bg-base-100 border-b border-base-300 fixed top-0 left-0 right-0 z-50 shadow-sm">
         <div className="flex-none">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -81,7 +129,7 @@ export default function MainLayout({ children, currentPage, onNavigate, onLogout
           <div className="flex items-center gap-3">
             {/* Logo */}
             <svg 
-              className="w-8 h-8 text-violet-600" 
+              className="w-8 h-8 text-primary" 
               viewBox="0 0 48 48" 
               fill="currentColor"
             >
@@ -91,8 +139,8 @@ export default function MainLayout({ children, currentPage, onNavigate, onLogout
               <rect x="20" y="18" width="8" height="4" />
             </svg>
             <div>
-              <h1 className="text-lg font-bold text-gray-800">CPDO Monitoring System</h1>
-              <p className="text-xs text-gray-500">City Planning and Development Office</p>
+              <h1 className="text-lg font-bold text-base-content">CPDO Monitoring System</h1>
+              <p className="text-xs text-base-content/70">City Planning and Development Office</p>
             </div>
           </div>
         </div>
@@ -113,18 +161,19 @@ export default function MainLayout({ children, currentPage, onNavigate, onLogout
           {/* User Dropdown */}
           <div className="dropdown dropdown-end">
             <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar">
-              <div className="w-10 rounded-full bg-violet-100 flex items-center justify-center">
-                <span className="text-violet-600 font-semibold">JD</span>
+              <div className="w-10 rounded-full bg-primary/15 flex items-center justify-center">
+                <span className="text-primary font-semibold">{userInitials}</span>
               </div>
             </div>
-            <ul tabIndex={0} className="mt-3 z-1 p-2 shadow-lg menu menu-sm dropdown-content bg-white rounded-lg w-52 border border-gray-200">
+            <ul tabIndex={0} className="mt-3 z-1 p-2 shadow-lg menu menu-sm dropdown-content bg-base-100 rounded-lg w-52 border border-base-300">
               <li className="menu-title">
-                <span className="text-gray-700">John Doe</span>
-                <span className="text-xs text-gray-500">Admin</span>
+                <span className="text-base-content">{userDisplayName}</span>
+                <span className="text-xs text-base-content/70">{userRoleLabel}</span>
               </li>
-              <li><a onClick={() => onNavigate('settings')}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>Profile</a></li>
               <li><a onClick={() => onNavigate('settings')}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>Settings</a></li>
-              <li><a onClick={() => onNavigate('audit-logs')}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>Audit Logs</a></li>
+              {canAccessPage(userRole, 'audit-logs') && (
+                <li><a onClick={() => onNavigate('audit-logs')}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>Audit Logs</a></li>
+              )}
               <div className="divider my-0"></div>
               <li><a onClick={onLogout} className="text-error"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>Logout</a></li>
             </ul>
@@ -134,19 +183,19 @@ export default function MainLayout({ children, currentPage, onNavigate, onLogout
 
       {/* Sidebar */}
       <aside 
-        className={`fixed left-0 top-16 bottom-0 bg-white border-r border-gray-200 transition-all duration-300 z-40 ${
+        className={`fixed left-0 top-16 bottom-0 bg-base-100 border-r border-base-300 transition-all duration-300 z-40 ${
           sidebarOpen ? 'w-64' : 'w-20'
         }`}
       >
         <nav className="p-4 space-y-1">
-          {menuItems.map((item) => (
+          {visibleMenuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 currentPage === item.id
-                  ? 'bg-violet-50 text-violet-600 font-medium'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-primary/15 text-primary font-medium'
+                  : 'text-base-content hover:bg-base-200'
               }`}
             >
               {item.icon}
@@ -157,9 +206,9 @@ export default function MainLayout({ children, currentPage, onNavigate, onLogout
 
         {/* Sidebar Footer */}
         {sidebarOpen && (
-          <div className="absolute bottom-4 left-4 right-4 p-4 bg-violet-50 rounded-lg border border-violet-100">
-            <p className="text-xs text-gray-600 mb-1">Need Help?</p>
-            <a href="#support" className="text-sm text-violet-600 hover:text-violet-700 font-medium">
+          <div className="absolute bottom-4 left-4 right-4 p-4 bg-base-200 rounded-lg border border-base-300">
+            <p className="text-xs text-base-content/70 mb-1">Need Help?</p>
+            <a href="#support" className="text-sm text-primary hover:text-primary/80 font-medium">
               Contact Support
             </a>
           </div>

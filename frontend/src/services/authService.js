@@ -52,11 +52,22 @@ export const logoutService = async () => {
  */
 export const getMeService = async () => {
   const response = await api.get(API_ENDPOINTS.AUTH.ME);
-  const user = response.data;
+  const user = response.data?.user;
 
   // Update stored user data
   localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
 
+  return user;
+};
+
+/**
+ * Update current user profile
+ */
+export const updateMeService = async (payload) => {
+  const response = await api.patch(API_ENDPOINTS.AUTH.ME, payload);
+  const user = response.data?.user;
+
+  localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
   return user;
 };
 

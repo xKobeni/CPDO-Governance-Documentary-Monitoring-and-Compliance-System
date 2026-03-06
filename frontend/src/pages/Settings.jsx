@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { applyTheme, resolveTheme } from '../config/themes';
 
 export default function Settings() {
+  const { user, refreshUser, updateProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('account');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   // Account Settings State
   const [accountForm, setAccountForm] = useState({
-    fullName: 'John Doe',
-    email: 'john.doe@cpdo.gov',
-    role: 'STAFF', // Role code from roles table (ADMIN, STAFF, OFFICE)
-    office: 'Planning Division'
+    fullName: '',
+    email: '',
+    role: '',
+    office: ''
   });
 
   // Security Settings State
@@ -23,14 +28,36 @@ export default function Settings() {
 
   // Theme Settings State
   const [themeSettings, setThemeSettings] = useState({
-    theme: localStorage.getItem('cpdo-theme') || 'light'
+    theme: resolveTheme(localStorage.getItem('cpdo-theme'))
   });
 
   // Apply saved theme on mount
   useEffect(() => {
-    const savedTheme = localStorage.getItem('cpdo-theme') || 'light';
-    document.documentElement.setAttribute('data-theme', savedTheme);
+    const savedTheme = resolveTheme(localStorage.getItem('cpdo-theme'));
+    applyTheme(savedTheme);
+    setThemeSettings((prev) => ({
+      ...prev,
+      theme: savedTheme,
+    }));
   }, []);
+
+  useEffect(() => {
+    refreshUser().catch(() => {
+      setLoadError('Unable to load latest profile from server.');
+    });
+  }, [refreshUser]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    setLoadError('');
+    setAccountForm({
+      fullName: user.fullName || '',
+      email: user.email || '',
+      role: user.role || '',
+      office: user.officeName || user.officeCode || user.officeId || 'Unassigned',
+    });
+  }, [user]);
 
   const handleAccountChange = (e) => {
     const { name, value } = e.target;
@@ -50,24 +77,56 @@ export default function Settings() {
 
   const handleThemeChange = (e) => {
     const { name, value } = e.target;
+    const resolvedTheme = resolveTheme(value);
     setThemeSettings(prev => ({
       ...prev,
-      [name]: value
+      [name]: resolvedTheme
     }));
+
     // Apply theme to document and save to localStorage
-    document.documentElement.setAttribute('data-theme', value);
-    localStorage.setItem('cpdo-theme', value);
+    applyTheme(resolvedTheme);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    setSaveSuccess(false);
+    setSaveError('');
     setIsSaving(true);
-    
-    setTimeout(() => {
+
+    try {
+      if (activeTab === 'account') {
+        const fullName = accountForm.fullName.trim();
+        if (fullName.length < 2) {
+          throw new Error('Full name must be at least 2 characters long.');
+        }
+
+        const updatedUser = await updateProfile({ fullName });
+        setAccountForm((prev) => ({
+          ...prev,
+          fullName: updatedUser.fullName || prev.fullName,
+          email: updatedUser.email || prev.email,
+          role: updatedUser.role || prev.role,
+          office: updatedUser.officeName || updatedUser.officeCode || updatedUser.officeId || prev.office,
+        }));
+      }
+
       setIsSaving(false);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-      console.log('Settings saved successfully');
-    }, 1000);
+    } catch (error) {
+      setIsSaving(false);
+      setSaveError(error.response?.data?.message || error.message || 'Failed to save settings.');
+    }
+  };
+
+  const handleCancel = () => {
+    if (!user) return;
+    setSaveError('');
+    setAccountForm({
+      fullName: user.fullName || '',
+      email: user.email || '',
+      role: user.role || '',
+      office: user.officeName || user.officeCode || user.officeId || 'Unassigned',
+    });
   };
 
   const tabs = [
@@ -106,9 +165,9 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="pb-6 border-b border-gray-200">
-        <h1 className="text-4xl font-bold text-gray-800">Settings</h1>
-        <p className="text-gray-600 mt-2">Manage your account, security, and preferences</p>
+      <div className="pb-6 border-b border-base-300">
+        <h1 className="text-4xl font-bold text-base-content">Settings</h1>
+        <p className="text-base-content/70 mt-2">Manage your account, security, and preferences</p>
       </div>
 
       {/* Success Message */}
@@ -131,6 +190,18 @@ export default function Settings() {
         </div>
       )}
 
+      {loadError && (
+        <div className="alert alert-warning bg-amber-50 border border-amber-200 shadow-lg rounded-lg">
+          <span className="text-amber-800 font-medium">{loadError}</span>
+        </div>
+      )}
+
+      {saveError && (
+        <div className="alert alert-error bg-red-50 border border-red-200 shadow-lg rounded-lg">
+          <span className="text-red-800 font-medium">{saveError}</span>
+        </div>
+      )}
+
       {/* Settings Container */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         
@@ -144,19 +215,19 @@ export default function Settings() {
                 className={`w-full flex items-start gap-4 p-4 rounded-xl transition-all duration-200 ${
                   activeTab === tab.id
                     ? 'bg-violet-50 border-2 border-violet-600 shadow-md'
-                    : 'bg-white border-2 border-gray-200 hover:border-violet-300 hover:bg-gray-50'
+                    : 'bg-base-100 border-2 border-base-300 hover:border-primary/40 hover:bg-base-200'
                 }`}
               >
                 <div className={`shrink-0 p-3 rounded-lg ${
-                  activeTab === tab.id ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-600'
+                  activeTab === tab.id ? 'bg-primary text-primary-content' : 'bg-base-200 text-base-content/70'
                 }`}>
                   {tab.icon}
                 </div>
                 <div className="text-left">
-                  <p className={`font-semibold ${activeTab === tab.id ? 'text-violet-600' : 'text-gray-800'}`}>
+                  <p className={`font-semibold ${activeTab === tab.id ? 'text-primary' : 'text-base-content'}`}>
                     {tab.label}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">{tab.description}</p>
+                  <p className="text-xs text-base-content/60 mt-1">{tab.description}</p>
                 </div>
               </button>
             ))}
@@ -169,7 +240,7 @@ export default function Settings() {
           {activeTab === 'account' && (
             <div className="space-y-6">
               {/* Personal Information Card */}
-              <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl">
+              <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
                 <div className="card-body">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="p-3 rounded-lg bg-violet-100">
@@ -253,7 +324,7 @@ export default function Settings() {
               </div>
 
               {/* Password Card */}
-              <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl">
+              <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
                 <div className="card-body">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="p-3 rounded-lg bg-amber-100">
@@ -266,7 +337,7 @@ export default function Settings() {
                       <p className="text-sm text-gray-600">Update your password regularly</p>
                     </div>
                   </div>
-                  <button className="btn btn-outline border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white hover:border-violet-600 rounded-lg w-full sm:w-auto">
+                  <button className="btn btn-outline btn-primary rounded-lg w-full sm:w-auto">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
@@ -277,11 +348,11 @@ export default function Settings() {
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-3 pt-6">
-                <button className="btn btn-ghost rounded-lg">Cancel</button>
+                <button onClick={handleCancel} className="btn btn-ghost rounded-lg">Cancel</button>
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="btn bg-violet-600 hover:bg-violet-700 text-white border-none rounded-lg disabled:bg-violet-400"
+                  className="btn btn-primary rounded-lg"
                 >
                   {isSaving ? (
                     <>
@@ -305,7 +376,7 @@ export default function Settings() {
           {activeTab === 'security' && (
             <div className="space-y-6">
               {/* Security Features Card */}
-              <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl">
+              <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
                 <div className="card-body">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="p-3 rounded-lg bg-red-100">
@@ -321,7 +392,7 @@ export default function Settings() {
                   
                   <div className="space-y-4">
                     {/* Two-Factor Authentication */}
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-linear-to-r from-violet-50 to-purple-50 border-2 border-violet-100 hover:border-violet-300 transition-colors">
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-base-200 border-2 border-base-300 hover:border-primary/40 transition-colors">
                       <div>
                         <h3 className="font-semibold text-gray-800">Two-Factor Authentication</h3>
                         <p className="text-sm text-gray-600 mt-1">Add an extra layer of security</p>
@@ -340,7 +411,7 @@ export default function Settings() {
                     </div>
 
                     {/* Login Alerts */}
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-linear-to-r from-blue-50 to-cyan-50 border-2 border-blue-100 hover:border-blue-300 transition-colors">
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-base-200 border-2 border-base-300 hover:border-primary/40 transition-colors">
                       <div>
                         <h3 className="font-semibold text-gray-800">Login Alerts</h3>
                         <p className="text-sm text-gray-600 mt-1">Get notified of unusual activity</p>
@@ -362,7 +433,7 @@ export default function Settings() {
               </div>
 
               {/* Configuration Card */}
-              <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl">
+              <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
                 <div className="card-body">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="p-3 rounded-lg bg-orange-100">
@@ -425,7 +496,7 @@ export default function Settings() {
               </div>
 
               {/* Active Sessions Card */}
-              <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl">
+              <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
                 <div className="card-body">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="p-3 rounded-lg bg-green-100">
@@ -439,7 +510,7 @@ export default function Settings() {
                     </div>
                   </div>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-violet-300 transition-colors">
+                    <div className="flex items-center justify-between p-4 rounded-xl border border-base-300 hover:border-primary/40 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-linear-to-br from-blue-100 to-purple-100">
                           <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
@@ -462,11 +533,11 @@ export default function Settings() {
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-3 pt-6">
-                <button className="btn btn-ghost rounded-lg">Cancel</button>
+                <button onClick={handleCancel} className="btn btn-ghost rounded-lg">Cancel</button>
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="btn bg-violet-600 hover:bg-violet-700 text-white border-none rounded-lg disabled:bg-violet-400"
+                  className="btn btn-primary rounded-lg"
                 >
                   {isSaving ? (
                     <>
@@ -490,7 +561,7 @@ export default function Settings() {
           {activeTab === 'appearance' && (
             <div className="space-y-6">
               {/* Theme Selection Card */}
-              <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl">
+              <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
                 <div className="card-body">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="p-3 rounded-lg bg-violet-100">
@@ -515,38 +586,10 @@ export default function Settings() {
                       onChange={handleThemeChange}
                       className="select select-bordered w-full bg-gray-50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 rounded-lg text-base"
                     >
-                      <option value="light">☀️ Light</option>
-                      <option value="dark">🌙 Dark</option>
-                      <option value="cupcake">🧁 Cupcake</option>
-                      <option value="bumblebee">🐝 Bumblebee</option>
-                      <option value="emerald">💚 Emerald</option>
-                      <option value="corporate">🏢 Corporate</option>
-                      <option value="synthwave">🌆 Synthwave</option>
-                      <option value="retro">📻 Retro</option>
-                      <option value="cyberpunk">🤖 Cyberpunk</option>
-                      <option value="valentine">💝 Valentine</option>
-                      <option value="halloween">🎃 Halloween</option>
-                      <option value="garden">🌸 Garden</option>
-                      <option value="forest">🌲 Forest</option>
-                      <option value="aqua">💧 Aqua</option>
-                      <option value="lofi">🎵 Lo-Fi</option>
-                      <option value="pastel">🎨 Pastel</option>
-                      <option value="fantasy">🦄 Fantasy</option>
-                      <option value="wireframe">📐 Wireframe</option>
-                      <option value="black">⚫ Black</option>
-                      <option value="luxury">💎 Luxury</option>
-                      <option value="dracula">🧛 Dracula</option>
-                      <option value="cmyk">🖨️ CMYK</option>
-                      <option value="autumn">🍂 Autumn</option>
-                      <option value="business">💼 Business</option>
-                      <option value="acid">🧪 Acid</option>
-                      <option value="lemonade">🍋 Lemonade</option>
-                      <option value="night">🌃 Night</option>
-                      <option value="coffee">☕ Coffee</option>
-                      <option value="winter">❄️ Winter</option>
-                      <option value="dim">🔅 Dim</option>
-                      <option value="nord">🏔️ Nord</option>
-                      <option value="sunset">🌅 Sunset</option>
+                      <option value="light">Light</option>
+                      <option value="corporate">Corporate</option>
+                      <option value="nord">Nord</option>
+                      <option value="silk">Silk</option>
                     </select>
                     <label className="label pt-2">
                       <span className="label-text-alt text-gray-500">DaisyUI theme will be applied across the entire application</span>
@@ -556,7 +599,7 @@ export default function Settings() {
               </div>
 
               {/* Theme Preview Card */}
-              <div className="card bg-linear-to-br from-violet-50 to-purple-50 border-2 border-violet-200 rounded-2xl">
+              <div className="card bg-base-100 border-2 border-base-300 rounded-2xl">
                 <div className="card-body">
                   <h3 className="font-semibold text-gray-800 mb-4">Preview</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -573,7 +616,7 @@ export default function Settings() {
               </div>
 
               {/* Theme Info Card */}
-              <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl">
+              <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
                 <div className="card-body">
                   <div className="flex items-start gap-3">
                     <div className="text-2xl">💡</div>
@@ -589,11 +632,11 @@ export default function Settings() {
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-3 pt-6">
-                <button className="btn btn-ghost rounded-lg">Cancel</button>
+                <button onClick={handleCancel} className="btn btn-ghost rounded-lg">Cancel</button>
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="btn bg-violet-600 hover:bg-violet-700 text-white border-none rounded-lg disabled:bg-violet-400"
+                  className="btn btn-primary rounded-lg"
                 >
                   {isSaving ? (
                     <>

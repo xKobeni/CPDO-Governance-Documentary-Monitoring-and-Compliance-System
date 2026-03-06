@@ -5,13 +5,38 @@ import { verifyPassword } from "../utils/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/jwt.js";
 import { sha256 } from "../utils/tokenHash.js";
 
-import { findUserAuthByEmail, updateLastLogin, recordFailedLoginAttempt, resetFailedLoginAttempts, getFailedLoginAttempts } from "../models/users.model.js";
+import {
+  findUserAuthByEmail,
+  findUserById,
+  updateUserProfile,
+  updateLastLogin,
+  recordFailedLoginAttempt,
+  resetFailedLoginAttempts,
+} from "../models/users.model.js";
 import { createSession, findValidSessionByHash, revokeSession, revokeAllSessionsByUserId } from "../models/sessions.model.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
+
+const updateMeSchema = z.object({
+  fullName: z.string().min(2).max(120),
+});
+
+function formatUserProfile(user) {
+  return {
+    id: user.id,
+    fullName: user.full_name,
+    email: user.email,
+    role: user.role_code,
+    roleName: user.role_name,
+    officeId: user.office_id ?? null,
+    officeName: user.office_name ?? null,
+    officeCode: user.office_code ?? null,
+    isActive: user.is_active,
+  };
+}
 
 function setRefreshCookie(res, token) {
   res.cookie("refresh_token", token, {
@@ -196,5 +221,17 @@ export async function logout(req, res) {
 }
 
 export async function me(req, res) {
-  return res.json({ user: req.user });
+  const user = await findUserById(req.user.sub);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  return res.json({ user: formatUserProfile(user) });
+}
+
+export async function updateMe(req, res) {
+  const parsed = updateMeSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: "Invalid input" });
+
+  const updated = await updateUserProfile(req.user.sub, parsed.data);
+  if (!updated) return res.status(404).json({ message: "User not found" });
+
+  return res.json({ user: formatUserProfile(updated) });
 }

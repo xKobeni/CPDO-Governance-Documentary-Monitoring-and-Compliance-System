@@ -8,6 +8,7 @@ import {
   loginService,
   logoutService,
   getMeService,
+  updateMeService,
   getStoredUser,
   getStoredToken,
 } from '../services/authService';
@@ -133,6 +134,24 @@ export const useAuthStore = create((set) => ({
       error: null,
       loginError: { message: null, attemptsRemaining: null, isLocked: false, lockedUntil: null },
     });
+  },
+
+  /**
+   * Refresh authenticated user profile from backend
+   */
+  refreshUser: async () => {
+    const currentUser = await getMeService();
+    set({ user: currentUser });
+    return currentUser;
+  },
+
+  /**
+   * Update authenticated user profile
+   */
+  updateProfile: async (payload) => {
+    const updatedUser = await updateMeService(payload);
+    set({ user: updatedUser });
+    return updatedUser;
   },
 }));
 

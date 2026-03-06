@@ -69,21 +69,21 @@ export default function AuditLogs() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="pb-6 border-b border-gray-200">
-        <h1 className="text-4xl font-bold text-gray-800">Audit Logs</h1>
-        <p className="text-gray-600 mt-2">Track all system activities and user actions</p>
+      <div className="pb-6 border-b border-base-300">
+        <h1 className="text-4xl font-bold text-base-content">Audit Logs</h1>
+        <p className="text-base-content/70 mt-2">Track all system activities and user actions</p>
       </div>
 
       {/* Filters and Search */}
-      <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl">
+      <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl">
         <div className="card-body">
-          <h2 className="card-title text-gray-800 mb-4">Filters & Search</h2>
+          <h2 className="card-title text-base-content mb-4">Filters & Search</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Search */}
             <div className="form-control">
               <label className="label pb-2">
-                <span className="label-text font-semibold text-gray-800">Search</span>
+                <span className="label-text font-semibold text-base-content">Search</span>
               </label>
               <input
                 type="text"
@@ -93,14 +93,14 @@ export default function AuditLogs() {
                   setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="input input-bordered w-full bg-gray-50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 rounded-lg"
+                className="input input-bordered w-full bg-base-100 rounded-lg"
               />
             </div>
 
             {/* Action Filter */}
             <div className="form-control">
               <label className="label pb-2">
-                <span className="label-text font-semibold text-gray-800">Action Type</span>
+                <span className="label-text font-semibold text-base-content">Action Type</span>
               </label>
               <select
                 value={filterAction}
@@ -108,7 +108,7 @@ export default function AuditLogs() {
                   setFilterAction(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="select select-bordered w-full bg-gray-50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 rounded-lg"
+                className="select select-bordered w-full bg-base-100 rounded-lg"
               >
                 <option value="all">All Actions</option>
                 {uniqueActions.map((action) => (
@@ -120,7 +120,7 @@ export default function AuditLogs() {
             {/* Entity Type Filter */}
             <div className="form-control">
               <label className="label pb-2">
-                <span className="label-text font-semibold text-gray-800">Entity Type</span>
+                <span className="label-text font-semibold text-base-content">Entity Type</span>
               </label>
               <select
                 value={filterEntity}
@@ -128,7 +128,7 @@ export default function AuditLogs() {
                   setFilterEntity(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="select select-bordered w-full bg-gray-50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 rounded-lg"
+                className="select select-bordered w-full bg-base-100 rounded-lg"
               >
                 <option value="all">All Entities</option>
                 {uniqueEntityTypes.map((type) => (
@@ -140,12 +140,12 @@ export default function AuditLogs() {
             {/* Date Range */}
             <div className="form-control">
               <label className="label pb-2">
-                <span className="label-text font-semibold text-gray-800">Date Range</span>
+                <span className="label-text font-semibold text-base-content">Date Range</span>
               </label>
               <select
                 value={dateRange}
                 onChange={(e) => setDateRange(e.target.value)}
-                className="select select-bordered w-full bg-gray-50 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-200 rounded-lg"
+                className="select select-bordered w-full bg-base-100 rounded-lg"
               >
                 <option value="today">Today</option>
                 <option value="7days">Last 7 Days</option>
@@ -156,12 +156,12 @@ export default function AuditLogs() {
           </div>
 
           {/* Results Info */}
-          <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              Showing <span className="font-semibold text-gray-800">{paginatedLogs.length}</span> of <span className="font-semibold text-gray-800">{filteredLogs.length}</span> logs
+          <div className="mt-4 pt-4 border-t border-base-300 flex items-center justify-between">
+            <p className="text-sm text-base-content/70">
+              Showing <span className="font-semibold text-base-content">{paginatedLogs.length}</span> of <span className="font-semibold text-base-content">{filteredLogs.length}</span> logs
             </p>
             {filteredLogs.length === 0 && (
-              <button className="btn btn-sm btn-outline border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white">
+              <button className="btn btn-sm btn-outline btn-primary">
                 Clear Filters
               </button>
             )}
@@ -170,29 +170,29 @@ export default function AuditLogs() {
       </div>
 
       {/* Logs Table */}
-      <div className="card bg-white shadow-sm border border-gray-200 rounded-2xl overflow-hidden">
+      <div className="card bg-base-100 shadow-sm border border-base-300 rounded-2xl overflow-hidden">
         <div className="card-body p-0">
           <div className="overflow-x-auto">
             <table className="table table-zebra w-full">
-              <thead className="bg-linear-to-r from-violet-50 to-purple-50 border-b-2 border-gray-200">
+              <thead className="bg-base-200 border-b-2 border-base-300">
                 <tr>
-                  <th className="text-gray-700 font-semibold">Action</th>
-                  <th className="text-gray-700 font-semibold">User</th>
-                  <th className="text-gray-700 font-semibold hidden md:table-cell">Entity Type</th>
-                  <th className="text-gray-700 font-semibold hidden lg:table-cell">Entity ID</th>
-                  <th className="text-gray-700 font-semibold hidden lg:table-cell">IP Address</th>
-                  <th className="text-gray-700 font-semibold">Timestamp</th>
+                  <th className="text-base-content/80 font-semibold">Action</th>
+                  <th className="text-base-content/80 font-semibold">User</th>
+                  <th className="text-base-content/80 font-semibold hidden md:table-cell">Entity Type</th>
+                  <th className="text-base-content/80 font-semibold hidden lg:table-cell">Entity ID</th>
+                  <th className="text-base-content/80 font-semibold hidden lg:table-cell">IP Address</th>
+                  <th className="text-base-content/80 font-semibold">Timestamp</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedLogs.length > 0 ? (
                   paginatedLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={log.id} className="hover:bg-base-200 transition-colors">
                       <td>
-                        <span className="font-medium text-gray-800">{log.action}</span>
+                        <span className="font-medium text-base-content">{log.action}</span>
                       </td>
                       <td>
-                        <span className="text-gray-800">{log.actor_name}</span>
+                        <span className="text-base-content">{log.actor_name}</span>
                       </td>
                       <td className="hidden md:table-cell">
                         <span className={`badge ${getEntityBadge(log.entity_type)} badge-sm`}>
@@ -200,15 +200,15 @@ export default function AuditLogs() {
                         </span>
                       </td>
                       <td className="hidden lg:table-cell">
-                        <p className="text-sm text-gray-600 font-mono truncate max-w-xs">
+                        <p className="text-sm text-base-content/70 font-mono truncate max-w-xs">
                           {log.entity_id || 'N/A'}
                         </p>
                       </td>
                       <td className="hidden lg:table-cell">
-                        <p className="text-sm text-gray-600 font-mono">{log.ip_address}</p>
+                        <p className="text-sm text-base-content/70 font-mono">{log.ip_address}</p>
                       </td>
                       <td>
-                        <p className="text-xs text-gray-600">{formatTimestamp(log.created_at)}</p>
+                        <p className="text-xs text-base-content/70">{formatTimestamp(log.created_at)}</p>
                       </td>
                     </tr>
                   ))
@@ -216,11 +216,11 @@ export default function AuditLogs() {
                   <tr>
                     <td colSpan="6" className="text-center py-8">
                       <div className="flex flex-col items-center justify-center gap-2">
-                        <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-12 h-12 text-base-content/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                         </svg>
-                        <p className="text-gray-500 font-medium">No logs found</p>
-                        <p className="text-gray-400 text-sm">Try adjusting your filters</p>
+                        <p className="text-base-content/70 font-medium">No logs found</p>
+                        <p className="text-base-content/50 text-sm">Try adjusting your filters</p>
                       </div>
                     </td>
                   </tr>
@@ -237,7 +237,7 @@ export default function AuditLogs() {
           <button
             onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
             disabled={currentPage === 1}
-            className="btn btn-sm btn-outline border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white disabled:border-gray-300 disabled:text-gray-400"
+            className="btn btn-sm btn-outline btn-primary"
           >
             Previous
           </button>
@@ -249,8 +249,8 @@ export default function AuditLogs() {
                 onClick={() => setCurrentPage(page)}
                 className={`btn btn-sm ${
                   page === currentPage
-                    ? 'btn-primary bg-violet-600 border-violet-600 text-white'
-                    : 'btn-outline border-gray-300 text-gray-700 hover:border-violet-600 hover:text-violet-600'
+                    ? 'btn-primary'
+                    : 'btn-outline'
                 }`}
               >
                 {page}
@@ -261,7 +261,7 @@ export default function AuditLogs() {
           <button
             onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
             disabled={currentPage === totalPages}
-            className="btn btn-sm btn-outline border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white disabled:border-gray-300 disabled:text-gray-400"
+            className="btn btn-sm btn-outline btn-primary"
           >
             Next
           </button>
@@ -270,7 +270,7 @@ export default function AuditLogs() {
 
       {/* Export Button */}
       <div className="flex justify-end">
-        <button className="btn btn-outline border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white rounded-lg gap-2">
+        <button className="btn btn-outline btn-primary rounded-lg gap-2">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>

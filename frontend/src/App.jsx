@@ -5,14 +5,17 @@ import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import AuditLogs from './pages/AuditLogs';
 import Notifications from './pages/Notifications';
+import UserManagement from './pages/UserManagement';
+import OfficeManagement from './pages/OfficeManagement';
 import MainLayout from './layouts/MainLayout';
-import { Error404 } from './pages/ErrorPage';
+import { Error403, Error404 } from './pages/ErrorPage';
 import { useAuth } from './hooks/useAuth';
+import { canAccessPage } from './config/rbac';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [authInitialized, setAuthInitialized] = useState(false);
-  const { isAuthenticated, initializeAuth, logout } = useAuth();
+  const { isAuthenticated, initializeAuth, logout, user } = useAuth();
 
   // Initialize auth from localStorage on app load
   useEffect(() => {
@@ -36,10 +39,10 @@ export default function App() {
   // Show loading while initializing auth
   if (!authInitialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-base-200 text-base-content">
         <div className="flex flex-col items-center gap-4">
           <div className="loading loading-spinner loading-lg text-violet-600"></div>
-          <p className="text-gray-600 font-medium">Loading...</p>
+          <p className="text-base-content/70 font-medium">Loading...</p>
         </div>
       </div>
     );
@@ -55,6 +58,10 @@ export default function App() {
 
   // Render page content based on current page
   const renderPage = () => {
+    if (!canAccessPage(user?.role, currentPage)) {
+      return <Error403 />;
+    }
+
     switch (currentPage) {
       case 'dashboard':
         return <Dashboard />;
@@ -65,7 +72,9 @@ export default function App() {
       case 'reports':
         return <Error404 message="Reports page coming soon" />;
       case 'users':
-        return <Error404 message="Users page coming soon" />;
+        return <UserManagement />;
+      case 'offices':
+        return <OfficeManagement />;
       case 'settings':
         return <Settings />;
       case 'notifications':
