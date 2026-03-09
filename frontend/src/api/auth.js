@@ -22,6 +22,6 @@ export async function logout() {
 
 export async function getMe() {
   const response = await api.get("/auth/me");
-  setAuthState({ user: response.data });
-  return response.data;
+  // Extract user from the response since backend returns { user: {...} }
+  return response.data.user;
 }

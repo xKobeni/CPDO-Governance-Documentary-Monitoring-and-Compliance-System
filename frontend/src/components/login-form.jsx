@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { EyeIcon, EyeOffIcon } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 
 export function LoginForm({
   className,
@@ -23,12 +23,65 @@ export function LoginForm({
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [email, setEmail] = useState("");
+  const emailInputRef = useRef(null);
+
+  // Load saved email on component mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("rememberedEmail");
+    const hasRememberedEmail = localStorage.getItem("rememberMe") === "true";
+    
+    if (savedEmail && hasRememberedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
+
+  // Handle remember me toggle
+  const handleRememberMeChange = (checked) => {
+    setRememberMe(checked);
+    
+    if (checked) {
+      // Save current email if remember me is checked
+      const currentEmail = emailInputRef.current?.value || email;
+      if (currentEmail) {
+        localStorage.setItem("rememberedEmail", currentEmail);
+        localStorage.setItem("rememberMe", "true");
+      }
+    } else {
+      // Clear saved email if remember me is unchecked
+      localStorage.removeItem("rememberedEmail");
+      localStorage.removeItem("rememberMe");
+    }
+  };
+
+  // Handle email change to update localStorage if remember me is checked
+  const handleEmailChange = (e) => {
+    const newEmail = e.target.value;
+    setEmail(newEmail);
+    
+    if (rememberMe) {
+      localStorage.setItem("rememberedEmail", newEmail);
+    }
+  };
+
+  // Handle form submission
+  const handleSubmit = (e) => {
+    if (rememberMe && email) {
+      localStorage.setItem("rememberedEmail", email);
+      localStorage.setItem("rememberMe", "true");
+    }
+    
+    if (onSubmit) {
+      onSubmit(e);
+    }
+  };
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden p-0">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-12 md:p-16" onSubmit={onSubmit}>
+          <form className="p-12 md:p-16" onSubmit={handleSubmit}>
             <FieldGroup className="space-y-2">
               <div className="flex flex-col items-center gap-2 text-center mb-4">
                 <h1 className="text-2xl font-bold">Welcome back</h1>
@@ -46,9 +99,12 @@ export function LoginForm({
               <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input 
+                  ref={emailInputRef}
                   id="email" 
                   name="email"
                   type="email" 
+                  value={email}
+                  onChange={handleEmailChange}
                   placeholder="admin@cpdo.gov.ph" 
                   required 
                 />
@@ -87,7 +143,7 @@ export function LoginForm({
                   <Checkbox 
                     id="remember-me"
                     checked={rememberMe}
-                    onCheckedChange={setRememberMe}
+                    onCheckedChange={handleRememberMeChange}
                     className="data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
                   />
                   <input 

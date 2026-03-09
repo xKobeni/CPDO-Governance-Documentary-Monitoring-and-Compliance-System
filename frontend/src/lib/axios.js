@@ -5,14 +5,24 @@ const api = axios.create({
   withCredentials: true,
 });
 
-let accessToken = null;
+let accessToken = localStorage.getItem('accessToken');
 
 export function setAccessToken(token) {
   accessToken = token;
+  if (token) {
+    localStorage.setItem('accessToken', token);
+  } else {
+    localStorage.removeItem('accessToken');
+  }
 }
 
 export function clearAccessToken() {
   accessToken = null;
+  localStorage.removeItem('accessToken');
+}
+
+export function getAccessToken() {
+  return accessToken;
 }
 
 api.interceptors.request.use((config) => {
@@ -48,7 +58,10 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         clearAccessToken();
-        window.location.href = "/login";
+        // Import setAuthState here to avoid circular dependency
+        const { setAuthState } = await import('../store/auth-store');
+        setAuthState({ user: null });
+        window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }

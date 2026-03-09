@@ -17,7 +17,7 @@ export async function findUserAuthByEmail(email) {
 export async function findUserById(id) {
   const { rows } = await pool.query(
     `SELECT
-        u.id, u.email, u.full_name, u.is_active, u.office_id, u.created_at, u.updated_at,
+        u.id, u.email, u.full_name, u.is_active, u.office_id, u.created_at, u.updated_at, u.last_login_at,
         r.code as role_code, r.name as role_name,
         o.name as office_name, o.code as office_code
      FROM users u
@@ -42,7 +42,7 @@ export async function createUser({ email, passwordHash, fullName, roleId, office
 export async function listUsers(limit = 20, offset = 0) {
   const { rows } = await pool.query(
     `SELECT
-        u.id, u.email, u.full_name, u.is_active, u.office_id, u.created_at, u.updated_at,
+        u.id, u.email, u.full_name, u.is_active, u.office_id, u.created_at, u.updated_at, u.last_login_at,
         r.code as role_code, r.name as role_name,
         o.name as office_name, o.code as office_code
      FROM users u
@@ -137,4 +137,31 @@ export async function updateUserProfile(userId, { fullName }) {
 
   if (!rows[0]) return null;
   return findUserById(userId);
+}
+
+export async function updateUser(userId, { email, fullName, roleId, officeId }) {
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET email = COALESCE($2, email),
+         full_name = COALESCE($3, full_name),
+         role_id = COALESCE($4, role_id),
+         office_id = COALESCE($5, office_id),
+         updated_at = now()
+     WHERE id = $1
+     RETURNING id`,
+    [userId, email?.toLowerCase(), fullName, roleId, officeId]
+  );
+
+  if (!rows[0]) return null;
+  return findUserById(userId);
+}
+
+export async function deleteUser(userId) {
+  const { rows } = await pool.query(
+    `DELETE FROM users
+     WHERE id = $1
+     RETURNING id`,
+    [userId]
+  );
+  return rows[0] || null;
 }
