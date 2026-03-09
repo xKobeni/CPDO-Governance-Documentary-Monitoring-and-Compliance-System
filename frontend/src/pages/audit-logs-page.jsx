@@ -45,77 +45,15 @@ import {
   AlertCircle,
   MoreVertical,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
-// Mock data for demonstration - replace with actual API calls
-// Import the API functions: import { getAuditLogs, getAuditStats, exportAuditLogs } from '../api/audit-logs';
-const mockAuditLogs = [
-  {
-    id: '1',
-    actorUserId: 'user1',
-    actorName: 'Juan Dela Cruz',
-    actorEmail: 'juan.delacruz@cpdo.gov.ph',
-    action: 'CREATE_USER',
-    entityType: 'USER',
-    entityId: 'user123',
-    metadata: { email: 'new.user@cpdo.gov.ph', role: 'STAFF' },
-    createdAt: '2024-03-09T10:30:00Z'
-  },
-  {
-    id: '2',
-    actorUserId: 'user2',
-    actorName: 'Maria Santos',
-    actorEmail: 'maria.santos@cpdo.gov.ph',
-    action: 'APPROVE_SUBMISSION',
-    entityType: 'SUBMISSION',
-    entityId: 'sub456',
-    metadata: { submissionTitle: 'Budget Report Q1', comments: 'Approved with minor revisions' },
-    createdAt: '2024-03-09T09:15:00Z'
-  },
-  {
-    id: '3',
-    actorUserId: null,
-    actorName: null,
-    actorEmail: null,
-    action: 'SYSTEM_BACKUP',
-    entityType: 'SYSTEM',
-    entityId: null,
-    metadata: { backupSize: '2.5GB', status: 'success' },
-    createdAt: '2024-03-09T02:00:00Z'
-  },
-  {
-    id: '4',
-    actorUserId: 'user1',
-    actorName: 'Juan Dela Cruz',
-    actorEmail: 'juan.delacruz@cpdo.gov.ph',
-    action: 'DELETE_FILE',
-    entityType: 'FILE',
-    entityId: 'file789',
-    metadata: { fileName: 'old-report.pdf', reason: 'Outdated document' },
-    createdAt: '2024-03-08T16:45:00Z'
-  },
-  {
-    id: '5',
-    actorUserId: 'user3',
-    actorName: 'Pedro Garcia',
-    actorEmail: 'pedro.garcia@cpdo.gov.ph',
-    action: 'UPDATE_TEMPLATE',
-    entityType: 'TEMPLATE',
-    entityId: 'tpl101',
-    metadata: { templateName: 'Quarterly Report Template', changes: ['Added new fields', 'Updated validation'] },
-    createdAt: '2024-03-08T14:20:00Z'
-  }
-];
-
-const mockStats = {
-  totalLogs: 1247,
-  uniqueActors: 23,
-  entityTypes: 8,
-  logsToday: 15,
-  logsWeek: 89
-};
-
+// Import the API functions
+import { getAuditLogs, getAuditStats, exportAuditLogs } from '../api/audit-logs';
 const actionTypes = [
   'CREATE_USER', 'UPDATE_USER', 'DELETE_USER', 'SET_USER_ACTIVE',
   'CREATE_OFFICE', 'UPDATE_OFFICE', 'DELETE_OFFICE', 'SET_OFFICE_ACTIVE',
@@ -151,8 +89,22 @@ const getEntityIcon = (entityType) => {
 };
 
 export default function AuditLogsPage() {
-  const [auditLogs, setAuditLogs] = useState(mockAuditLogs);
-  const [stats, setStats] = useState(mockStats);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [stats, setStats] = useState({
+    totalLogs: 0,
+    uniqueActors: 0,
+    entityTypes: 0,
+    logsToday: 0,
+    logsWeek: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('all');
   const [entityFilter, setEntityFilter] = useState('all');
@@ -160,48 +112,177 @@ export default function AuditLogsPage() {
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  // Filter logs based on search and filters
+  // Load data on component mount and when filters change (not search)
+  useEffect(() => {
+    loadAuditLogs();
+  }, [pagination.page, actionFilter, entityFilter, dateFilter]);
+
+  // Load stats on component mount
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  // Client-side filtering for search (since backend doesn't support general text search)
   const filteredLogs = auditLogs.filter(log => {
-    const matchesSearch = (log.actorName?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-                         (log.actorEmail?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-                         log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         log.entityType.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!searchQuery) return true;
     
-    const matchesAction = actionFilter === 'all' || log.action === actionFilter;
-    const matchesEntity = entityFilter === 'all' || log.entityType === entityFilter;
-    
-    let matchesDate = true;
-    if (dateFilter !== 'all') {
-      const logDate = new Date(log.createdAt);
-      const now = new Date();
-      const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
-      const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-      const monthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-      
-      if (dateFilter === 'today') matchesDate = logDate >= dayAgo;
-      else if (dateFilter === 'week') matchesDate = logDate >= weekAgo;
-      else if (dateFilter === 'month') matchesDate = logDate >= monthAgo;
-    }
-    
-    return matchesSearch && matchesAction && matchesEntity && matchesDate;
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      (log.actorName?.toLowerCase() || '').includes(searchLower) ||
+      (log.actorEmail?.toLowerCase() || '').includes(searchLower) ||
+      log.action.toLowerCase().includes(searchLower) ||
+      log.entityType.toLowerCase().includes(searchLower) ||
+      (log.entityId?.toLowerCase() || '').includes(searchLower)
+    );
   });
+
+  const loadAuditLogs = async () => {
+    try {
+      setLoading(true);
+      
+      // Build query parameters
+      const params = {
+        page: pagination.page,
+        limit: pagination.limit
+      };
+
+      // Add filters if set
+      if (actionFilter !== 'all') params.action = actionFilter;
+      if (entityFilter !== 'all') params.entityType = entityFilter;
+      
+      // Handle date filter
+      if (dateFilter !== 'all') {
+        const now = new Date();
+        let dateFrom;
+        
+        switch (dateFilter) {
+          case 'today':
+            dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            break;
+          case 'week':
+            dateFrom = new Date(now - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case 'month':
+            dateFrom = new Date(now - 30 * 24 * 60 * 60 * 1000);
+            break;
+        }
+        
+        if (dateFrom) {
+          params.dateFrom = dateFrom.toISOString();
+        }
+      }
+
+      const response = await getAuditLogs(params);
+      
+      // Handle pagination response format
+      const logsData = response.data || [];
+      const formattedLogs = Array.isArray(logsData) ? logsData.map(log => ({
+        ...log,
+        actorName: log.actor_name,
+        actorEmail: log.actor_email,
+        entityType: log.entity_type,
+        entityId: log.entity_id,
+        createdAt: log.created_at
+      })) : [];
+      
+      setAuditLogs(formattedLogs);
+      
+      // Update pagination info
+      if (response.pagination) {
+        setPagination(prev => ({
+          ...prev,
+          total: response.pagination.total,
+          totalPages: response.pagination.totalPages
+        }));
+      }
+      
+    } catch (error) {
+      console.error('Failed to load audit logs:', error);
+      toast.error('Failed to load audit logs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const response = await getAuditStats();
+      const statsData = response.stats || response;
+      
+      setStats({
+        totalLogs: parseInt(statsData.total_logs) || 0,
+        uniqueActors: parseInt(statsData.unique_actors) || 0,
+        entityTypes: parseInt(statsData.entity_types) || 0,
+        logsToday: parseInt(statsData.logs_today) || 0,
+        logsWeek: parseInt(statsData.logs_week) || 0
+      });
+    } catch (error) {
+      console.error('Failed to load audit stats:', error);
+      toast.error('Failed to load statistics');
+    }
+  };
 
   const handleExportLogs = async () => {
     try {
-      // In a real app, this would call exportAuditLogs API
-      // const blob = await exportAuditLogs({ /* current filters */ });
-      // const url = window.URL.createObjectURL(blob);
-      // const link = document.createElement('a');
-      // link.href = url;
-      // link.download = `audit-logs-${new Date().toISOString().split('T')[0]}.csv`;
-      // link.click();
-      // window.URL.revokeObjectURL(url);
+      setExporting(true);
       
-      alert('Export functionality not implemented in demo mode');
+      // Build export parameters based on current filters
+      const params = {};
+      if (actionFilter !== 'all') params.action = actionFilter;
+      if (entityFilter !== 'all') params.entityType = entityFilter;
+      
+      // Handle date filter
+      if (dateFilter !== 'all') {
+        const now = new Date();
+        let dateFrom;
+        
+        switch (dateFilter) {
+          case 'today':
+            dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            break;
+          case 'week':
+            dateFrom = new Date(now - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case 'month':
+            dateFrom = new Date(now - 30 * 24 * 60 * 60 * 1000);
+            break;
+        }
+        
+        if (dateFrom) {
+          params.dateFrom = dateFrom.toISOString();
+        }
+      }
+      
+      const blob = await exportAuditLogs(params);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `audit-logs-${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Audit logs exported successfully');
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Failed to export audit logs');
+      toast.error('Failed to export audit logs');
+    } finally {
+      setExporting(false);
     }
+  };
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+  };
+
+  const handleFilterChange = (filterType, value) => {
+    if (filterType === 'action') setActionFilter(value);
+    if (filterType === 'entity') setEntityFilter(value);
+    if (filterType === 'date') setDateFilter(value);
+    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
+  };
+
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
   };
 
   const formatDate = (dateString) => {
@@ -221,12 +302,12 @@ export default function AuditLogsPage() {
 
   const copyLogId = (logId) => {
     navigator.clipboard.writeText(logId);
-    // In a real app, show a toast notification
+    toast.success('Log ID copied to clipboard');
   };
 
   const copyMetadata = (metadata) => {
     navigator.clipboard.writeText(JSON.stringify(metadata, null, 2));
-    // In a real app, show a toast notification
+    toast.success('Metadata copied to clipboard');
   };
 
   return (
@@ -239,9 +320,18 @@ export default function AuditLogsPage() {
             Monitor system activities and user actions
           </p>
         </div>
-        <Button onClick={handleExportLogs}>
-          <Download className="mr-2 h-4 w-4" />
-          Export Logs
+        <Button onClick={handleExportLogs} disabled={exporting || loading}>
+          {exporting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Exporting...
+            </>
+          ) : (
+            <>
+              <Download className="mr-2 h-4 w-4" />
+              Export Logs
+            </>
+          )}
         </Button>
       </div>
 
@@ -309,12 +399,12 @@ export default function AuditLogsPage() {
               <Input
                 placeholder="Search logs..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearch(e.target.value)}
                 className="pl-10"
               />
             </div>
             
-            <Select value={actionFilter} onValueChange={setActionFilter}>
+            <Select value={actionFilter} onValueChange={(value) => handleFilterChange('action', value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Filter by action" />
               </SelectTrigger>
@@ -326,7 +416,7 @@ export default function AuditLogsPage() {
               </SelectContent>
             </Select>
             
-            <Select value={entityFilter} onValueChange={setEntityFilter}>
+            <Select value={entityFilter} onValueChange={(value) => handleFilterChange('entity', value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Filter by entity" />
               </SelectTrigger>
@@ -338,7 +428,7 @@ export default function AuditLogsPage() {
               </SelectContent>
             </Select>
             
-            <Select value={dateFilter} onValueChange={setDateFilter}>
+            <Select value={dateFilter} onValueChange={(value) => handleFilterChange('date', value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Filter by date" />
               </SelectTrigger>
@@ -353,13 +443,19 @@ export default function AuditLogsPage() {
             <div className="flex items-center space-x-2">
               <Filter className="h-4 w-4 text-gray-500" />
               <span className="text-sm text-gray-500">
-                {filteredLogs.length} of {auditLogs.length} logs
+                {filteredLogs.length} of {pagination.total} logs
               </span>
             </div>
           </div>
 
           {/* Audit Logs Table */}
-          <Table>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="ml-2">Loading audit logs...</span>
+            </div>
+          ) : (
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Timestamp</TableHead>
@@ -445,8 +541,9 @@ export default function AuditLogsPage() {
               })}
             </TableBody>
           </Table>
+          )}
 
-          {filteredLogs.length === 0 && (
+          {!loading && filteredLogs.length === 0 && (
             <div className="text-center py-8">
               <Activity className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-1">No audit logs found</h3>
@@ -456,6 +553,35 @@ export default function AuditLogsPage() {
                   : 'System activities will appear here as they occur.'
                 }
               </p>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {!loading && pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-gray-500">
+                Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total logs)
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                  disabled={pagination.page <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                  disabled={pagination.page >= pagination.totalPages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

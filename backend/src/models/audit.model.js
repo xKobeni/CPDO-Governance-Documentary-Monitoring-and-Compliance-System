@@ -70,7 +70,7 @@ export async function getAuditLogs(limit = 50, offset = 0, filters = {}) {
   
   params.push(limit, offset);
   
-  const result = await pool.query(query);
+  const result = await pool.query(query, params);
   
   // Get total count for pagination
   const countQuery = `
