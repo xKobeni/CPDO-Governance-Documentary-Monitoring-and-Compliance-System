@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.js";
+import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
 import { audit } from "../middlewares/audit.js";
 import { mediumCache } from "../middlewares/caching.js";
@@ -16,7 +16,7 @@ import {
 const r = Router();
 
 // All office management routes require authentication and ADMIN role
-r.use(requireAuth, requireRole("ADMIN"));
+r.use(requireAuth, checkSessionInactivity, requireRole("ADMIN"));
 
 // CREATE - Create a new office
 r.post(

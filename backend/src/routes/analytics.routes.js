@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.js";
+import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
 import { mediumCache } from "../middlewares/caching.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -12,7 +12,7 @@ import {
 
 const r = Router();
 
-r.use(requireAuth, requireRole("ADMIN", "STAFF"));
+r.use(requireAuth, checkSessionInactivity, requireRole("ADMIN", "STAFF"));
 
 r.get("/user-stats", mediumCache, asyncHandler(getUserStatsHandler));
 r.get("/recent-activity", asyncHandler(getRecentActivityHandler));

@@ -34,8 +34,8 @@ export async function checkSessionInactivity(req, res, next) {
     const { rows } = await pool.query(
       `SELECT last_activity_at, revoked_at
        FROM auth_sessions
-       WHERE id = $1`,
-      [sessionId]
+       WHERE id = $1 AND user_id = $2`,
+      [sessionId, req.user.sub]
     );
 
     if (!rows[0] || rows[0].revoked_at) {

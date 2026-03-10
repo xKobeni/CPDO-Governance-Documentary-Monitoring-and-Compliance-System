@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.js";
+import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
 import { audit } from "../middlewares/audit.js";
 import { shortCache } from "../middlewares/caching.js";
@@ -14,7 +14,7 @@ import commentsRoutes from "./comments.routes.js";
 
 const r = Router();
 
-r.use(requireAuth);
+r.use(requireAuth, checkSessionInactivity);
 
 // OFFICE/STAFF/ADMIN can create + view list (OFFICE auto restricted)
 r.post("/", audit("CREATE_SUBMISSION", "SUBMISSION", null, (req) => ({ templateId: req.body.templateId, title: req.body.title })), asyncHandler(createSubmissionHandler));

@@ -1,11 +1,12 @@
-import api, { setAccessToken, clearAccessToken } from "../lib/axios";
+import api, { setAccessToken, clearAccessToken, setSessionId, clearSessionId } from "../lib/axios";
 import { setAuthState } from "../store/auth-store";
 
 export async function login(payload) {
   const response = await api.post("/auth/login", payload);
-  const { accessToken, user } = response.data;
+  const { accessToken, sessionId, user } = response.data;
 
   setAccessToken(accessToken);
+  if (sessionId) setSessionId(sessionId);
   setAuthState({ user });
 
   return response.data;
@@ -16,6 +17,7 @@ export async function logout() {
     await api.post("/auth/logout");
   } finally {
     clearAccessToken();
+    clearSessionId();
     setAuthState({ user: null });
   }
 }

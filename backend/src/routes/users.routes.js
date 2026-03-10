@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.js";
+import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
 import { audit } from "../middlewares/audit.js";
 import { mediumCache } from "../middlewares/caching.js";
@@ -10,7 +10,7 @@ import {
 
 const r = Router();
 
-r.use(requireAuth, requireRole("ADMIN"));
+r.use(requireAuth, checkSessionInactivity, requireRole("ADMIN"));
 
 r.post("/", audit("CREATE_USER", "USER", null, (req) => ({ email: req.body.email, fullName: req.body.fullName, role: req.body.role })), asyncHandler(createUserHandler));
 r.get("/", mediumCache, asyncHandler(listUsersHandler));

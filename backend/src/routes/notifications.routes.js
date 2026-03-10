@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.js";
+import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { shortCache } from "../middlewares/caching.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import {
@@ -12,7 +12,7 @@ import {
 
 const r = Router();
 
-r.use(requireAuth);
+r.use(requireAuth, checkSessionInactivity);
 
 // Get unread notifications
 r.get("/unread", shortCache, asyncHandler(getUnreadHandler));

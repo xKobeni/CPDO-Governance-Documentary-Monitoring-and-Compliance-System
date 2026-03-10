@@ -220,7 +220,7 @@ export async function refresh(req, res) {
   const newRefreshToken = signRefreshToken(newRefreshPayload);
 
   const expiresAt = new Date(Date.now() + env.refreshTtlDays * 24 * 60 * 60 * 1000);
-  await createSession({
+  const newSession = await createSession({
     userId: payload.sub,
     refreshTokenHash: sha256(newRefreshToken),
     userAgent: req.headers["user-agent"] ?? null,
@@ -231,7 +231,7 @@ export async function refresh(req, res) {
   setRefreshCookie(res, newRefreshToken);
 
   const accessToken = signAccessToken(accessPayload);
-  return res.json({ accessToken });
+  return res.json({ accessToken, sessionId: newSession.id });
 }
 
 export async function logout(req, res) {

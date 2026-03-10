@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.js";
+import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
 import { audit } from "../middlewares/audit.js";
 import { longCache } from "../middlewares/caching.js";
@@ -13,7 +13,7 @@ import {
 
 const r = Router();
 
-r.use(requireAuth);
+r.use(requireAuth, checkSessionInactivity);
 
 // read: ADMIN/STAFF/OFFICE - cached for 1 hour
 r.get("/", longCache, asyncHandler(listTemplatesByYearHandler));

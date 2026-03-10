@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.js";
+import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { audit } from "../middlewares/audit.js";
 import { shortCache } from "../middlewares/caching.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -11,7 +11,7 @@ import {
 
 const r = Router({ mergeParams: true }); // mergeParams to access :submissionId
 
-r.use(requireAuth);
+r.use(requireAuth, checkSessionInactivity);
 
 // Get all comments for a submission
 r.get("/", shortCache, asyncHandler(getCommentsHandler));

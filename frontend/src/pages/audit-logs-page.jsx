@@ -115,7 +115,7 @@ export default function AuditLogsPage() {
   // Load data on component mount and when filters change (not search)
   useEffect(() => {
     loadAuditLogs();
-  }, [pagination.page, actionFilter, entityFilter, dateFilter]);
+  }, [pagination.page, pagination.limit, actionFilter, entityFilter, dateFilter]);
 
   // Load stats on component mount
   useEffect(() => {
@@ -192,7 +192,7 @@ export default function AuditLogsPage() {
         setPagination(prev => ({
           ...prev,
           total: response.pagination.total,
-          totalPages: response.pagination.totalPages
+          totalPages: response.pagination.pages
         }));
       }
       
@@ -285,6 +285,10 @@ export default function AuditLogsPage() {
     setPagination(prev => ({ ...prev, page: newPage }));
   };
 
+  const handlePageSizeChange = (val) => {
+    setPagination(prev => ({ ...prev, limit: Number(val), page: 1 }));
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-PH', {
       year: 'numeric',
@@ -336,53 +340,68 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Logs</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalLogs.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
-            <User className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.uniqueActors}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Entity Types</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.entityTypes}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today</CardTitle>
-            <Calendar className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.logsToday}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">This Week</CardTitle>
-            <Calendar className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.logsWeek}</div>
-          </CardContent>
-        </Card>
-      </div>
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {[1,2,3,4,5].map(i => (
+            <Card key={i}>
+              <CardContent className="p-6">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                  <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Logs</CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalLogs.toLocaleString()}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+              <User className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.uniqueActors}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Entity Types</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.entityTypes}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Today</CardTitle>
+              <Calendar className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.logsToday}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">This Week</CardTitle>
+              <Calendar className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.logsWeek}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Filters and Search */}
       <Card>
@@ -392,20 +411,19 @@ export default function AuditLogsPage() {
             Comprehensive record of all system activities and user actions
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        <CardContent className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search logs..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="pl-10"
+                className="pl-9"
               />
             </div>
-            
             <Select value={actionFilter} onValueChange={(value) => handleFilterChange('action', value)}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Filter by action" />
               </SelectTrigger>
               <SelectContent>
@@ -415,9 +433,8 @@ export default function AuditLogsPage() {
                 ))}
               </SelectContent>
             </Select>
-            
             <Select value={entityFilter} onValueChange={(value) => handleFilterChange('entity', value)}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full sm:w-45">
                 <SelectValue placeholder="Filter by entity" />
               </SelectTrigger>
               <SelectContent>
@@ -427,9 +444,8 @@ export default function AuditLogsPage() {
                 ))}
               </SelectContent>
             </Select>
-            
             <Select value={dateFilter} onValueChange={(value) => handleFilterChange('date', value)}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full sm:w-40">
                 <SelectValue placeholder="Filter by date" />
               </SelectTrigger>
               <SelectContent>
@@ -439,146 +455,165 @@ export default function AuditLogsPage() {
                 <SelectItem value="month">This Month</SelectItem>
               </SelectContent>
             </Select>
-            
-            <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <span className="text-sm text-gray-500">
-                {filteredLogs.length} of {pagination.total} logs
-              </span>
-            </div>
           </div>
 
           {/* Audit Logs Table */}
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin" />
-              <span className="ml-2">Loading audit logs...</span>
-            </div>
-          ) : (
-            <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>Actor</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Entity</TableHead>
-                <TableHead>Details</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLogs.map((log) => {
-                const EntityIcon = getEntityIcon(log.entityType);
-                return (
-                  <TableRow key={log.id}>
-                    <TableCell className="text-sm">
-                      {formatDate(log.createdAt)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <User className="h-4 w-4 text-gray-400" />
-                        <div>
-                          <div className="font-medium">{log.actorName || 'System'}</div>
-                          {log.actorEmail && (
-                            <div className="text-sm text-gray-500">{log.actorEmail}</div>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant="outline" 
-                        className={getActionBadgeColor(log.action)}
-                      >
-                        {log.action}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <EntityIcon className="h-4 w-4 text-gray-400" />
-                        <span className="font-medium">{log.entityType}</span>
-                        {log.entityId && (
-                          <span className="text-sm text-gray-500 font-mono">
-                            ({log.entityId.substring(0, 8)}...)
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {log.metadata && (
-                        <div className="text-sm text-gray-600 max-w-96 truncate">
-                          {JSON.stringify(log.metadata, null, 0)}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openDetailModal(log)}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => copyLogId(log.id)}>
-                            <Copy className="mr-2 h-4 w-4" />
-                            Copy Log ID
-                          </DropdownMenuItem>
-                          {log.metadata && (
-                            <DropdownMenuItem onClick={() => copyMetadata(log.metadata)}>
-                              <Copy className="mr-2 h-4 w-4" />
-                              Copy Metadata
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          )}
-
-          {!loading && filteredLogs.length === 0 && (
-            <div className="text-center py-8">
-              <Activity className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-1">No audit logs found</h3>
-              <p className="text-gray-500">
-                {searchQuery || actionFilter !== 'all' || entityFilter !== 'all' || dateFilter !== 'all' 
-                  ? 'Try adjusting your search or filter criteria.' 
-                  : 'System activities will appear here as they occur.'
-                }
-              </p>
-            </div>
-          )}
-
-          {/* Pagination Controls */}
-          {!loading && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-sm text-gray-500">
-                Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total logs)
+          <div className="border rounded-md">
+            {loading ? (
+              <div className="p-8 text-center">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+                <p className="text-muted-foreground">Loading audit logs...</p>
               </div>
-              <div className="flex items-center space-x-2">
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Timestamp</TableHead>
+                    <TableHead>Actor</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Entity</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLogs.map((log) => {
+                    const EntityIcon = getEntityIcon(log.entityType);
+                    return (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-sm">
+                          {formatDate(log.createdAt)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <div className="font-medium">{log.actorName || 'System'}</div>
+                              {log.actorEmail && (
+                                <div className="text-sm text-muted-foreground">{log.actorEmail}</div>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={getActionBadgeColor(log.action)}>
+                            {log.action}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <EntityIcon className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{log.entityType}</span>
+                            {log.entityId && (
+                              <span className="text-sm text-muted-foreground font-mono">
+                                ({log.entityId.substring(0, 8)}...)
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {log.metadata && (
+                            <div className="text-sm text-muted-foreground max-w-96 truncate">
+                              {JSON.stringify(log.metadata, null, 0)}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openDetailModal(log)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => copyLogId(log.id)}>
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copy Log ID
+                              </DropdownMenuItem>
+                              {log.metadata && (
+                                <DropdownMenuItem onClick={() => copyMetadata(log.metadata)}>
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Copy Metadata
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+            {!loading && filteredLogs.length === 0 && (
+              <div className="text-center py-6 text-muted-foreground">
+                No audit logs found matching your criteria.
+              </div>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {!loading && pagination.total > 0 && (
+            <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Showing {((pagination.page - 1) * pagination.limit + 1).toLocaleString()}–{Math.min(pagination.page * pagination.limit, pagination.total).toLocaleString()} of {pagination.total.toLocaleString()} log{pagination.total !== 1 ? 's' : ''}
+                </p>
+                <Select value={String(pagination.limit)} onValueChange={handlePageSizeChange}>
+                  <SelectTrigger className="h-8 w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10 / page</SelectItem>
+                    <SelectItem value="20">20 / page</SelectItem>
+                    <SelectItem value="50">50 / page</SelectItem>
+                    <SelectItem value="100">100 / page</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handlePageChange(pagination.page - 1)}
                   disabled={pagination.page <= 1}
+                  className="h-8 w-8 p-0"
                 >
                   <ChevronLeft className="h-4 w-4" />
-                  Previous
                 </Button>
+                {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
+                  .filter((page) => page === 1 || page === pagination.totalPages || Math.abs(page - pagination.page) <= 1)
+                  .reduce((acc, page, idx, arr) => {
+                    if (idx > 0 && page - arr[idx - 1] > 1) acc.push('ellipsis-' + page);
+                    acc.push(page);
+                    return acc;
+                  }, [])
+                  .map((item) =>
+                    typeof item === 'string' ? (
+                      <span key={item} className="px-1 text-muted-foreground text-sm">…</span>
+                    ) : (
+                      <Button
+                        key={item}
+                        variant={item === pagination.page ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => handlePageChange(item)}
+                        className="h-8 w-8 p-0"
+                      >
+                        {item}
+                      </Button>
+                    )
+                  )}
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handlePageChange(pagination.page + 1)}
                   disabled={pagination.page >= pagination.totalPages}
+                  className="h-8 w-8 p-0"
                 >
-                  Next
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>

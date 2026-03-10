@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.js";
+import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { mediumCache } from "../middlewares/caching.js";
@@ -12,7 +12,7 @@ import {
 const r = Router();
 
 // All audit log routes require authentication and ADMIN role
-r.use(requireAuth, requireRole("ADMIN"));
+r.use(requireAuth, checkSessionInactivity, requireRole("ADMIN"));
 
 // GET - List audit logs with filters and pagination
 r.get("/", mediumCache, asyncHandler(getAuditLogsHandler));

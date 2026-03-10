@@ -6,6 +6,7 @@ const api = axios.create({
 });
 
 let accessToken = localStorage.getItem('accessToken');
+let sessionId = localStorage.getItem('sessionId');
 
 export function setAccessToken(token) {
   accessToken = token;
@@ -25,9 +26,30 @@ export function getAccessToken() {
   return accessToken;
 }
 
+export function setSessionId(id) {
+  sessionId = id;
+  if (id) {
+    localStorage.setItem('sessionId', id);
+  } else {
+    localStorage.removeItem('sessionId');
+  }
+}
+
+export function clearSessionId() {
+  sessionId = null;
+  localStorage.removeItem('sessionId');
+}
+
+export function getSessionId() {
+  return sessionId;
+}
+
 api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
+  }
+  if (sessionId) {
+    config.headers['x-session-id'] = sessionId;
   }
   return config;
 });
@@ -52,12 +74,16 @@ api.interceptors.response.use(
         );
 
         const newToken = refreshResponse.data?.accessToken;
+        const newSessionId = refreshResponse.data?.sessionId;
         setAccessToken(newToken);
+        if (newSessionId) setSessionId(newSessionId);
 
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        if (newSessionId) originalRequest.headers['x-session-id'] = newSessionId;
         return api(originalRequest);
       } catch (refreshError) {
         clearAccessToken();
+        clearSessionId();
         // Import setAuthState here to avoid circular dependency
         const { setAuthState } = await import('../store/auth-store');
         setAuthState({ user: null });

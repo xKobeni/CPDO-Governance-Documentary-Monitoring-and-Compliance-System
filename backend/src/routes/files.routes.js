@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.js";
+import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { upload } from "../middlewares/upload.js";
 import { audit } from "../middlewares/audit.js";
 import { shortCache } from "../middlewares/caching.js";
@@ -11,7 +11,7 @@ import {
 
 const r = Router();
 
-r.use(requireAuth);
+r.use(requireAuth, checkSessionInactivity);
 
 r.get("/:submissionId", shortCache, asyncHandler(listSubmissionFilesHandler));
 r.post(
