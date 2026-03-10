@@ -20,7 +20,7 @@ r.get("/", longCache, asyncHandler(listTemplatesByYearHandler));
 r.get("/:templateId/items", longCache, asyncHandler(listTemplateItemsHandler));
 
 // write: ADMIN only
-r.post("/", requireRole("ADMIN"), audit("CREATE_TEMPLATE", "TEMPLATE"), asyncHandler(createTemplateHandler));
+r.post("/", requireRole("ADMIN"), audit("CREATE_TEMPLATE", "TEMPLATE", null, (req) => ({ name: req.body.name, year: req.body.year })), asyncHandler(createTemplateHandler));
 r.post("/:templateId/items", requireRole("ADMIN"), audit("CREATE_CHECKLIST_ITEM", "CHECKLIST_ITEM", (req) => req.params.templateId), asyncHandler(createChecklistItemHandler));
 
 export default r;

@@ -12,7 +12,7 @@ const r = Router();
 
 r.use(requireAuth, requireRole("ADMIN"));
 
-r.post("/", audit("CREATE_USER", "USER"), asyncHandler(createUserHandler));
+r.post("/", audit("CREATE_USER", "USER", null, (req) => ({ email: req.body.email, fullName: req.body.fullName, role: req.body.role })), asyncHandler(createUserHandler));
 r.get("/", mediumCache, asyncHandler(listUsersHandler));
 r.get("/:id", mediumCache, asyncHandler(getUserHandler));
 r.patch("/:id", audit("UPDATE_USER", "USER", (req) => req.params.id, (req) => req.body), asyncHandler(updateUserHandler));

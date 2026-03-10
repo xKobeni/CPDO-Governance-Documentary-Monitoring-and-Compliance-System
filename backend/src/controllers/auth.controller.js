@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { verifyPassword } from "../utils/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/jwt.js";
 import { sha256 } from "../utils/tokenHash.js";
+import { writeAuditLog } from "../models/audit.model.js";
 
 import {
   findUserAuthByEmail,
@@ -35,6 +36,8 @@ function formatUserProfile(user) {
     officeName: user.office_name ?? null,
     officeCode: user.office_code ?? null,
     isActive: user.is_active,
+    createdAt: user.created_at ?? null,
+    lastLoginAt: user.last_login_at ?? null,
   };
 }
 
@@ -61,6 +64,18 @@ export async function login(req, res) {
 
   const user = await findUserAuthByEmail(email);
   if (!user || !user.is_active) {
+    // Manual audit logging for failed login (invalid user/inactive)
+    try {
+      await writeAuditLog({
+        actorUserId: user?.id || null,
+        action: "LOGIN_FAILED",
+        entityType: "USER",
+        entityId: user?.id || null,
+        metadata: { email, reason: "invalid_credentials" }
+      });
+    } catch (e) {
+      // Don't break login flow for audit logging errors
+    }
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
@@ -81,7 +96,33 @@ export async function login(req, res) {
     const updated = await recordFailedLoginAttempt(user.id);
     const attemptsRemaining = Math.max(0, 5 - (updated?.failed_login_attempts || 0));
     
+    // Manual audit logging for failed password
+    try {
+      await writeAuditLog({
+        actorUserId: user.id,
+        action: "LOGIN_FAILED",
+        entityType: "USER",
+        entityId: user.id,
+        metadata: { email, reason: "wrong_password", attemptsRemaining: attemptsRemaining }
+      });
+    } catch (e) {
+      // Don't break login flow for audit logging errors
+    }
+    
     if (updated?.account_locked_until && new Date(updated.account_locked_until) > new Date()) {
+      // Manual audit logging for account lockout
+      try {
+        await writeAuditLog({
+          actorUserId: user.id,
+          action: "ACCOUNT_LOCKED",
+          entityType: "USER",
+          entityId: user.id,
+          metadata: { email, lockedUntil: updated.account_locked_until }
+        });
+      } catch (e) {
+        // Don't break login flow for audit logging errors
+      }
+      
       return res.status(423).json({
         message: "Account locked due to too many failed login attempts. Try again in 15 minutes.",
         lockedUntil: updated.account_locked_until,
@@ -131,16 +172,12 @@ export async function login(req, res) {
 
   const accessToken = signAccessToken(accessPayload);
 
+  const fullUser = await findUserById(user.id);
+
   return res.json({
     accessToken,
     sessionId: session.id,
-    user: {
-      id: user.id,
-      fullName: user.full_name,
-      email: user.email,
-      role: user.role_code,
-      officeId: user.office_id ?? null,
-    },
+    user: formatUserProfile(fullUser ?? user),
   });
 }
 

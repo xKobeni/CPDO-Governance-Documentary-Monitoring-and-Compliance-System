@@ -21,7 +21,7 @@ r.use(requireAuth, requireRole("ADMIN"));
 // CREATE - Create a new office
 r.post(
   "/",
-  audit("CREATE_OFFICE", "OFFICE"),
+  audit("CREATE_OFFICE", "OFFICE", null, (req) => ({ name: req.body.name, code: req.body.code })),
   asyncHandler(createOfficeHandler)
 );
 
@@ -48,7 +48,7 @@ r.patch(
 // DELETE - Delete an office
 r.delete(
   "/:id",
-  audit("DELETE_OFFICE", "OFFICE", (req) => req.params.id),
+  audit("DELETE_OFFICE", "OFFICE", (req) => req.params.id, (req) => ({ targetId: req.params.id })),
   asyncHandler(deleteOfficeHandler)
 );
 

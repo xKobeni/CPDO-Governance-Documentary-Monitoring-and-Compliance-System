@@ -25,3 +25,8 @@ export async function getMe() {
   // Extract user from the response since backend returns { user: {...} }
   return response.data.user;
 }
+
+export async function updateMe(payload) {
+  const response = await api.patch("/auth/me", payload);
+  return response.data.user;
+}

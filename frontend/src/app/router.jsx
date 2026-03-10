@@ -4,6 +4,7 @@ import LoginPage from "../pages/login-page";
 import UnauthorizedPage from "../pages/unauthorized-page";
 import NotFoundPage from "../pages/not-found-page";
 import ProfilePage from "../pages/profile-page";
+import SettingsPage from "../pages/settings-page";
 import UsersPage from "../pages/users-page";
 import OfficesPage from "../pages/offices-page";
 import AuditLogsPage from "../pages/audit-logs-page";
@@ -64,7 +65,7 @@ export default function AppRouter() {
         <Route path="/files" element={<div className="p-6"><h1 className="text-2xl font-bold">File Management</h1><p>Manage files and documents.</p></div>} />
         <Route path="/comments" element={<div className="p-6"><h1 className="text-2xl font-bold">Comments</h1><p>View and manage comments.</p></div>} />
         <Route path="/notifications" element={<div className="p-6"><h1 className="text-2xl font-bold">Notifications</h1><p>Manage system notifications.</p></div>} />
-        <Route path="/settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Settings</h1><p>System configuration and preferences.</p></div>} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route 
           path="/audit-logs" 
           element={

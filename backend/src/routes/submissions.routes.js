@@ -17,7 +17,7 @@ const r = Router();
 r.use(requireAuth);
 
 // OFFICE/STAFF/ADMIN can create + view list (OFFICE auto restricted)
-r.post("/", audit("CREATE_SUBMISSION", "SUBMISSION"), asyncHandler(createSubmissionHandler));
+r.post("/", audit("CREATE_SUBMISSION", "SUBMISSION", null, (req) => ({ templateId: req.body.templateId, title: req.body.title })), asyncHandler(createSubmissionHandler));
 r.get("/", shortCache, asyncHandler(listSubmissionsHandler));
 r.get("/:id", shortCache, asyncHandler(getSubmissionHandler));
 

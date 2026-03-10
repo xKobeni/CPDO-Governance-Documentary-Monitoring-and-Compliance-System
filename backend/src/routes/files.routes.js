@@ -17,7 +17,11 @@ r.get("/:submissionId", shortCache, asyncHandler(listSubmissionFilesHandler));
 r.post(
   "/:submissionId/upload",
   upload.single("file"),
-  audit("UPLOAD_FILE", "SUBMISSION", (req) => req.params.submissionId),
+  audit("UPLOAD_FILE", "SUBMISSION", (req) => req.params.submissionId, (req) => ({ 
+    fileName: req.file?.originalname, 
+    fileSize: req.file?.size,
+    submissionId: req.params.submissionId 
+  })),
   asyncHandler(uploadSubmissionFileHandler)
 );
 
