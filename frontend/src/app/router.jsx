@@ -8,6 +8,7 @@ import SettingsPage from "../pages/settings-page";
 import UsersPage from "../pages/users-page";
 import OfficesPage from "../pages/offices-page";
 import AuditLogsPage from "../pages/audit-logs-page";
+import ReportsPage from "../pages/reports-page";
 
 import DashboardLayout from "../layouts/dashboard-layout";
 import AuthLayout from "../layouts/auth-layout";
@@ -61,7 +62,14 @@ export default function AppRouter() {
             </RoleGuard>
           }
         />
-        <Route path="/reports" element={<div className="p-6"><h1 className="text-2xl font-bold">Reports</h1><p>Generate and view system reports.</p></div>} />
+        <Route
+          path="/reports"
+          element={
+            <RoleGuard allowedRoles={['ADMIN', 'STAFF']}>
+              <ReportsPage />
+            </RoleGuard>
+          }
+        />
         <Route path="/files" element={<div className="p-6"><h1 className="text-2xl font-bold">File Management</h1><p>Manage files and documents.</p></div>} />
         <Route path="/comments" element={<div className="p-6"><h1 className="text-2xl font-bold">Comments</h1><p>View and manage comments.</p></div>} />
         <Route path="/notifications" element={<div className="p-6"><h1 className="text-2xl font-bold">Notifications</h1><p>Manage system notifications.</p></div>} />

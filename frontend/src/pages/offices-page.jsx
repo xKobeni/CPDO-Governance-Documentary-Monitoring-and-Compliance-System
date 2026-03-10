@@ -47,7 +47,8 @@ import {
   XCircle,
   Loader2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -245,13 +246,18 @@ export default function OfficesPage() {
             Manage office hierarchy and organizational structure
           </p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button disabled={loading}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Office
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={loadOffices} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button disabled={loading}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Office
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Create New Office</DialogTitle>
@@ -318,6 +324,7 @@ export default function OfficesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Statistics Cards */}

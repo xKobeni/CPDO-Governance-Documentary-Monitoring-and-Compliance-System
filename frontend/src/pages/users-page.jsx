@@ -47,7 +47,8 @@ import {
   Shield,
   Loader2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -260,13 +261,18 @@ export default function UsersPage() {
             Manage user accounts, roles, and permissions
           </p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button disabled={loading}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add User
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button disabled={loading}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add User
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-106.25">
             <DialogHeader>
               <DialogTitle>Create New User</DialogTitle>
@@ -349,6 +355,7 @@ export default function UsersPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -421,7 +428,7 @@ export default function UsersPage() {
               <Input
                 placeholder="Search users by name or email..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={handleSearchChange}
                 className="pl-9"
               />
             </div>

@@ -48,7 +48,8 @@ import {
   ExternalLink,
   Loader2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -324,19 +325,25 @@ export default function AuditLogsPage() {
             Monitor system activities and user actions
           </p>
         </div>
-        <Button onClick={handleExportLogs} disabled={exporting || loading}>
-          {exporting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Exporting...
-            </>
-          ) : (
-            <>
-              <Download className="mr-2 h-4 w-4" />
-              Export Logs
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={loadAuditLogs} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button onClick={handleExportLogs} disabled={exporting || loading}>
+            {exporting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="mr-2 h-4 w-4" />
+                Export Logs
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
