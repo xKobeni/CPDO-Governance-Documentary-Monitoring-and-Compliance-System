@@ -40,23 +40,23 @@ const iconMap = {
   "/dashboard": Home,
   "/governance": CheckSquare,
   "/submissions": ClipboardList,
-  "/my-checklists/financial-administration": FileCheck,
+  "/my-checklists": FileCheck,
   "/templates": FileText,
   "/users": Users,
   "/offices": Building2,
   "/reports": BarChart,
   "/audit-logs": BarChart3,
+  "/notifications": Bell,
 };
 
 // Expandable sections configuration
 const expandableSections = {
   "/templates": [
     { title: "All Templates", href: "/templates" },
-    { title: "Create Template", href: "/templates/create" },
+    { title: "Manage Templates", href: "/templates/manage" },
     { title: "Manage Categories", href: "/templates/categories" }
   ],
   "/governance": [
-    { title: "All Areas", href: "/governance" },
     { title: "Manage Areas", href: "/governance/manage" },
     { title: "Compliance Matrix", href: "/governance/compliance" }
   ],
@@ -69,12 +69,36 @@ const expandableSections = {
 
 export const NavigationSidebar = React.memo(function NavigationSidebar({ className, currentPath = "/dashboard", onNavigate, user, onLogout, ...props }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [expandedItems, setExpandedItems] = useState(new Set(["/templates", "/governance"]));
+  const [expandedItems, setExpandedItems] = useState(new Set());
+
+  // Section groupings for organised sidebar
+  const NAV_SECTIONS = [
+    {
+      label: 'Main',
+      hrefs: ['/dashboard'],
+    },
+    {
+      label: 'Compliance',
+      hrefs: ['/governance', '/submissions', '/my-checklists', '/templates'],
+    },
+    {
+      label: 'Administration',
+      hrefs: ['/users', '/offices'],
+    },
+    {
+      label: 'Reports & Logs',
+      hrefs: ['/reports', '/audit-logs'],
+    },
+    {
+      label: 'Notifications',
+      hrefs: ['/notifications'],
+    },
+  ];
 
   // Filter navigation items based on user role
   const getFilteredNavItems = () => {
     if (!user?.role) return NAV_ITEMS;
-    return NAV_ITEMS.filter(item => 
+    return NAV_ITEMS.filter(item =>
       item.roles.includes(user.role.toUpperCase())
     );
   };
@@ -100,6 +124,56 @@ export const NavigationSidebar = React.memo(function NavigationSidebar({ classNa
     if (onNavigate) {
       onNavigate(href);
     }
+  };
+
+  // Render a single nav item (shared by flat + grouped views)
+  const renderNavItem = (item) => {
+    const IconComponent = iconMap[item.href] || Home;
+    const hasExpandableItems = expandableSections[item.href];
+    return (
+      <div key={item.href} className="mb-0.5">
+        <Button
+          variant="ghost"
+          className={cn(
+            "w-full justify-start gap-2 text-xs h-8 px-2",
+            (currentPath === item.href || (hasExpandableItems && expandableSections[item.href].some(s => currentPath === s.href))) && "bg-accent text-accent-foreground",
+            hasExpandableItems && "pr-1"
+          )}
+          onClick={() => {
+            if (hasExpandableItems) {
+              toggleExpanded(item.href);
+            } else {
+              handleNavigation(item.href);
+            }
+          }}
+        >
+          <IconComponent className="h-4 w-4 shrink-0" />
+          <span className="flex-1 text-left truncate">{item.label}</span>
+          {hasExpandableItems && (
+            expandedItems.has(item.href)
+              ? <ChevronDown className="h-3 w-3 shrink-0" />
+              : <ChevronRight className="h-3 w-3 shrink-0" />
+          )}
+        </Button>
+        {hasExpandableItems && expandedItems.has(item.href) && (
+          <div className="ml-6 mt-0.5 space-y-0.5">
+            {expandableSections[item.href].map((subItem) => (
+              <Button
+                key={subItem.href}
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start text-xs h-7 px-2",
+                  currentPath === subItem.href && "bg-accent text-accent-foreground"
+                )}
+                onClick={() => handleNavigation(subItem.href)}
+              >
+                {subItem.title}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -133,60 +207,27 @@ export const NavigationSidebar = React.memo(function NavigationSidebar({ classNa
 
       {/* Navigation Items */}
       <div className="flex-1 overflow-y-auto">
-        <nav className="p-2">
-          {filteredItems.map((item) => {
-            const IconComponent = iconMap[item.href] || Home;
-            const hasExpandableItems = expandableSections[item.href];
-            
-            return (
-              <div key={item.href} className="mb-1">
-                <Button
-                  variant="ghost"
-                  className={cn(
-                    "w-full justify-start gap-2 text-xs h-8 px-2",
-                    currentPath === item.href && "bg-accent text-accent-foreground",
-                    hasExpandableItems && "pr-1"
-                  )}
-                  onClick={() => {
-                    if (hasExpandableItems) {
-                      toggleExpanded(item.href);
-                    } else {
-                      handleNavigation(item.href);
-                    }
-                  }}
-                >
-                  <IconComponent className="h-4 w-4 shrink-0" />
-                  <span className="flex-1 text-left truncate">{item.label}</span>
-                  {hasExpandableItems && (
-                    expandedItems.has(item.href) ? (
-                      <ChevronDown className="h-3 w-3 shrink-0" />
-                    ) : (
-                      <ChevronRight className="h-3 w-3 shrink-0" />
-                    )
-                  )}
-                </Button>
-
-                {/* Sub-items */}
-                {hasExpandableItems && expandedItems.has(item.href) && (
-                  <div className="ml-6 mt-1 space-y-1">
-                    {expandableSections[item.href].map((subItem) => (
-                      <Button
-                        key={subItem.href}
-                        variant="ghost"
-                        className={cn(
-                          "w-full justify-start text-xs h-7 px-2",
-                          currentPath === subItem.href && "bg-accent text-accent-foreground"
-                        )}
-                        onClick={() => handleNavigation(subItem.href)}
-                      >
-                        {subItem.title}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <nav className="p-2 space-y-0.5">
+          {searchQuery ? (
+            // Flat list while searching
+            filteredItems.map((item) => renderNavItem(item))
+          ) : (
+            // Grouped sections
+            NAV_SECTIONS.map((section) => {
+              const sectionItems = filteredNavItems.filter((item) =>
+                section.hrefs.includes(item.href)
+              );
+              if (sectionItems.length === 0) return null;
+              return (
+                <div key={section.label} className="mb-3">
+                  <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 select-none">
+                    {section.label}
+                  </p>
+                  {sectionItems.map((item) => renderNavItem(item))}
+                </div>
+              );
+            })
+          )}
         </nav>
       </div>
 

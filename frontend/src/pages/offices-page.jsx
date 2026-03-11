@@ -3,6 +3,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Checkbox } from '../components/ui/checkbox';
 import { 
   Table, 
   TableBody, 
@@ -31,6 +32,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { Label } from '../components/ui/label';
@@ -48,12 +50,13 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  ClipboardList,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-// Import the API functions
-import { getOffices, createOffice, updateOffice, deleteOffice, toggleOfficeStatus } from '../api/offices';
+import { getOffices, createOffice, updateOffice, deleteOffice, toggleOfficeStatus, getOfficeAssignments, setOfficeAssignments } from '../api/offices';
+import { getGovernanceAreas } from '../api/governance';
 
 export default function OfficesPage() {
   const [offices, setOffices] = useState([]);
@@ -72,6 +75,15 @@ export default function OfficesPage() {
     contactEmail: '',
     isActive: true
   });
+
+  // Assign Governance Areas state
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [assigningOffice, setAssigningOffice] = useState(null);
+  const [allGovernanceAreas, setAllGovernanceAreas] = useState([]);
+  const [selectedAreaIds, setSelectedAreaIds] = useState([]);
+  const [assignYear, setAssignYear] = useState(new Date().getFullYear());
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignSubmitting, setAssignSubmitting] = useState(false);
 
   // Load data on component mount
   useEffect(() => {
@@ -208,6 +220,64 @@ export default function OfficesPage() {
     }
   };
 
+  const openAssignDialog = async (office) => {
+    setAssigningOffice(office);
+    setAssignYear(new Date().getFullYear());
+    setSelectedAreaIds([]);
+    setIsAssignDialogOpen(true);
+    setAssignLoading(true);
+    try {
+      const [areasRes, assignRes] = await Promise.all([
+        getGovernanceAreas(),
+        getOfficeAssignments(office.id, new Date().getFullYear()),
+      ]);
+      const areas = (areasRes.governanceAreas || areasRes.data || areasRes).filter(a => a.is_active !== false);
+      setAllGovernanceAreas(areas);
+      const currentIds = (assignRes.data || []).map(a => a.governance_area_id);
+      setSelectedAreaIds(currentIds);
+    } catch {
+      toast.error('Failed to load governance areas');
+      setIsAssignDialogOpen(false);
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const handleAssignYearChange = async (year) => {
+    setAssignYear(year);
+    if (!assigningOffice) return;
+    setAssignLoading(true);
+    try {
+      const assignRes = await getOfficeAssignments(assigningOffice.id, year);
+      const currentIds = (assignRes.data || []).map(a => a.governance_area_id);
+      setSelectedAreaIds(currentIds);
+    } catch {
+      toast.error('Failed to load assignments for selected year');
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const toggleAreaSelection = (areaId) => {
+    setSelectedAreaIds(prev =>
+      prev.includes(areaId) ? prev.filter(id => id !== areaId) : [...prev, areaId]
+    );
+  };
+
+  const handleSaveAssignments = async () => {
+    if (!assigningOffice) return;
+    setAssignSubmitting(true);
+    try {
+      await setOfficeAssignments(assigningOffice.id, assignYear, selectedAreaIds);
+      toast.success(`Assignments updated for ${assigningOffice.name} (${assignYear})`);
+      setIsAssignDialogOpen(false);
+    } catch {
+      toast.error('Failed to save assignments');
+    } finally {
+      setAssignSubmitting(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       code: '',
@@ -258,7 +328,7 @@ export default function OfficesPage() {
                 Add Office
               </Button>
             </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-106.25">
             <DialogHeader>
               <DialogTitle>Create New Office</DialogTitle>
               <DialogDescription>
@@ -483,6 +553,11 @@ export default function OfficesPage() {
                               <Edit className="mr-2 h-4 w-4" />
                               Edit Office
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openAssignDialog(office)}>
+                              <ClipboardList className="mr-2 h-4 w-4" />
+                              Assign Governance Areas
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleToggleStatus(office.id)}>
                               {office.isActive ? (
                                 <>
@@ -585,9 +660,78 @@ export default function OfficesPage() {
         </CardContent>
       </Card>
 
+      {/* Assign Governance Areas Dialog */}
+      <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+        <DialogContent className="sm:max-w-125">
+          <DialogHeader>
+            <DialogTitle>Assign Governance Areas</DialogTitle>
+            <DialogDescription>
+              {assigningOffice?.name} — select which governance areas this office must comply with.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex items-center gap-3">
+              <Label className="shrink-0">Compliance Year</Label>
+              <Select value={String(assignYear)} onValueChange={(v) => handleAssignYearChange(Number(v))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {assignLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : allGovernanceAreas.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No governance areas found.</p>
+            ) : (
+              <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
+                {allGovernanceAreas.map(area => (
+                  <label
+                    key={area.id}
+                    className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                  >
+                    <Checkbox
+                      checked={selectedAreaIds.includes(area.id)}
+                      onCheckedChange={() => toggleAreaSelection(area.id)}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <div className="text-sm font-medium leading-tight">{area.name}</div>
+                      {area.description && (
+                        <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{area.description}</div>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              {selectedAreaIds.length} area{selectedAreaIds.length !== 1 ? 's' : ''} selected
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)} disabled={assignSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveAssignments} disabled={assignLoading || assignSubmitting}>
+              {assignSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Assignments
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Office Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-106.25">
           <DialogHeader>
             <DialogTitle>Edit Office</DialogTitle>
             <DialogDescription>

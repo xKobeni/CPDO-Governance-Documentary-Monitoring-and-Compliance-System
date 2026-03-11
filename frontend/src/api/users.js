@@ -15,11 +15,14 @@ export async function createUser(userData) {
   // Transform frontend format to backend format
   const backendData = {
     email: userData.email,
-    password: userData.password || 'TempPassword123!', // Should be provided in form
     fullName: userData.fullName,
     roleCode: userData.role,
-    officeId: userData.officeId || null
+    officeId: userData.officeId || null,
   };
+  // Only include password if provided; backend will auto-generate if absent
+  if (userData.password) {
+    backendData.password = userData.password;
+  }
   const response = await api.post('/users', backendData);
   return response.data;
 }

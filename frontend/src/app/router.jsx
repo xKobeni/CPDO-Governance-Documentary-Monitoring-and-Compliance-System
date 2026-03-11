@@ -9,6 +9,12 @@ import UsersPage from "../pages/users-page";
 import OfficesPage from "../pages/offices-page";
 import AuditLogsPage from "../pages/audit-logs-page";
 import ReportsPage from "../pages/reports-page";
+import GovernancePage from "../pages/governance-page";
+import GovernanceCompliancePage from "../pages/governance-compliance-page";
+import TemplatesAllPage from "../pages/templates-all-page";
+import SubmissionsPage from "../pages/submissions-page";
+import TemplatesManagePage from "../pages/templates-manage-page";
+import TemplatesCategoriesPage from "../pages/templates-categories-page";
 
 import DashboardLayout from "../layouts/dashboard-layout";
 import AuthLayout from "../layouts/auth-layout";
@@ -17,6 +23,8 @@ import ProtectedRoute from "../guards/protected-route";
 import RoleGuard from "../guards/role-guard";
 
 import DashboardPage from "../pages/dashboard-page";
+import MyChecklistsPage from "../pages/my-checklists-page";
+import NotificationsPage from "../pages/notifications-page";
 
 export default function AppRouter() {
   return (
@@ -37,15 +45,15 @@ export default function AppRouter() {
         <Route path="/profile" element={<ProfilePage />} />
 
         {/* Main application routes - properly implemented */}
-        <Route path="/governance" element={<div className="p-6"><h1 className="text-2xl font-bold">Governance Areas</h1><p>Manage governance areas and compliance tracking.</p></div>} />
-        <Route path="/submissions" element={<div className="p-6"><h1 className="text-2xl font-bold">Submissions</h1><p>Manage all submissions and reviews.</p></div>} />
-        <Route path="/submissions/pending" element={<div className="p-6"><h1 className="text-2xl font-bold">Pending Reviews</h1><p>Review pending submissions.</p></div>} />
-        <Route path="/submissions/approved" element={<div className="p-6"><h1 className="text-2xl font-bold">Approved Submissions</h1><p>View approved submissions.</p></div>} />
-        <Route path="/submissions/rejected" element={<div className="p-6"><h1 className="text-2xl font-bold">Rejected Submissions</h1><p>View rejected submissions.</p></div>} />
-        <Route path="/submissions/create" element={<div className="p-6"><h1 className="text-2xl font-bold">Create New Submission</h1><p>Create a new submission.</p></div>} />
+        <Route path="/governance" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/governance/manage" element={<RoleGuard allowedRoles={['ADMIN']}><GovernancePage /></RoleGuard>} />
+        <Route path="/governance/compliance" element={<GovernanceCompliancePage />} />
+        <Route path="/my-checklists" element={<RoleGuard allowedRoles={['OFFICE']}><MyChecklistsPage /></RoleGuard>} />
+        <Route path="/submissions" element={<SubmissionsPage />} />
         <Route path="/reviews" element={<div className="p-6"><h1 className="text-2xl font-bold">Reviews</h1><p>Manage reviews and approvals.</p></div>} />
-        <Route path="/templates" element={<div className="p-6"><h1 className="text-2xl font-bold">Templates</h1><p>Manage submission templates.</p></div>} />
-        <Route path="/templates/create" element={<div className="p-6"><h1 className="text-2xl font-bold">Create Template</h1><p>Create a new template.</p></div>} />
+        <Route path="/templates" element={<TemplatesAllPage />} />
+        <Route path="/templates/manage" element={<RoleGuard allowedRoles={['ADMIN']}><TemplatesManagePage /></RoleGuard>} />
+        <Route path="/templates/categories" element={<RoleGuard allowedRoles={['ADMIN']}><TemplatesCategoriesPage /></RoleGuard>} />
         <Route 
           path="/users" 
           element={
@@ -72,7 +80,7 @@ export default function AppRouter() {
         />
         <Route path="/files" element={<div className="p-6"><h1 className="text-2xl font-bold">File Management</h1><p>Manage files and documents.</p></div>} />
         <Route path="/comments" element={<div className="p-6"><h1 className="text-2xl font-bold">Comments</h1><p>View and manage comments.</p></div>} />
-        <Route path="/notifications" element={<div className="p-6"><h1 className="text-2xl font-bold">Notifications</h1><p>Manage system notifications.</p></div>} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route 
           path="/audit-logs" 

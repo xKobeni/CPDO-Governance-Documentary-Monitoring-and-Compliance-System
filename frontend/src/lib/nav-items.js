@@ -7,7 +7,7 @@ export const NAV_ITEMS = [
   {
     label: "Governance",
     href: "/governance",
-    roles: ["ADMIN", "STAFF", "OFFICE"],
+    roles: ["ADMIN", "STAFF"],
   },
   {
     label: "Submissions",
@@ -16,7 +16,7 @@ export const NAV_ITEMS = [
   },
   {
     label: "My Checklists",
-    href: "/my-checklists/financial-administration",
+    href: "/my-checklists",
     roles: ["OFFICE"],
   },
   {
@@ -43,5 +43,10 @@ export const NAV_ITEMS = [
     label: "Audit Logs",
     href: "/audit-logs",
     roles: ["ADMIN"],
+  },
+  {
+    label: "Notifications",
+    href: "/notifications",
+    roles: ["ADMIN", "STAFF", "OFFICE"],
   },
 ];

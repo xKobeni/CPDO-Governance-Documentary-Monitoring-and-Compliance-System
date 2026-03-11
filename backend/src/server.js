@@ -1,14 +1,24 @@
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
-import { dbHealthcheck } from "./config/db.js";
+import { pool, dbHealthcheck } from "./config/db.js";
 import { logger } from "./config/logger.js";
 
 const app = createApp();
+
+async function ensureRoles() {
+  await pool.query(
+    `INSERT INTO roles (code, name)
+     VALUES ('ADMIN', 'Administrator'), ('STAFF', 'Staff Member'), ('OFFICE', 'Office Head')
+     ON CONFLICT (code) DO NOTHING`
+  );
+}
 
 (async () => {
   try {
     const ok = await dbHealthcheck();
     if (!ok) throw new Error("DB healthcheck failed");
+
+    await ensureRoles();
 
     app.listen(env.port, () => {
       logger.info({ port: env.port }, "API server running");

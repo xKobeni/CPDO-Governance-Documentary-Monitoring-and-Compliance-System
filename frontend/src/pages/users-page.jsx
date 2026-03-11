@@ -48,7 +48,12 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Copy,
+  Check
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -60,6 +65,24 @@ const roleOptions = [
   { value: 'STAFF', label: 'Staff Member', color: 'bg-blue-100 text-blue-800' },
   { value: 'OFFICE', label: 'Office Head', color: 'bg-green-100 text-green-800' }
 ];
+
+function generatePassword() {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const special = "!@#$%^&*";
+  const all = upper + lower + digits + special;
+  const pwd = [
+    upper[Math.floor(Math.random() * upper.length)],
+    lower[Math.floor(Math.random() * lower.length)],
+    digits[Math.floor(Math.random() * digits.length)],
+    special[Math.floor(Math.random() * special.length)],
+  ];
+  for (let i = pwd.length; i < 12; i++) {
+    pwd.push(all[Math.floor(Math.random() * all.length)]);
+  }
+  return pwd.sort(() => Math.random() - 0.5).join("");
+}
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
@@ -74,6 +97,8 @@ export default function UsersPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [copiedPassword, setCopiedPassword] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -135,18 +160,32 @@ export default function UsersPage() {
   const handlePageSizeChange = (val) => { setPageSize(Number(val)); setCurrentPage(1); };
 
   const handleCreateUser = async () => {
-    if (!formData.fullName || !formData.email || !formData.password || !formData.role) {
+    if (!formData.fullName || !formData.email || !formData.role) {
       toast.error('Please fill in all required fields');
       return;
     }
 
     try {
       setSubmitting(true);
-      await createUser(formData);
-      toast.success('User created successfully');
+      const result = await createUser(formData);
+      if (result.generatedPassword) {
+        toast(
+          (t) => (
+            <div className="flex flex-col gap-1">
+              <span className="font-semibold">User created successfully</span>
+              <span className="text-sm">Auto-generated password:</span>
+              <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono select-all">{result.generatedPassword}</code>
+              <span className="text-xs text-gray-500">Copy and share this password with the user.</span>
+            </div>
+          ),
+          { duration: 15000 }
+        );
+      } else {
+        toast.success('User created successfully');
+      }
       setIsCreateDialogOpen(false);
       resetForm();
-      loadData(); // Reload users list
+      loadData();
     } catch (error) {
       console.error('Error creating user:', error);
       toast.error(error.response?.data?.message || 'Failed to create user');
@@ -215,6 +254,8 @@ export default function UsersPage() {
       officeId: '',
       isActive: true
     });
+    setShowPassword(false);
+    setCopiedPassword(false);
   };
 
   const openEditDialog = (user) => {
@@ -303,15 +344,58 @@ export default function UsersPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="password">Temporary Password *</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="Enter temporary password"
-                  disabled={submitting}
-                />
+                <Label htmlFor="password">Temporary Password <span className="text-muted-foreground text-xs">(optional — auto-generated if blank)</span></Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Leave blank to auto-generate"
+                      disabled={submitting}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowPassword((v) => !v)}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    title="Generate password"
+                    disabled={submitting}
+                    onClick={() => {
+                      const pwd = generatePassword();
+                      setFormData((f) => ({ ...f, password: pwd }));
+                      setShowPassword(true);
+                    }}
+                  >
+                    <KeyRound className="h-4 w-4" />
+                  </Button>
+                  {formData.password && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Copy password"
+                      disabled={submitting}
+                      onClick={() => {
+                        navigator.clipboard.writeText(formData.password);
+                        setCopiedPassword(true);
+                        setTimeout(() => setCopiedPassword(false), 2000);
+                      }}
+                    >
+                      {copiedPassword ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="role">Role *</Label>

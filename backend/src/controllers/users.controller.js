@@ -4,9 +4,27 @@ import { getRoleByCode } from "../models/roles.model.js";
 import { createUser, listUsers, setUserActive, findUserById, updateUser, deleteUser } from "../models/users.model.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
+function generatePassword() {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghjkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const special = "!@#$%^&*";
+  const all = upper + lower + digits + special;
+  let pwd = [
+    upper[Math.floor(Math.random() * upper.length)],
+    lower[Math.floor(Math.random() * lower.length)],
+    digits[Math.floor(Math.random() * digits.length)],
+    special[Math.floor(Math.random() * special.length)],
+  ];
+  for (let i = pwd.length; i < 12; i++) {
+    pwd.push(all[Math.floor(Math.random() * all.length)]);
+  }
+  return pwd.sort(() => Math.random() - 0.5).join("");
+}
+
 const createUserSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z.string().min(8).optional(),
   fullName: z.string().min(2),
   roleCode: z.enum(["ADMIN", "STAFF", "OFFICE"]),
   officeId: z.string().uuid().nullable().optional(),
@@ -16,7 +34,8 @@ export async function createUserHandler(req, res) {
   const parsed = createUserSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
 
-  const { email, password, fullName, roleCode, officeId } = parsed.data;
+  const { email, fullName, roleCode, officeId } = parsed.data;
+  const rawPassword = parsed.data.password || generatePassword();
 
   if (roleCode === "OFFICE" && !officeId) {
     return res.status(400).json({ message: "OFFICE users must have officeId" });
@@ -25,7 +44,7 @@ export async function createUserHandler(req, res) {
   const role = await getRoleByCode(roleCode);
   if (!role) return res.status(400).json({ message: "Role not found" });
 
-  const passwordHash = await hashPassword(password);
+  const passwordHash = await hashPassword(rawPassword);
 
   const user = await createUser({
     email,
@@ -35,7 +54,7 @@ export async function createUserHandler(req, res) {
     officeId: roleCode === "OFFICE" ? officeId : (officeId ?? null),
   });
 
-  return res.status(201).json({ user });
+  return res.status(201).json({ user, generatedPassword: !parsed.data.password ? rawPassword : undefined });
 }
 
 export async function listUsersHandler(req, res) {

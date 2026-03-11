@@ -33,7 +33,8 @@ export async function getSubmissionById(id) {
             o.name as office_name,
             ga.code as governance_code, ga.name as governance_name,
             t.title as template_title,
-            ci.item_code, ci.title as item_title
+            ci.item_code, ci.title as item_title,
+            ci.allowed_file_types, ci.max_files
      FROM submissions s
      JOIN offices o ON o.id = s.office_id
      JOIN governance_areas ga ON ga.id = s.governance_area_id

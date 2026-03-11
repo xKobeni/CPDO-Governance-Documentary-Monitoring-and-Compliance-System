@@ -344,6 +344,23 @@ CREATE INDEX IF NOT EXISTS idx_report_exports_requested_by ON report_exports(req
 CREATE INDEX IF NOT EXISTS idx_report_exports_filters ON report_exports(year, governance_area_id, office_id);
 
 -- =========================
+-- OFFICE GOVERNANCE ASSIGNMENTS
+-- Which governance areas each office is required to comply with per year
+-- =========================
+CREATE TABLE IF NOT EXISTS office_governance_assignments (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  office_id          UUID NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+  governance_area_id UUID NOT NULL REFERENCES governance_areas(id) ON DELETE CASCADE,
+  year               INT NOT NULL,
+  assigned_by        UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+  assigned_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT uq_office_governance_year UNIQUE (office_id, governance_area_id, year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_oga_office_year ON office_governance_assignments(office_id, year);
+CREATE INDEX IF NOT EXISTS idx_oga_governance_year ON office_governance_assignments(governance_area_id, year);
+
+-- =========================
 -- AUTH SESSIONS (for refresh token security)
 -- =========================
 CREATE TABLE IF NOT EXISTS auth_sessions (

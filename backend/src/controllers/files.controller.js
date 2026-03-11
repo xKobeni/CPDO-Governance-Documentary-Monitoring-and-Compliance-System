@@ -42,6 +42,20 @@ export async function uploadSubmissionFileHandler(req, res) {
 
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
+  // Validate file extension against the checklist item's allowed_file_types
+  const allowedTypes = submission.allowed_file_types; // TEXT[] from DB, e.g. ['pdf','docx']
+  if (Array.isArray(allowedTypes) && allowedTypes.length > 0) {
+    const ext = path.extname(req.file.originalname).toLowerCase().replace(/^\./, '');
+    const normalised = allowedTypes.map((t) => t.toLowerCase().replace(/^\./, ''));
+    if (!normalised.includes(ext)) {
+      await cleanupTempUpload(req.file.path);
+      return res.status(422).json({
+        message: `File type not accepted. Allowed: ${normalised.map((t) => `.${t}`).join(', ')}`,
+        allowedTypes: normalised,
+      });
+    }
+  }
+
   const totalUploaded = await getUserTotalUploadedBytes(req.user.sub);
   const projectedTotal = totalUploaded + req.file.size;
   if (projectedTotal > env.uploadQuotaBytes) {

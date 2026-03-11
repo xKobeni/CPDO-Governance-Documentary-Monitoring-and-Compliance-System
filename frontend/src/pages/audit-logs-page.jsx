@@ -479,7 +479,6 @@ export default function AuditLogsPage() {
                     <TableHead>Actor</TableHead>
                     <TableHead>Action</TableHead>
                     <TableHead>Entity</TableHead>
-                    <TableHead>Details</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -517,13 +516,6 @@ export default function AuditLogsPage() {
                               </span>
                             )}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {log.metadata && (
-                            <div className="text-sm text-muted-foreground max-w-96 truncate">
-                              {JSON.stringify(log.metadata, null, 0)}
-                            </div>
-                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
