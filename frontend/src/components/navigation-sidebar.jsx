@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { NAV_ITEMS } from "@/lib/nav-items"
 import React from "react"
@@ -14,7 +13,6 @@ import {
 import { 
   ChevronDown, 
   ChevronRight,
-  Search,
   Home,
   ClipboardList,
   FileText,
@@ -68,7 +66,6 @@ const expandableSections = {
 };
 
 export const NavigationSidebar = React.memo(function NavigationSidebar({ className, currentPath = "/dashboard", onNavigate, user, onLogout, ...props }) {
-  const [searchQuery, setSearchQuery] = useState("");
   const [expandedItems, setExpandedItems] = useState(new Set());
 
   // Section groupings for organised sidebar
@@ -114,11 +111,6 @@ export const NavigationSidebar = React.memo(function NavigationSidebar({ classNa
     }
     setExpandedItems(newExpanded);
   };
-
-  const filteredItems = filteredNavItems.filter(item => {
-    if (!searchQuery) return true;
-    return item.label.toLowerCase().includes(searchQuery.toLowerCase());
-  });
 
   const handleNavigation = (href) => {
     if (onNavigate) {
@@ -181,53 +173,35 @@ export const NavigationSidebar = React.memo(function NavigationSidebar({ classNa
       {/* Header */}
       <div className="flex flex-col gap-2 p-4 border-b">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-red-600 rounded flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-foreground">CPDO Monitoring</h2>
-            <p className="text-xs text-muted-foreground">v1.0.0</p>
-          </div>
-        </div>
-        
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search the system..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-8 text-xs"
+          <img
+            src="/SGLG_logo%20text.png"
+            alt="Seal of Good Local Governance"
+            className="h-8 w-auto max-w-[140px] object-contain shrink-0"
           />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-foreground truncate">CPDO Monitoring</h2>
+            <p className="text-[10px] text-muted-foreground">v1.0.0</p>
+          </div>
         </div>
       </div>
 
       {/* Navigation Items */}
       <div className="flex-1 overflow-y-auto">
         <nav className="p-2 space-y-0.5">
-          {searchQuery ? (
-            // Flat list while searching
-            filteredItems.map((item) => renderNavItem(item))
-          ) : (
-            // Grouped sections
-            NAV_SECTIONS.map((section) => {
-              const sectionItems = filteredNavItems.filter((item) =>
-                section.hrefs.includes(item.href)
-              );
-              if (sectionItems.length === 0) return null;
-              return (
-                <div key={section.label} className="mb-3">
-                  <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 select-none">
-                    {section.label}
-                  </p>
-                  {sectionItems.map((item) => renderNavItem(item))}
-                </div>
-              );
-            })
-          )}
+          {NAV_SECTIONS.map((section) => {
+            const sectionItems = filteredNavItems.filter((item) =>
+              section.hrefs.includes(item.href)
+            );
+            if (sectionItems.length === 0) return null;
+            return (
+              <div key={section.label} className="mb-3">
+                <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 select-none">
+                  {section.label}
+                </p>
+                {sectionItems.map((item) => renderNavItem(item))}
+              </div>
+            );
+          })}
         </nav>
       </div>
 

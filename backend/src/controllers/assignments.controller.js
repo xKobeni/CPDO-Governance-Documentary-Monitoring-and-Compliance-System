@@ -93,24 +93,31 @@ export async function getOfficeChecklistHandler(req, res) {
         items: [],
       };
     }
-    areasMap[row.governance_area_id].items.push({
-      id: row.item_id,
-      itemCode: row.item_code,
-      title: row.item_title,
-      description: row.item_description,
-      isRequired: row.is_required,
-      frequency: row.frequency,
-      dueDate: row.due_date,
-      sortOrder: row.item_sort_order,
-      submission: row.submission_id
-        ? {
-            id: row.submission_id,
-            status: row.submission_status,
-            submittedAt: row.submitted_at,
-            officeRemarks: row.office_remarks,
-          }
-        : null,
-    });
+    // When an area is assigned but no ACTIVE template/items exist yet,
+    // the left joins will produce rows with null item_id. Still return the area.
+    if (row.item_id) {
+      areasMap[row.governance_area_id].items.push({
+        id: row.item_id,
+        parentItemId: row.parent_item_id,
+        itemCode: row.item_code,
+        title: row.item_title,
+        description: row.item_description,
+        isRequired: row.is_required,
+        frequency: row.frequency,
+        dueDate: row.due_date,
+        allowedFileTypes: row.allowed_file_types ?? null,
+        maxFiles: row.max_files ?? null,
+        sortOrder: row.item_sort_order,
+        submission: row.submission_id
+          ? {
+              id: row.submission_id,
+              status: row.submission_status,
+              submittedAt: row.submitted_at,
+              officeRemarks: row.office_remarks,
+            }
+          : null,
+      });
+    }
   }
 
   const areas = Object.values(areasMap).sort((a, b) => a.sortOrder - b.sortOrder);

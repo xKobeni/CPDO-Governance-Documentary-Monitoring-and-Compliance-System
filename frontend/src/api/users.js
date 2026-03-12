@@ -57,6 +57,6 @@ export async function getOffices() {
 
 // Note: Backend doesn't have user stats endpoint yet, this is placeholder
 export async function getUserStats() {
-  const response = await api.get('/users/stats');
+  const response = await api.get('/analytics/user-stats');
   return response.data;
 }

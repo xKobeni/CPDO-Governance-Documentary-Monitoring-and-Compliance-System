@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -15,7 +16,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../components/ui/tooltip';
-import { RefreshCw, CheckCircle2, Clock, XCircle, AlertCircle, MinusCircle, Download } from 'lucide-react';import { cn } from '../lib/utils';
+import { RefreshCw, CheckCircle2, Clock, XCircle, AlertCircle, MinusCircle, Download } from 'lucide-react';
+import { cn } from '../lib/utils';
 import { getGovernanceAreas } from '../api/governance';
 import { getOffices } from '../api/offices';
 import { getComplianceMatrix } from '../api/governance';
@@ -68,6 +70,7 @@ function getAreaStats(areaId, offices, matrixData) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function GovernanceCompliancePage() {
+  const navigate = useNavigate();
   const [year, setYear] = useState('2026');
   const [focusOffice, setFocusOffice] = useState('all');
   const [showAtRiskOnly, setShowAtRiskOnly] = useState(false);
@@ -107,11 +110,33 @@ export default function GovernanceCompliancePage() {
     }
   }, [year]);
 
+  const handleExport = () => {
+    const activeAreas = areas;
+    const activeOffices = offices;
+    const rows = [];
+    rows.push(["Governance Area", ...activeOffices.map((o) => o.code)].join(","));
+    for (const a of activeAreas) {
+      const line = [a.code, ...activeOffices.map((o) => (matrixData[a.id]?.[o.id] ?? "NOT_SUBMITTED"))];
+      rows.push(line.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(","));
+    }
+    const csv = rows.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `compliance-matrix-${year}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => { loadData(); }, [loadData]);
 
   const totalCells = areas.length * offices.length;
-  const approvedCells = areas.reduce((sum, a) =>
-    sum + offices.filter((o) => matrixData[a.id]?.[o.id] === 'APPROVED').length, 0);
+  // Flatten all matrix statuses for summary counters
+  const allCellStatuses = Object.values(matrixData).flatMap((row) => Object.values(row || {}));
+  const approvedCells = allCellStatuses.filter((s) => s === 'APPROVED').length;
   const overallPct = totalCells > 0 ? Math.round((approvedCells / totalCells) * 100) : 0;
 
   const visibleAreas = showAtRiskOnly
@@ -177,11 +202,11 @@ export default function GovernanceCompliancePage() {
             </div>
             <div className="flex gap-3 shrink-0 flex-wrap text-xs">
               {[
-                { status: 'APPROVED', count: approvedCells },
-                { status: 'PENDING',            count: areas.reduce((s, a) => s + offices.filter((o) => matrixData[a.id]?.[o.id] === 'PENDING').length, 0) },
-                { status: 'REVISION_REQUESTED', count: areas.reduce((s, a) => s + offices.filter((o) => matrixData[a.id]?.[o.id] === 'REVISION_REQUESTED').length, 0) },
-                { status: 'DENIED',             count: areas.reduce((s, a) => s + offices.filter((o) => matrixData[a.id]?.[o.id] === 'DENIED').length, 0) },
-                { status: 'NOT_SUBMITTED',      count: totalCells - areas.reduce((s, a) => s + offices.filter((o) => !!matrixData[a.id]?.[o.id]).length, 0) },
+                { status: 'APPROVED',           count: approvedCells },
+                { status: 'PENDING',            count: allCellStatuses.filter((s) => s === 'PENDING').length },
+                { status: 'REVISION_REQUESTED', count: allCellStatuses.filter((s) => s === 'REVISION_REQUESTED').length },
+                { status: 'DENIED',             count: allCellStatuses.filter((s) => s === 'DENIED').length },
+                { status: 'NOT_SUBMITTED',      count: Math.max(totalCells - allCellStatuses.length, 0) },
               ].map(({ status, count }) => {
                 const cfg = STATUS_CONFIG[status];
                 const Icon = cfg.icon;
@@ -279,6 +304,7 @@ export default function GovernanceCompliancePage() {
                   );
                 })}
                 <th className="px-3 py-3 text-center font-medium min-w-[90px]">Row Progress</th>
+                <th className="px-3 py-3 text-center font-medium min-w-[90px]">Review</th>
               </tr>
             </thead>
             <tbody>
@@ -314,6 +340,16 @@ export default function GovernanceCompliancePage() {
                       </div>
                       <div className="text-[10px] text-muted-foreground mt-0.5">{areaStats.approved}/{areaStats.total}</div>
                     </td>
+                    <td className="px-3 py-2 text-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={() => navigate(`/submissions?governanceAreaId=${area.id}&year=${year}`)}
+                      >
+                        Review
+                      </Button>
+                    </td>
                   </tr>
                 );
               })}
@@ -337,6 +373,7 @@ export default function GovernanceCompliancePage() {
                 <td className="px-3 py-2 text-center">
                   <div className={cn('text-sm font-bold', overallPct >= 80 ? 'text-green-700' : overallPct >= 50 ? 'text-amber-700' : 'text-red-700')}>{overallPct}%</div>
                 </td>
+                <td className="px-3 py-2 text-center" />
               </tr>
             </tfoot>
           </table>

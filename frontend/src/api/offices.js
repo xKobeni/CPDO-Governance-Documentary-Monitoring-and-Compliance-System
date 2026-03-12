@@ -30,9 +30,9 @@ export async function toggleOfficeStatus(officeId, isActive) {
   return response.data;
 }
 
-// Note: Backend doesn't have office stats endpoint yet, this is placeholder
-export async function getOfficeStats() {
-  const response = await api.get('/offices/stats');
+// Backend office-related stats live under /analytics
+export async function getOfficeStats(params = {}) {
+  const response = await api.get('/analytics/office-performance', { params });
   return response.data;
 }
 

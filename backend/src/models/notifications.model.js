@@ -62,10 +62,13 @@ export async function getUserNotifications(userId, limit = 20, offset = 0) {
 /**
  * Mark notification as read
  */
-export async function markAsRead(notificationId) {
+export async function markAsRead(notificationId, userId) {
   const { rows } = await pool.query(
-    `UPDATE notifications SET is_read = TRUE WHERE id = $1 RETURNING *`,
-    [notificationId]
+    `UPDATE notifications
+     SET is_read = TRUE
+     WHERE id = $1 AND user_id = $2
+     RETURNING *`,
+    [notificationId, userId]
   );
   return rows[0] || null;
 }

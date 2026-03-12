@@ -31,6 +31,18 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- Extend notification_type safely (idempotent-ish) for UI/feature growth.
+-- Older databases created before these values existed can be upgraded by re-running schema.sql.
+DO $$ BEGIN
+  ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'DEADLINE_REMINDER';
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'SYSTEM';
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
+
 DO $$ BEGIN
   CREATE TYPE export_format AS ENUM ('PDF', 'XLSX', 'CSV');
 EXCEPTION WHEN duplicate_object THEN NULL;

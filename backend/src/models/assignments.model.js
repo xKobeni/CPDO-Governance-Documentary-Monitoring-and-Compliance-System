@@ -129,12 +129,15 @@ export async function getChecklistItemsForOffice(officeId, year) {
   const { rows } = await pool.query(
     `SELECT
        ci.id                   AS item_id,
+       ci.parent_item_id       AS parent_item_id,
        ci.item_code,
        ci.title                AS item_title,
        ci.description          AS item_description,
        ci.is_required,
        ci.frequency,
        ci.due_date,
+       ci.allowed_file_types,
+       ci.max_files,
        ci.sort_order           AS item_sort_order,
        ct.id                   AS template_id,
        ct.title                AS template_title,
@@ -148,8 +151,8 @@ export async function getChecklistItemsForOffice(officeId, year) {
        s.office_remarks
      FROM office_governance_assignments oga
      JOIN governance_areas ga        ON ga.id  = oga.governance_area_id
-     JOIN checklist_templates ct     ON ct.governance_area_id = ga.id AND ct.year = oga.year AND ct.status = 'ACTIVE'
-     JOIN checklist_items ci         ON ci.template_id = ct.id AND ci.is_active = TRUE AND ci.parent_item_id IS NULL
+     LEFT JOIN checklist_templates ct ON ct.governance_area_id = ga.id AND ct.year = oga.year AND ct.status = 'ACTIVE'
+     LEFT JOIN checklist_items ci     ON ci.template_id = ct.id AND ci.is_active = TRUE
      LEFT JOIN submissions s         ON s.checklist_item_id = ci.id AND s.office_id = oga.office_id AND s.year = oga.year
      WHERE oga.office_id = $1 AND oga.year = $2
      ORDER BY ga.sort_order, ga.code, ci.sort_order, ci.item_code`,

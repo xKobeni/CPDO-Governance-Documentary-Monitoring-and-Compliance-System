@@ -30,15 +30,10 @@ export async function getNotificationsHandler(req, res) {
  */
 export async function markAsReadHandler(req, res) {
   const notificationId = req.params.id;
-  const notification = await markAsRead(notificationId);
+  const notification = await markAsRead(notificationId, req.user.sub);
   
   if (!notification) {
     return res.status(404).json({ message: "Notification not found" });
-  }
-
-  // Check if it belongs to current user
-  if (notification.user_id !== req.user.sub) {
-    return res.status(403).json({ message: "Forbidden" });
   }
 
   return res.json({ notification });

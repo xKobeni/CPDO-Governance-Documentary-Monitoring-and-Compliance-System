@@ -25,6 +25,8 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  XCircle,
+  Loader2,
   Search,
   Filter,
   ChevronDown,
@@ -44,11 +46,18 @@ import {
 import { useAuth } from "../hooks/use-auth";
 import { toast } from "react-hot-toast";
 import { getOfficeChecklist } from "../api/offices";
+import {
+  createSubmission,
+  listSubmissionFiles,
+  uploadSubmissionFile,
+} from "../api/submissions";
 
 // ─── Helpers & Config ─────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
   completed:    { label: "Completed",    color: "bg-green-100 text-green-700 border-green-200", dot: "bg-green-500" },
-  "in-progress":{ label: "In Progress",  color: "bg-blue-100 text-blue-700 border-blue-200",   dot: "bg-blue-500" },
+  "in-progress":{ label: "Pending",      color: "bg-blue-100 text-blue-700 border-blue-200",   dot: "bg-blue-500" },
+  "not-approved":{ label: "Not Approved", color: "bg-red-100 text-red-700 border-red-200",     dot: "bg-red-500" },
+  "no-uploaded":{ label: "No Uploaded",  color: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
   pending:      { label: "Pending",      color: "bg-gray-100 text-gray-600 border-gray-200",   dot: "bg-gray-400" },
   overdue:      { label: "Overdue",      color: "bg-red-100 text-red-700 border-red-200",      dot: "bg-red-500" },
 };
@@ -56,6 +65,8 @@ const STATUS_CONFIG = {
 const STATUS_ICON = {
   completed:     <CheckCircle2 className="h-4 w-4 text-green-600" />,
   "in-progress": <Clock className="h-4 w-4 text-blue-600" />,
+  "not-approved": <XCircle className="h-4 w-4 text-red-600" />,
+  "no-uploaded": <Upload className="h-4 w-4 text-amber-600" />,
   pending:       <Clock className="h-4 w-4 text-gray-400" />,
   overdue:       <AlertCircle className="h-4 w-4 text-red-600" />,
 };
@@ -64,13 +75,13 @@ const STATUS_ICON = {
 function deriveStatus(submission, dueDate) {
   if (!submission) {
     if (dueDate && new Date(dueDate) < new Date()) return "overdue";
-    return "pending";
+    return "no-uploaded";
   }
   const s = submission.status?.toUpperCase();
   if (s === "APPROVED") return "completed";
-  if (s === "SUBMITTED") return "in-progress";
-  if (s === "REJECTED") return "pending"; // needs resubmission
-  return "pending";
+  if (s === "PENDING") return "in-progress";
+  if (s === "DENIED" || s === "REVISION_REQUESTED") return "not-approved";
+  return "in-progress";
 }
 
 /** Transform the API checklist response into the shape the UI expects */
@@ -79,18 +90,47 @@ function transformApiChecklist(apiAreas) {
     id: area.id,
     area: area.name,
     icon: null,
-    items: area.items.map((item) => ({
-      id: item.id,
-      title: item.title,
-      description: item.description,
-      status: deriveStatus(item.submission, item.dueDate),
-      due: item.dueDate,
-      submittedAt: item.submission?.submittedAt ?? null,
-      remarks: item.submission?.officeRemarks ?? null,
-      required: item.isRequired,
-      submissionId: item.submission?.id ?? null,
-      submissionStatus: item.submission?.status ?? null,
-    })),
+    items: (() => {
+      const nodes = (area.items ?? []).map((item) => ({
+        id: item.id,
+        parentId: item.parentItemId ?? null,
+        title: item.title,
+        description: item.description,
+        status: deriveStatus(item.submission, item.dueDate),
+        due: item.dueDate,
+        submittedAt: item.submission?.submittedAt ?? null,
+        remarks: item.submission?.officeRemarks ?? null,
+        required: item.isRequired,
+        frequency: item.frequency ?? null,
+        allowedFileTypes: item.allowedFileTypes ?? null,
+        maxFiles: item.maxFiles ?? null,
+        submissionId: item.submission?.id ?? null,
+        submissionStatus: item.submission?.status ?? null,
+        sortOrder: item.sortOrder ?? 0,
+        itemCode: item.itemCode ?? "",
+        children: [],
+      }));
+
+      const byId = new Map(nodes.map((n) => [n.id, n]));
+      const roots = [];
+
+      for (const n of nodes) {
+        if (n.parentId && byId.has(n.parentId)) {
+          byId.get(n.parentId).children.push(n);
+        } else {
+          roots.push(n);
+        }
+      }
+
+      const sortFn = (a, b) => (a.sortOrder - b.sortOrder) || String(a.itemCode).localeCompare(String(b.itemCode));
+      const sortTree = (arr) => {
+        arr.sort(sortFn);
+        for (const x of arr) sortTree(x.children);
+      };
+      sortTree(roots);
+
+      return roots;
+    })(),
   }));
 }
 
@@ -105,82 +145,222 @@ function daysUntil(dateStr) {
 }
 
 // ─── Submit Item Dialog ───────────────────────────────────────────────────────
-function SubmitDialog({ item, open, onClose }) {
-  const [notes, setNotes] = useState("");
+function SubmitDialog({ item, open, onClose, onSubmit }) {
+  const [remarks, setRemarks] = useState("");
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  const allowedTypes = Array.isArray(item?.allowedFileTypes) ? item.allowedFileTypes : null;
+  const acceptAttr = allowedTypes && allowedTypes.length > 0
+    ? allowedTypes.map((t) => `.${String(t).toLowerCase()}`).join(",")
+    : ".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg";
+  const allowedLabel = allowedTypes && allowedTypes.length > 0
+    ? allowedTypes.map((t) => String(t).toUpperCase()).join(", ")
+    : "PDF, DOC, DOCX, XLS, XLSX, PNG, JPG";
+
+  const handleFileChange = (e) => {
+    const next = e.target.files?.[0] || null;
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    setFile(next);
+    if (next) {
+      setPreviewUrl(URL.createObjectURL(next));
+    }
+  };
+
+  useEffect(() => {
+    if (!open && previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      setFile(null);
+      setRemarks("");
+    }
+  }, [open, previewUrl]);
 
   const handleSubmit = async () => {
-    if (!notes.trim()) {
-      toast.error("Please add submission notes before submitting.");
+    if (!file) {
+      toast.error("Please choose a file to upload.");
       return;
     }
+
+    // Validate extension against allowed types, if provided
+    if (allowedTypes && allowedTypes.length > 0) {
+      const name = file.name || "";
+      const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+      if (!allowedTypes.map((t) => String(t).toLowerCase()).includes(ext)) {
+        toast.error(`File type ".${ext || "?"}" is not allowed. Accepted: ${allowedLabel}.`);
+        return;
+      }
+    }
+
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 900)); // mock delay
-    toast.success(`"${item?.title}" submitted successfully!`);
-    setSubmitting(false);
-    setNotes("");
-    setFile(null);
-    onClose();
+    try {
+      await onSubmit?.({ notes: remarks.trim() || null, file });
+      toast.success(`"${item?.title}" submitted successfully!`);
+      setRemarks("");
+      setFile(null);
+      onClose();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || err?.message || "Submission failed.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-5xl max-h-[95vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Send className="h-4 w-4 text-red-600" />
-            Submit Checklist Item
+            <Upload className="h-4 w-4 text-blue-600" />
+            Upload Document
           </DialogTitle>
           <DialogDescription>
-            Submit your compliance documentation for review.
+            Submit your office&apos;s supporting document for this checklist item.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
-            <p className="font-medium">{item?.title}</p>
-            <p className="text-xs text-muted-foreground">{item?.description}</p>
-            {item?.due && (
-              <p className="text-xs flex items-center gap-1 pt-1">
-                <Calendar className="h-3 w-3" />
-                Due: {formatDate(item.due)}
+        <div className="py-2 space-y-4 sm:space-y-0 sm:flex sm:items-start sm:gap-6">
+          {/* Left column: details + file + remarks */}
+          <div className="flex-1 space-y-4">
+            <div className="rounded-lg border bg-muted/60 p-3 text-sm space-y-1">
+              <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                Target Document
               </p>
-            )}
-          </div>
-          <div className="space-y-1">
-            <Label>Submission Notes <span className="text-red-500">*</span></Label>
-            <Textarea
-              placeholder="Describe what you are submitting and any relevant notes..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              disabled={submitting}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label>Attach Document <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              <p className="font-medium">{item?.title}</p>
+              {item?.description ? (
+                <p className="text-xs text-muted-foreground">{item.description}</p>
+              ) : null}
+              {item?.due && (
+                <p className="text-xs flex items-center gap-1 pt-1 text-muted-foreground">
+                  <Calendar className="h-3 w-3" />
+                  Due: {formatDate(item.due)}
+                </p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label>
+                Select File{" "}
+                <span className="text-xs text-muted-foreground">
+                  ({allowedLabel})
+                </span>
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="file"
+                  accept={acceptAttr}
+                  onChange={handleFileChange}
+                  disabled={submitting}
+                  className="text-sm bg-white"
+                />
+              </div>
+              {file && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Paperclip className="h-3 w-3" />
+                  {file.name}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Accepted: {allowedLabel}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label>
+                Office Remarks{" "}
+                <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Textarea
+                placeholder="e.g., This document includes annexes A and B."
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                rows={3}
                 disabled={submitting}
-                className="text-sm"
               />
             </div>
-            {file && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Paperclip className="h-3 w-3" />
-                {file.name}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">Accepted: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG</p>
+          </div>
+
+          {/* Right column: preview */}
+          <div className="mt-4 sm:mt-0 sm:w-80 lg:w-96">
+            <Label className="text-xs text-muted-foreground">Preview</Label>
+            <div className="mt-1 border rounded-md bg-muted/40 p-2 max-h-[70vh] overflow-hidden">
+              {file && (
+                <>
+                {previewUrl && file.type.startsWith("image/") && (
+                  <img
+                    src={previewUrl}
+                    alt={file.name}
+                    className="max-h-64 w-full object-contain rounded"
+                  />
+                )}
+                {previewUrl && file.type === "application/pdf" && (
+                  <iframe
+                    src={previewUrl}
+                    title={file.name}
+                    className="w-full h-64 rounded border"
+                  />
+                )}
+                {previewUrl && !file.type && file.name.toLowerCase().endsWith(".pdf") && (
+                  <iframe
+                    src={previewUrl}
+                    title={file.name}
+                    className="w-full h-64 rounded border"
+                  />
+                )}
+                {previewUrl && !file.type && (file.name.toLowerCase().endsWith(".png") || file.name.toLowerCase().endsWith(".jpg") || file.name.toLowerCase().endsWith(".jpeg")) && (
+                  <img
+                    src={previewUrl}
+                    alt={file.name}
+                    className="max-h-64 w-full object-contain rounded"
+                  />
+                )}
+                {previewUrl && !/\.(pdf|png|jpe?g)$/i.test(file.name) && (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground flex-1">
+                      Preview is not available for this file type.
+                    </p>
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[11px] px-2"
+                    >
+                      <a href={previewUrl} target="_blank" rel="noreferrer">
+                        Open locally
+                      </a>
+                    </Button>
+                  </div>
+                )}
+                {!previewUrl && (
+                  <p className="text-xs text-muted-foreground">
+                    Preview will appear here after selecting a supported file type.
+                  </p>
+                )}
+                </>
+              )}
+              {!file && (
+                <p className="text-xs text-muted-foreground">
+                  Select a file on the left to preview it here.
+                </p>
+              )}
+            </div>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
           <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? <><RefreshCw className="mr-2 h-4 w-4 animate-spin" />Submitting...</> : <><Send className="mr-2 h-4 w-4" />Submit</>}
+            {submitting ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Submitting...
+              </>
+            ) : (
+              <>
+                <Upload className="mr-2 h-4 w-4" />
+                Submit
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -188,78 +368,357 @@ function SubmitDialog({ item, open, onClose }) {
   );
 }
 
+function formatBytes(n) {
+  const num = Number(n || 0);
+  if (!Number.isFinite(num) || num <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  let v = num;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function cn(...parts) {
+  return parts.filter(Boolean).join(" ");
+}
+
+function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
+  const [loading, setLoading] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [fileToUpload, setFileToUpload] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const submissionId = item?.submissionId ?? null;
+  const submissionStatus = String(item?.submissionStatus || "").toUpperCase();
+  const canUpload = Boolean(submissionId) && submissionStatus !== "APPROVED";
+
+  async function refreshFiles() {
+    if (!submissionId) return;
+    setLoading(true);
+    try {
+      const res = await listSubmissionFiles(submissionId);
+      setFiles(res.files ?? []);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to load files.");
+      setFiles([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function doUpload() {
+    if (!submissionId || !fileToUpload) return;
+    setUploading(true);
+    try {
+      await uploadSubmissionFile(submissionId, fileToUpload);
+      toast.success("File uploaded");
+      setFileToUpload(null);
+      await refreshFiles();
+      onUploaded?.();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (open) refreshFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, submissionId]);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            Submission Details
+          </DialogTitle>
+          <DialogDescription>
+            {item?.title}
+          </DialogDescription>
+        </DialogHeader>
+
+        {!submissionId ? (
+          <div className="text-sm text-muted-foreground">
+            No submission record yet for this item.
+          </div>
+        ) : (
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Status</p>
+                <Badge variant="secondary" className="mt-0.5">
+                  {submissionStatus || "—"}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Submitted</p>
+                <p className="font-medium">{formatDate(item?.submittedAt)}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Uploaded files</p>
+                <Button variant="outline" size="sm" onClick={refreshFiles} disabled={loading}>
+                  <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
+                  Refresh
+                </Button>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                  Loading…
+                </div>
+              ) : files.length === 0 ? (
+                <p className="text-xs text-muted-foreground mt-2">No files uploaded yet.</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {files.map((f) => (
+                    <div key={f.id} className="flex items-start justify-between gap-3 rounded-md bg-muted/40 border p-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{f.file_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          v{f.version_no} · {formatBytes(f.file_size_bytes)} · {formatDate(f.uploaded_at)}
+                        </p>
+                      </div>
+                      {f.is_current && (
+                        <Badge variant="outline" className="text-[10px]">Current</Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {canUpload && (
+              <div className="space-y-2">
+                <Label>Upload a new version</Label>
+                <Input
+                  type="file"
+                  onChange={(e) => setFileToUpload(e.target.files?.[0] || null)}
+                  disabled={uploading}
+                />
+                <div className="flex justify-end">
+                  <Button onClick={doUpload} disabled={!fileToUpload || uploading} className="gap-2">
+                    {uploading ? <><Loader2 className="h-4 w-4 animate-spin" />Uploading…</> : <><Upload className="h-4 w-4" />Upload</>}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Checklist Item Row ───────────────────────────────────────────────────────
-function ChecklistItemRow({ item, onSubmit, onView }) {
-  const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.pending;
+function statusChip(submissionStatus, uiStatus) {
+  const s = String(submissionStatus || "").toUpperCase();
+  if (!submissionStatus) return { label: "NO UPLOADED", className: "bg-amber-50 text-amber-700 border-amber-200" };
+  if (s === "APPROVED") return { label: "APPROVED", className: "bg-green-100 text-green-700 border-green-200" };
+  if (s === "DENIED") return { label: "DENIED", className: "bg-red-100 text-red-700 border-red-200" };
+  if (s === "REVISION_REQUESTED") return { label: "REVISION", className: "bg-amber-50 text-amber-700 border-amber-200" };
+  if (s === "PENDING") return { label: "NOT APPROVED", className: "bg-slate-100 text-slate-700 border-slate-200" };
+  // fallback to UI status
+  return uiStatus === "completed"
+    ? { label: "APPROVED", className: "bg-green-100 text-green-700 border-green-200" }
+    : { label: "NOT APPROVED", className: "bg-slate-100 text-slate-700 border-slate-200" };
+}
+
+function ChecklistItemRow({ item, onSubmit, onView, depth = 0, expanded = true, onToggle, headerCode }) {
+  const isHeader = (item.children?.length ?? 0) > 0;
   const days = daysUntil(item.due);
   const dueSoon = item.status !== "completed" && days >= 0 && days <= 7;
 
-  return (
-    <div className="flex items-start sm:items-center gap-3 rounded-lg border p-3 hover:bg-muted/30 transition-colors group">
-      <div className="mt-0.5 sm:mt-0 shrink-0">{STATUS_ICON[item.status]}</div>
-      <div className="flex-1 min-w-0 space-y-0.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-sm font-medium truncate">{item.title}</span>
-          {item.required && <span className="text-[10px] text-red-600 font-semibold uppercase tracking-wide">Required</span>}
-        </div>
-        <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
-        <div className="flex flex-wrap items-center gap-2 pt-0.5">
-          <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border ${cfg.color}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-            {cfg.label}
-          </span>
-          <span className={`text-xs flex items-center gap-1 ${dueSoon ? "text-amber-600 font-medium" : item.status === "overdue" ? "text-red-600 font-medium" : "text-muted-foreground"}`}>
-            <Calendar className="h-3 w-3" />
-            {item.status === "completed" ? `Submitted ${formatDate(item.submittedAt)}` : `Due ${formatDate(item.due)}`}
-            {item.status !== "completed" && days < 0 && " (overdue)"}
-            {dueSoon && ` (${days}d left)`}
-          </span>
-          {item.remarks && (
-            <span className="text-xs text-amber-600 flex items-center gap-1">
-              <Info className="h-3 w-3" />
-              {item.remarks}
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center gap-1 shrink-0">
-        {item.status === "completed" ? (
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onView(item)}>
-            <Eye className="mr-1 h-3 w-3" />
-            View
-          </Button>
-        ) : (
-          <Button size="sm" className="h-7 text-xs" onClick={() => onSubmit(item)}>
-            <Send className="mr-1 h-3 w-3" />
-            Submit
-          </Button>
+  if (isHeader) {
+    const leafCount = (function countLeaves(n) {
+      if (!n.children?.length) return 1;
+      return n.children.reduce((acc, c) => acc + countLeaves(c), 0);
+    })(item);
+
+    return (
+      <div
+        className={cn(
+          "w-full flex items-center justify-between gap-3 rounded-lg border px-4 py-3 transition-colors cursor-pointer",
+          depth > 0 ? "bg-muted/20 hover:bg-muted/40" : "bg-muted/10 hover:bg-muted/30"
         )}
+        style={{ marginLeft: depth ? Math.min(depth * 16, 48) : 0 }}
+      >
+        <button type="button" onClick={() => onToggle?.(item.id)} className="min-w-0 flex-1 flex items-center gap-3 text-left">
+          <span className="inline-flex h-7 min-w-7 px-2 items-center justify-center rounded-md bg-white border text-slate-700 text-xs font-semibold shrink-0 shadow-sm">
+            {headerCode ?? ""}
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold truncate">{item.title}</span>
+              <Badge variant="secondary" className="text-[10px]">
+                {leafCount} item{leafCount === 1 ? "" : "s"}
+              </Badge>
+              {item.required && (
+                <span className="text-[10px] text-red-600 font-semibold uppercase tracking-wide">Required</span>
+              )}
+            </div>
+            {item.description ? (
+              <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{item.description}</p>
+            ) : null}
+          </div>
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-auto" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 ml-auto" />
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  const chip = statusChip(item.submissionStatus, item.status);
+  const isApproved = String(item.submissionStatus || "").toUpperCase() === "APPROVED";
+  const actionLabel = item.submissionId ? (isApproved ? "Details" : "Replace") : "Upload";
+  const fileTypes = Array.isArray(item.allowedFileTypes)
+    ? item.allowedFileTypes.map((t) => String(t).toLowerCase()).join(", ")
+    : (item.allowedFileTypes ? String(item.allowedFileTypes) : "—");
+
+  return (
+    <div
+      className={cn(
+        "relative flex items-start sm:items-center gap-3 rounded-lg border px-4 py-3 transition-colors group",
+        depth > 0 ? "bg-muted/5 hover:bg-muted/20 pl-6" : "hover:bg-muted/10"
+      )}
+      style={{ marginLeft: depth ? Math.min(depth * 16, 48) : 0 }}
+    >
+      {depth > 0 ? (
+        <span aria-hidden="true" className="absolute left-3 top-0 bottom-0 w-4 pointer-events-none">
+          <span className="absolute left-2 top-0 bottom-0 w-px bg-border" />
+          <span className="absolute left-2 top-1/2 w-2 h-px bg-border" />
+        </span>
+      ) : null}
+
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium truncate">{item.title}</p>
+            {item.description ? <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{item.description}</p> : null}
+            <div className="flex flex-wrap items-center gap-2 pt-1.5">
+              <span
+                className={cn(
+                  "text-xs flex items-center gap-1",
+                  dueSoon ? "text-amber-600 font-medium" : item.status === "overdue" ? "text-red-600 font-medium" : "text-muted-foreground"
+                )}
+              >
+                <Calendar className="h-3 w-3 shrink-0" />
+                {item.status === "completed" ? `Submitted ${formatDate(item.submittedAt)}` : `Due ${formatDate(item.due)}`}
+                {item.status !== "completed" && days < 0 && " (overdue)"}
+                {dueSoon && item.status !== "completed" && ` (${days}d left)`}
+              </span>
+              {fileTypes && fileTypes !== "—" && (
+                <span className="text-xs text-muted-foreground">· {fileTypes}</span>
+              )}
+              {item.remarks ? (
+                <span className="text-xs flex items-center gap-1 rounded-md border bg-blue-50/50 border-blue-200 px-2 py-1 text-blue-800 w-full sm:w-auto">
+                  <Info className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                  <span className="font-medium">Evaluator:</span> {item.remarks}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md border text-[11px] font-semibold", chip.className)}>
+              {chip.label}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => onView(item)}
+                disabled={!item.submissionId}
+              >
+                <Eye className="mr-1 h-3.5 w-3.5" />
+                Details
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => (item.submissionId ? onView(item) : onSubmit(item))}
+              >
+                <Upload className="mr-1 h-3.5 w-3.5" />
+                {actionLabel}
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
 // ─── Checklist Area Card ──────────────────────────────────────────────────────
-function ChecklistAreaCard({ area, onSubmit, onView, defaultOpen = false }) {
+function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, onView, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
-  const total = area.items.length;
-  const done = area.items.filter((i) => i.status === "completed").length;
-  const overdue = area.items.filter((i) => i.status === "overdue").length;
-  const pct = Math.round((done / total) * 100);
+  const [expandedIds, setExpandedIds] = useState(() => new Set());
+  const flattenItems = (items) => items.flatMap((i) => [i, ...flattenItems(i.children || [])]);
+  const flat = flattenItems(area.items);
+  const total = flat.length;
+  const done = flat.filter((i) => i.status === "completed").length;
+  const overdue = flat.filter((i) => i.status === "overdue").length;
+  const inProg = flat.filter((i) => i.status === "in-progress").length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  useEffect(() => {
+    // Auto-expand all header rows initially for a friendlier experience
+    const ids = new Set();
+    const walk = (items) => {
+      for (const it of items) {
+        if (it.children?.length) ids.add(it.id);
+        if (it.children?.length) walk(it.children);
+      }
+    };
+    walk(area.items);
+    setExpandedIds(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [area.id]);
+
+  const toggle = (id) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   return (
-    <Card>
+    <Card className={cn("border-l-4 transition-all hover:shadow-md", accentClass)}>
       <button
-        className="w-full text-left"
+        type="button"
+        className="w-full text-left cursor-pointer"
         onClick={() => setOpen((v) => !v)}
       >
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xl">{area.icon}</span>
+          <div className="flex flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                <ClipboardList className="h-5 w-5 text-muted-foreground" />
+              </div>
               <div className="min-w-0">
-                <CardTitle className="text-base">{area.area}</CardTitle>
-                <CardDescription className="text-xs">{done}/{total} completed · {area.items.filter(i => i.status === "in-progress").length} in progress</CardDescription>
+                <CardTitle className="text-base font-medium">{area.area}</CardTitle>
+                <CardDescription className="text-xs mt-0.5">
+                  {done}/{total} completed
+                  {inProg > 0 && ` · ${inProg} in progress`}
+                </CardDescription>
               </div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
@@ -268,19 +727,62 @@ function ChecklistAreaCard({ area, onSubmit, onView, defaultOpen = false }) {
                   {overdue} overdue
                 </Badge>
               )}
-              <span className="text-sm font-semibold text-muted-foreground w-10 text-right">{pct}%</span>
+              <span className="text-sm font-semibold text-muted-foreground w-10 text-right tabular-nums">{pct}%</span>
               {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
             </div>
           </div>
-          <Progress value={pct} className="h-1.5 mt-2" />
+          <Progress value={pct} className="h-1.5 mt-3" />
         </CardHeader>
       </button>
 
       {open && (
         <CardContent className="pt-0 space-y-2">
-          {area.items.map((item) => (
-            <ChecklistItemRow key={item.id} item={item} onSubmit={onSubmit} onView={onView} />
-          ))}
+          {(function render(items, depth = 0, parentCode = "") {
+            const toLetter = (n) => {
+              // 1 -> a, 2 -> b ... 26 -> z, 27 -> aa ...
+              let x = n;
+              let out = "";
+              while (x > 0) {
+                x -= 1;
+                out = String.fromCharCode(97 + (x % 26)) + out;
+                x = Math.floor(x / 26);
+              }
+              return out;
+            };
+
+            let headerCounter = 0;
+
+            return items.flatMap((item) => {
+              const isHeader = (item.children?.length ?? 0) > 0;
+              const isExpanded = isHeader ? expandedIds.has(item.id) : true;
+
+              let headerCode;
+              if (isHeader) {
+                headerCounter += 1;
+                // Prefer backend-provided item codes (authoritative).
+                // Only fall back to generated hierarchical numbering if missing.
+                headerCode = item.itemCode
+                  ? item.itemCode
+                  : (depth === 0
+                      ? String(headerCounter)
+                      : `${parentCode}.${toLetter(headerCounter)}`);
+              }
+
+              return [
+                <ChecklistItemRow
+                  key={item.id}
+                  item={item}
+                  onSubmit={onSubmit}
+                  onView={onView}
+                  depth={depth}
+                  expanded={isExpanded}
+                  onToggle={toggle}
+                  headerCode={headerCode}
+                />,
+                ...(isHeader && isExpanded ? render(item.children, depth + 1, headerCode ?? parentCode) : []),
+              ];
+            });
+          })(area.items, 0, "")}
         </CardContent>
       )}
     </Card>
@@ -297,32 +799,52 @@ export default function MyChecklistsPage() {
   const [viewItem, setViewItem] = useState(null);
   const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [year] = useState(new Date().getFullYear());
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
   const [officeName, setOfficeName] = useState(user?.office || "Your Office");
 
-  useEffect(() => {
+  async function loadChecklist() {
     if (!user?.officeId) return;
-    getOfficeChecklist(user.officeId, year)
-      .then((res) => {
-        const apiData = res.data;
-        if (apiData?.office?.name) setOfficeName(apiData.office.name);
-        setChecklists(transformApiChecklist(apiData?.areas ?? []));
-      })
-      .catch((err) => {
-        console.error("Failed to load checklist", err);
-        toast.error("Failed to load your checklist. Please try again.");
-      })
-      .finally(() => setLoading(false));
+    setLoading(true);
+    try {
+      const res = await getOfficeChecklist(user.officeId, year);
+      const apiData = res.data;
+      if (apiData?.office?.name) setOfficeName(apiData.office.name);
+      setChecklists(transformApiChecklist(apiData?.areas ?? []));
+    } catch (err) {
+      console.error("Failed to load checklist", err);
+      toast.error("Failed to load your checklist. Please try again.");
+      setChecklists([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadChecklist();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.officeId, year]);
 
-  // Flatten all items for summary stats
-  const allItems = checklists.flatMap((a) => a.items);
-  const total = allItems.length;
-  const completed = allItems.filter((i) => i.status === "completed").length;
-  const inProgress = allItems.filter((i) => i.status === "in-progress").length;
-  const overdue = allItems.filter((i) => i.status === "overdue").length;
-  const pending = allItems.filter((i) => i.status === "pending").length;
-  const completionPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  async function handleSubmitChecklistItem(item, { notes, file }) {
+    if (!user?.officeId) throw new Error("Missing officeId");
+    if (!item?.id) throw new Error("Missing checklist item id");
+
+    const created = await createSubmission({
+      year,
+      officeId: user.officeId,
+      checklistItemId: item.id,
+      officeRemarks: notes ?? null,
+    });
+
+    const submissionId = created?.submission?.id;
+    if (!submissionId) throw new Error("Submission not created");
+
+    if (file) {
+      await uploadSubmissionFile(submissionId, file);
+    }
+
+    await loadChecklist();
+  }
 
   // Filter logic
   const filteredAreas = checklists
@@ -337,54 +859,108 @@ export default function MyChecklistsPage() {
     }))
     .filter((a) => a.items.length > 0);
 
+  // Summary counts (all areas)
+  const allItems = checklists.flatMap((a) =>
+    (function flatten(items) {
+      return items.flatMap((i) => [i, ...flatten(i.children || [])]);
+    })(a.items)
+  );
+  const totalItems = allItems.length;
+  const completedItems = allItems.filter((i) => i.status === "completed").length;
+  const overdueItems = allItems.filter((i) => i.status === "overdue").length;
+  const noUploadedItems = allItems.filter((i) => i.status === "no-uploaded").length;
+  const completionPct = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+  const CARD_ACCENTS = [
+    "border-l-blue-500",
+    "border-l-emerald-500",
+    "border-l-violet-500",
+    "border-l-amber-500",
+    "border-l-rose-500",
+    "border-l-cyan-500",
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Checklists</h1>
-          <p className="text-muted-foreground flex items-center gap-1.5 mt-0.5">
-            <Building2 className="h-3.5 w-3.5" />
-            {officeName} · Compliance Year: {year}
+          <p className="text-muted-foreground flex items-center gap-1.5 mt-1">
+            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="font-medium text-foreground">{officeName}</span>
+            <span>·</span>
+            <span>Compliance Year {year}</span>
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted rounded-lg px-3 py-2 shrink-0">
-          <TrendingUp className="h-4 w-4 text-green-600" />
-          <span className="font-semibold text-foreground">{completionPct}%</span> overall completion
+        <div className="flex items-center gap-2 shrink-0">
+          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+            <SelectTrigger className="w-[120px] h-9">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Completed", value: completed, color: "text-green-600", bg: "bg-green-50", icon: <CheckCircle2 className="h-4 w-4 text-green-600" /> },
-          { label: "In Progress", value: inProgress, color: "text-blue-600", bg: "bg-blue-50", icon: <Clock className="h-4 w-4 text-blue-600" /> },
-          { label: "Pending", value: pending, color: "text-gray-600", bg: "bg-gray-50", icon: <ClipboardList className="h-4 w-4 text-gray-500" /> },
-          { label: "Overdue", value: overdue, color: "text-red-600", bg: "bg-red-50", icon: <AlertCircle className="h-4 w-4 text-red-600" /> },
-        ].map((s) => (
-          <Card key={s.label} className={`${s.bg} border-0 shadow-sm`}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="shrink-0">{s.icon}</div>
-              <div>
-                <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-                <div className="text-xs text-muted-foreground">{s.label}</div>
-              </div>
+      {/* Summary strip */}
+      {!loading && checklists.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalItems}</div>
+              <p className="text-xs text-muted-foreground">Checklist items</p>
             </CardContent>
           </Card>
-        ))}
-      </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Completed</CardTitle>
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{completedItems}</div>
+              <p className="text-xs text-muted-foreground">{completionPct}% completion</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">No Upload</CardTitle>
+              <Upload className="h-4 w-4 text-amber-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600">{noUploadedItems}</div>
+              <p className="text-xs text-muted-foreground">Need documents</p>
+            </CardContent>
+          </Card>
+          <Card className={overdueItems > 0 ? "border-red-200 bg-red-50/30" : ""}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Overdue</CardTitle>
+              <AlertCircle className={cn("h-4 w-4", overdueItems > 0 ? "text-red-600" : "text-muted-foreground")} />
+            </CardHeader>
+            <CardContent>
+              <div className={cn("text-2xl font-bold", overdueItems > 0 && "text-red-600")}>{overdueItems}</div>
+              <p className="text-xs text-muted-foreground">Requires attention</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-      {/* Overall Progress Bar */}
-      <Card>
-        <CardContent className="p-4 space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="font-medium">Overall Progress</span>
-            <span className="text-muted-foreground">{completed} of {total} items completed</span>
-          </div>
-          <Progress value={completionPct} className="h-2.5" />
-          <p className="text-xs text-muted-foreground">{completionPct}% · {total - completed} items remaining</p>
-        </CardContent>
-      </Card>
+      {/* Status legend */}
+      <nav className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+        <span className="font-medium text-muted-foreground">Status:</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" /> No uploaded</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" /> Pending</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" /> Not approved</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-green-500" /> Approved</span>
+      </nav>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -406,6 +982,7 @@ export default function MyChecklistsPage() {
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="overdue">Overdue</SelectItem>
             <SelectItem value="in-progress">In Progress</SelectItem>
+            <SelectItem value="no-uploaded">No Uploaded</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
           </SelectContent>
@@ -425,25 +1002,25 @@ export default function MyChecklistsPage() {
 
       {/* Checklist Areas */}
       {loading ? (
-        <Card>
+        <Card className="border-l-4 border-l-muted">
           <CardContent className="py-16 text-center text-muted-foreground">
             <Loader2 className="mx-auto h-8 w-8 mb-3 animate-spin opacity-50" />
             <p className="text-sm">Loading checklist items...</p>
           </CardContent>
         </Card>
       ) : filteredAreas.length === 0 ? (
-        <Card>
+        <Card className="rounded-lg border border-dashed">
           <CardContent className="py-16 text-center text-muted-foreground">
             <ClipboardList className="mx-auto h-10 w-10 mb-3 opacity-30" />
             {checklists.length === 0 ? (
               <>
                 <p className="font-medium">No governance areas assigned</p>
-                <p className="text-sm">Contact your administrator to assign compliance areas to your office.</p>
+                <p className="text-sm mt-1">Contact your administrator to assign compliance areas to your office.</p>
               </>
             ) : (
               <>
                 <p className="font-medium">No checklist items found</p>
-                <p className="text-sm">Try adjusting your search or filters.</p>
+                <p className="text-sm mt-1">Try adjusting your search or filters.</p>
               </>
             )}
           </CardContent>
@@ -454,6 +1031,7 @@ export default function MyChecklistsPage() {
             <ChecklistAreaCard
               key={area.id}
               area={area}
+              accentClass={CARD_ACCENTS[idx % CARD_ACCENTS.length]}
               onSubmit={(item) => setSubmitItem(item)}
               onView={(item) => setViewItem(item)}
               defaultOpen={idx === 0}
@@ -467,44 +1045,15 @@ export default function MyChecklistsPage() {
         item={submitItem}
         open={!!submitItem}
         onClose={() => setSubmitItem(null)}
+        onSubmit={(payload) => handleSubmitChecklistItem(submitItem, payload)}
       />
 
-      {/* View Dialog (completed item) */}
-      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              Submission Details
-            </DialogTitle>
-          </DialogHeader>
-          {viewItem && (
-            <div className="space-y-3 py-2">
-              <div className="rounded-lg bg-muted p-3 space-y-1.5">
-                <p className="font-medium text-sm">{viewItem.title}</p>
-                <p className="text-xs text-muted-foreground">{viewItem.description}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground">Status</p>
-                  <Badge variant="secondary" className="bg-green-100 text-green-700 mt-0.5">Completed</Badge>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Submitted</p>
-                  <p className="font-medium">{formatDate(viewItem.submittedAt)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground rounded-lg border p-2.5">
-                <FileText className="h-4 w-4 shrink-0" />
-                <span className="text-xs">No attached document (mockup)</span>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewItem(null)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ViewSubmissionDialog
+        item={viewItem}
+        open={!!viewItem}
+        onClose={() => setViewItem(null)}
+        onUploaded={loadChecklist}
+      />
     </div>
   );
 }

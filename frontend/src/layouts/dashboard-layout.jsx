@@ -8,12 +8,6 @@ import {
   Bell, 
   Menu,
   CheckCheck,
-  CheckCircle2,
-  XCircle,
-  FilePen,
-  FileText,
-  AlertTriangle,
-  Info,
   ArrowRight,
 } from "lucide-react";
 import {
@@ -26,22 +20,16 @@ import {
 import { useState, useCallback, useRef } from "react";
 import React from "react";
 import { useIdleTimer } from "../hooks/use-idle-timer";
-
-const NOTIF_TYPE_STYLES = {
-  APPROVED:            { cls: 'bg-green-100 text-green-700',   icon: CheckCircle2  },
-  DENIED:              { cls: 'bg-red-100 text-red-700',       icon: XCircle       },
-  REVISION_REQUESTED:  { cls: 'bg-amber-100 text-amber-700',   icon: FilePen       },
-  SUBMISSION_RECEIVED: { cls: 'bg-blue-100 text-blue-700',     icon: FileText      },
-  DEADLINE_REMINDER:   { cls: 'bg-orange-100 text-orange-700', icon: AlertTriangle },
-  SYSTEM:              { cls: 'bg-slate-100 text-slate-700',   icon: Info          },
-};
-
-const TOPBAR_NOTIFS = [
-  { id: 'n-001', type: 'APPROVED',           title: 'Submission Approved',  body: 'Annual Planning Disclosure Report has been approved.',    time: '5 Mar' },
-  { id: 'n-002', type: 'REVISION_REQUESTED', title: 'Revision Requested',   body: 'Please update section 3.2 for the Signed Approval Page.', time: '4 Mar' },
-  { id: 'n-003', type: 'DENIED',             title: 'Submission Denied',    body: 'Citizen Satisfaction Survey is missing Q4 data.',         time: '4 Mar' },
-  { id: 'n-010', type: 'SYSTEM',             title: 'System Maintenance',   body: 'Scheduled maintenance March 15, 12 AM – 4 AM.',           time: '10 Mar' },
-];
+import {
+  useMarkAllNotificationsAsRead,
+  useMarkNotificationAsRead,
+  useUnreadNotificationCount,
+  useUnreadNotifications,
+} from "../hooks/use-notifications";
+import {
+  formatNotificationRelativeTime,
+  getNotificationTypeConfig,
+} from "../lib/notifications";
 
 // 30 minute idle timeout matching the backend; warn 5 minutes before
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -55,7 +43,14 @@ function DashboardLayout() {
   const [showIdleWarning, setShowIdleWarning] = useState(false);
   const [countdown, setCountdown] = useState(300); // seconds
   const countdownRef = useRef(null);
-  const [topbarUnread, setTopbarUnread] = useState(4);
+
+  const unreadNotificationsQuery = useUnreadNotifications({ page: 1, limit: 4, enabled: Boolean(user) });
+  const unreadCountQuery = useUnreadNotificationCount({ enabled: Boolean(user) });
+  const markAsReadMutation = useMarkNotificationAsRead();
+  const markAllAsReadMutation = useMarkAllNotificationsAsRead();
+
+  const topbarNotifications = unreadNotificationsQuery.data?.data ?? [];
+  const topbarUnread = unreadCountQuery.data?.unreadCount ?? 0;
 
   const handleLogout = useCallback(async () => {
     try {
@@ -126,6 +121,16 @@ function DashboardLayout() {
     const s = seconds % 60;
     return `${m}:${String(s).padStart(2, "0")}`;
   };
+
+  const handleNotificationClick = useCallback((notificationId) => {
+    markAsReadMutation.mutate(notificationId, {
+      onSettled: () => navigate('/notifications'),
+    });
+  }, [markAsReadMutation, navigate]);
+
+  const handleMarkAllRead = useCallback(() => {
+    markAllAsReadMutation.mutate();
+  }, [markAllAsReadMutation]);
 
   return (
     <div className="flex h-screen bg-background">
@@ -218,31 +223,36 @@ function DashboardLayout() {
                   {topbarUnread > 0 && (
                     <button
                       className="text-xs text-primary hover:underline flex items-center gap-1"
-                      onClick={() => setTopbarUnread(0)}
+                      onClick={handleMarkAllRead}
+                      disabled={markAllAsReadMutation.isPending}
                     >
                       <CheckCheck className="h-3 w-3" />
-                      Mark all read
+                      {markAllAsReadMutation.isPending ? 'Marking...' : 'Mark all read'}
                     </button>
                   )}
                 </div>
                 {/* Items */}
                 <div className="max-h-72 overflow-y-auto">
-                  {TOPBAR_NOTIFS.map((n) => {
-                    const cfg = NOTIF_TYPE_STYLES[n.type] ?? NOTIF_TYPE_STYLES.SYSTEM;
+                  {topbarNotifications.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+                      {unreadNotificationsQuery.isLoading ? 'Loading notifications...' : 'No unread notifications.'}
+                    </div>
+                  ) : topbarNotifications.map((n) => {
+                    const cfg = getNotificationTypeConfig(n.type);
                     const NIcon = cfg.icon;
                     return (
                       <DropdownMenuItem
                         key={n.id}
                         className="flex items-start gap-3 px-4 py-3 cursor-pointer"
-                        onClick={() => navigate('/notifications')}
+                        onClick={() => handleNotificationClick(n.id)}
                       >
-                        <span className={cn('shrink-0 flex items-center justify-center w-8 h-8 rounded-full', cfg.cls)}>
+                        <span className={cn('shrink-0 flex items-center justify-center w-8 h-8 rounded-full', cfg.badgeClass)}>
                           <NIcon className="w-3.5 h-3.5" />
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium leading-snug">{n.title}</p>
                           <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{n.body}</p>
-                          <p className="text-[10px] text-muted-foreground mt-1">{n.time}</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">{formatNotificationRelativeTime(n.createdAt)}</p>
                         </div>
                       </DropdownMenuItem>
                     );

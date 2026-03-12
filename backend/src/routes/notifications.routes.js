@@ -23,10 +23,10 @@ r.get("/unread/count", asyncHandler(getUnreadCountHandler));
 // Get all notifications (paginated)
 r.get("/", shortCache, asyncHandler(getNotificationsHandler));
 
-// Mark single notification as read
-r.patch("/:id/read", asyncHandler(markAsReadHandler));
-
 // Mark all as read
 r.patch("/all/read", asyncHandler(markAllAsReadHandler));
+
+// Mark single notification as read
+r.patch("/:id/read", asyncHandler(markAsReadHandler));
 
 export default r;

@@ -76,7 +76,8 @@ function deriveStatus(submission, dueDate) {
   }
   const s = submission.status?.toUpperCase();
   if (s === "APPROVED") return "completed";
-  if (s === "SUBMITTED") return "in-progress";
+  if (s === "PENDING") return "in-progress";
+  // DENIED / REVISION_REQUESTED
   return "pending";
 }
 
