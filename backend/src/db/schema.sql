@@ -115,7 +115,6 @@ CREATE TRIGGER trg_users_updated_at
 BEFORE UPDATE ON users
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- =========================
 -- GOVERNANCE AREAS
 -- =========================
 CREATE TABLE IF NOT EXISTS governance_areas (
@@ -134,6 +133,23 @@ CREATE INDEX IF NOT EXISTS idx_governance_areas_sort ON governance_areas(sort_or
 DROP TRIGGER IF EXISTS trg_governance_areas_updated_at ON governance_areas;
 CREATE TRIGGER trg_governance_areas_updated_at
 BEFORE UPDATE ON governance_areas
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- =========================
+-- YEARS (managed list of reporting years)
+-- =========================
+CREATE TABLE IF NOT EXISTS years (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  year       INT UNIQUE NOT NULL,
+  is_active  BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT chk_years_range CHECK (year >= 2000 AND year <= 2100)
+);
+
+DROP TRIGGER IF EXISTS trg_years_updated_at ON years;
+CREATE TRIGGER trg_years_updated_at
+BEFORE UPDATE ON years
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- =========================

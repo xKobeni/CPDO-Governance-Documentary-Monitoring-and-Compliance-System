@@ -44,10 +44,12 @@ import {
   LayoutGrid,
   Activity,
   Settings,
+  Calendar,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { getOfficeChecklist } from "../api/offices";
 import { getGovernanceAreasWithStats, getComplianceMatrix } from "../api/governance";
+import { getYears } from "../api/years";
 import { getOffices } from "../api/offices";
 import { getUsers } from "../api/users";
 import {
@@ -352,7 +354,6 @@ const COMPLIANCE_STATUS = {
 function AdminDashboard({ user }) {
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
   // ── Live clock ───────────────────────────────────────────────────────────────
   const [now, setNow] = useState(new Date());
@@ -365,6 +366,7 @@ function AdminDashboard({ user }) {
 
   // ── Year filter ──────────────────────────────────────────────────────────────
   const [year, setYear] = useState(currentYear);
+  const [yearOptions, setYearOptions] = useState([]);
   const [lastRefreshed, setLastRefreshed] = useState(null);
 
   // ── Shared data ─────────────────────────────────────────────────────────────
@@ -390,9 +392,27 @@ function AdminDashboard({ user }) {
         getUsers(),
         getComplianceMatrix(year),
       ]);
-      if (areasRes.status === 'fulfilled')   setAreas(areasRes.value.governanceAreas   || []);
-      if (officesRes.status === 'fulfilled') setOffices(officesRes.value.offices        || []);
-      if (usersRes.status === 'fulfilled')   setUsers(usersRes.value.users             || []);
+      if (areasRes.status === 'fulfilled') {
+        setAreas(areasRes.value.governanceAreas || []);
+      }
+      if (officesRes.status === 'fulfilled') {
+        const payload = officesRes.value;
+        const list = Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload?.offices)
+          ? payload.offices
+          : [];
+        setOffices(list);
+      }
+      if (usersRes.status === 'fulfilled') {
+        const payload = usersRes.value;
+        const list = Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload?.users)
+          ? payload.users
+          : [];
+        setUsers(list);
+      }
       if (matrixRes.status === 'fulfilled') {
         const m = {};
         for (const cell of (matrixRes.value.cells || [])) {
@@ -411,6 +431,27 @@ function AdminDashboard({ user }) {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  // Load managed years for the dropdown, with fallback
+  useEffect(() => {
+    getYears({ includeInactive: false })
+      .then((res) => {
+        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
+        if (yrs.length > 0) {
+          setYearOptions(yrs);
+          if (!yrs.includes(year)) {
+            setYear(yrs[0]);
+          }
+        } else {
+          const fallback = Array.from({ length: 5 }, (_, i) => currentYear - i);
+          setYearOptions(fallback);
+        }
+      })
+      .catch(() => {
+        const fallback = Array.from({ length: 5 }, (_, i) => currentYear - i);
+        setYearOptions(fallback);
+      });
+  }, [currentYear]);
+
   // ── Computed values ────────────────────────────────────────────────────────
   const activeAreas   = areas.filter((a) => a.is_active);
   const activeOffices = offices.filter((o) => o.is_active);
@@ -422,9 +463,17 @@ function AdminDashboard({ user }) {
   const approvedCells  = activeAreas.reduce((s, a) => s + activeOffices.filter((o) => matrix[a.id]?.[o.id] === 'APPROVED').length, 0);
   const overallPct     = totalCells > 0 ? Math.round((approvedCells / totalCells) * 100) : 0;
 
-  const adminCount  = users.filter((u) => u.role?.toUpperCase() === 'ADMIN').length;
-  const staffCount  = users.filter((u) => u.role?.toUpperCase() === 'STAFF').length;
-  const officeCount = users.filter((u) => u.role?.toUpperCase() === 'OFFICE').length;
+  const getRoleCode = (u) => {
+    const raw =
+      (u.role && String(u.role)) ||
+      (u.role_code && String(u.role_code)) ||
+      '';
+    return raw.toUpperCase();
+  };
+
+  const adminCount  = users.filter((u) => getRoleCode(u) === 'ADMIN').length;
+  const staffCount  = users.filter((u) => getRoleCode(u) === 'STAFF').length;
+  const officeCount = users.filter((u) => getRoleCode(u) === 'OFFICE').length;
 
   // ── Chart data ──────────────────────────────────────────────────────────────
   const areaChartData = activeAreas.map((a) => ({
@@ -505,12 +554,13 @@ function AdminDashboard({ user }) {
 
   // ── Quick action tiles ─────────────────────────────────────────────────────
   const quickActions = [
-    { label: 'Manage Areas',       icon: ShieldCheck, path: '/governance/manage',   color: 'text-blue-600',   bg: 'bg-blue-50'   },
-    { label: 'Compliance Matrix',  icon: BarChart3,   path: '/governance/compliance',color: 'text-violet-600', bg: 'bg-violet-50' },
-    { label: 'Manage Offices',     icon: Building2,   path: '/offices',              color: 'text-emerald-600',bg: 'bg-emerald-50'},
-    { label: 'Manage Users',       icon: Users,       path: '/users',                color: 'text-amber-600',  bg: 'bg-amber-50'  },
-    { label: 'All Templates',      icon: FileText,    path: '/templates',            color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { label: 'Submissions',        icon: ClipboardList,path: '/submissions',         color: 'text-rose-600',   bg: 'bg-rose-50'   },
+    { label: 'Manage Areas',       icon: ShieldCheck,   path: '/governance/manage',    color: 'text-blue-600',    bg: 'bg-blue-50'    },
+    { label: 'Compliance Matrix',  icon: BarChart3,     path: '/governance/compliance',color: 'text-violet-600',  bg: 'bg-violet-50'  },
+    { label: 'Manage Offices',     icon: Building2,     path: '/offices',              color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Manage Users',       icon: Users,         path: '/users',                color: 'text-amber-600',   bg: 'bg-amber-50'   },
+    { label: 'All Templates',      icon: FileText,      path: '/templates',            color: 'text-indigo-600',  bg: 'bg-indigo-50'  },
+    { label: 'Submissions',        icon: ClipboardList, path: '/submissions',         color: 'text-rose-600',    bg: 'bg-rose-50'    },
+    { label: 'Manage Years',       icon: Calendar,      path: '/years',               color: 'text-slate-700',   bg: 'bg-slate-50'   },
   ];
 
   return (
@@ -542,11 +592,6 @@ function AdminDashboard({ user }) {
           <Button variant="outline" size="sm" onClick={loadAll} disabled={loading}>
             {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</> : <><RefreshCw className="mr-2 h-4 w-4" />Refresh</>}
           </Button>
-          {lastRefreshed && !loading && (
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              Updated {lastRefreshed.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </span>
-          )}
         </div>
       </div>
 

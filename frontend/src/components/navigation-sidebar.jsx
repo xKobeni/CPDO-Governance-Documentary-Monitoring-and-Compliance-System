@@ -29,7 +29,8 @@ import {
   User,
   Mail,
   FileCheck,
-  BarChart
+  BarChart,
+  Calendar,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -42,6 +43,7 @@ const iconMap = {
   "/templates": FileText,
   "/users": Users,
   "/offices": Building2,
+  "/years": Calendar,
   "/reports": BarChart,
   "/audit-logs": BarChart3,
   "/notifications": Bell,
@@ -80,7 +82,7 @@ export const NavigationSidebar = React.memo(function NavigationSidebar({ classNa
     },
     {
       label: 'Administration',
-      hrefs: ['/users', '/offices'],
+      hrefs: ['/users', '/offices', '/years'],
     },
     {
       label: 'Reports & Logs',

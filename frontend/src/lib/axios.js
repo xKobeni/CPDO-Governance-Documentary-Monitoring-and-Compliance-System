@@ -5,21 +5,21 @@ const api = axios.create({
   withCredentials: true,
 });
 
-let accessToken = localStorage.getItem('accessToken');
-let sessionId = localStorage.getItem('sessionId');
+let accessToken = localStorage.getItem("accessToken");
+let sessionId = localStorage.getItem("sessionId");
 
 export function setAccessToken(token) {
   accessToken = token;
   if (token) {
-    localStorage.setItem('accessToken', token);
+    localStorage.setItem("accessToken", token);
   } else {
-    localStorage.removeItem('accessToken');
+    localStorage.removeItem("accessToken");
   }
 }
 
 export function clearAccessToken() {
   accessToken = null;
-  localStorage.removeItem('accessToken');
+  localStorage.removeItem("accessToken");
 }
 
 export function getAccessToken() {
@@ -29,19 +29,33 @@ export function getAccessToken() {
 export function setSessionId(id) {
   sessionId = id;
   if (id) {
-    localStorage.setItem('sessionId', id);
+    localStorage.setItem("sessionId", id);
   } else {
-    localStorage.removeItem('sessionId');
+    localStorage.removeItem("sessionId");
   }
 }
 
 export function clearSessionId() {
   sessionId = null;
-  localStorage.removeItem('sessionId');
+  localStorage.removeItem("sessionId");
 }
 
 export function getSessionId() {
   return sessionId;
+}
+
+async function forceLogout({ showTimeoutAlert = false } = {}) {
+  clearAccessToken();
+  clearSessionId();
+  const { setAuthState } = await import("../store/auth-store");
+  setAuthState({ user: null });
+
+  if (showTimeoutAlert) {
+    // Basic notification so users know it was a timeout, not an error
+    window.alert("Your session has expired due to inactivity. Please log in again.");
+  }
+
+  window.location.href = "/login";
 }
 
 api.interceptors.request.use((config) => {
@@ -49,7 +63,7 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
   if (sessionId) {
-    config.headers['x-session-id'] = sessionId;
+    config.headers["x-session-id"] = sessionId;
   }
   return config;
 });
@@ -58,9 +72,21 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const status = error.response?.status;
+    const message = error.response?.data?.message ?? "";
+
+    // If backend reports explicit inactivity timeout, treat it as a timeout and notify user
+    if (
+      status === 401 &&
+      typeof message === "string" &&
+      message.toLowerCase().includes("session inactive")
+    ) {
+      await forceLogout({ showTimeoutAlert: true });
+      return Promise.reject(error);
+    }
 
     if (
-      error.response?.status === 401 &&
+      status === 401 &&
       !originalRequest._retry &&
       !originalRequest.url?.includes("/auth/refresh")
     ) {
@@ -79,15 +105,10 @@ api.interceptors.response.use(
         if (newSessionId) setSessionId(newSessionId);
 
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        if (newSessionId) originalRequest.headers['x-session-id'] = newSessionId;
+        if (newSessionId) originalRequest.headers["x-session-id"] = newSessionId;
         return api(originalRequest);
       } catch (refreshError) {
-        clearAccessToken();
-        clearSessionId();
-        // Import setAuthState here to avoid circular dependency
-        const { setAuthState } = await import('../store/auth-store');
-        setAuthState({ user: null });
-        window.location.href = '/login';
+        await forceLogout();
         return Promise.reject(refreshError);
       }
     }

@@ -61,6 +61,7 @@ import {
   deleteGovernanceArea as apiDeleteArea,
   getAssignedOffices,
 } from '../api/governance';
+import { getYears } from '../api/years';
 
 const EMPTY_FORM = { code: '', name: '', description: '', sortOrder: '', isActive: true };
 
@@ -87,6 +88,7 @@ export default function GovernancePage() {
   const [assignedOfficesYear, setAssignedOfficesYear] = useState(new Date().getFullYear());
   const [assignedOffices, setAssignedOffices] = useState([]);
   const [assignedOfficesLoading, setAssignedOfficesLoading] = useState(false);
+  const [yearOptions, setYearOptions] = useState([]);
 
   const loadAreas = useCallback(async () => {
     setLoading(true);
@@ -102,6 +104,23 @@ export default function GovernancePage() {
   }, []);
 
   useEffect(() => { loadAreas(); }, [loadAreas]);
+
+  // Load managed years for assigned-offices dialog
+  useEffect(() => {
+    const current = new Date().getFullYear();
+    getYears({ includeInactive: false })
+      .then((res) => {
+        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
+        if (yrs.length > 0) {
+          setYearOptions(yrs);
+        } else {
+          setYearOptions([current - 1, current, current + 1]);
+        }
+      })
+      .catch(() => {
+        setYearOptions([current - 1, current, current + 1]);
+      });
+  }, []);
 
   // ── Filtering ───────────────────────────────────────────────────────────────
   const filtered = areas.filter((a) => {
@@ -639,7 +658,7 @@ export default function GovernancePage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map((y) => (
+                {yearOptions.map((y) => (
                   <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                 ))}
               </SelectContent>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { hashPassword } from "../utils/password.js";
 import { getRoleByCode } from "../models/roles.model.js";
-import { createUser, listUsers, setUserActive, findUserById, updateUser, deleteUser } from "../models/users.model.js";
+import { createUser, listUsers, setUserActive, findUserById, updateUser, deleteUser, updateUserPassword } from "../models/users.model.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
 function generatePassword() {
@@ -122,4 +122,26 @@ export async function deleteUserHandler(req, res) {
   
   if (!deleted) return res.status(404).json({ message: "User not found" });
   return res.json({ message: "User deleted successfully" });
+}
+
+export async function resetUserPasswordHandler(req, res) {
+  const userId = req.params.id;
+  const user = await findUserById(userId);
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  const rawPassword = generatePassword();
+  const passwordHash = await hashPassword(rawPassword);
+
+  const updated = await updateUserPassword(userId, passwordHash);
+  if (!updated) {
+    return res.status(500).json({ message: "Failed to reset password" });
+  }
+
+  // Return the new temporary password so admin can share it with the user
+  return res.json({
+    generatedPassword: rawPassword,
+  });
 }

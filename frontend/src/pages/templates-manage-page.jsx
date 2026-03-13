@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getAllTemplates, createTemplate, updateTemplate, deleteTemplate } from '../api/templates';
+import { getYears } from '../api/years';
 import { getGovernanceAreas } from '../api/governance';
 
 const STATUS_STYLE = {
@@ -69,8 +70,36 @@ export default function TemplatesManagePage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Managed years for dropdowns (fallbacks to existing template years)
+  const [yearOptions, setYearOptions] = useState([]);
+
+  useEffect(() => {
+    getYears({ includeInactive: false })
+      .then((res) => {
+        const yrs = (res.years || []).map((y) => String(y.year)).sort((a, b) => b - a);
+        if (yrs.length > 0) {
+          setYearOptions(yrs);
+        } else {
+          const derived = [...new Set(templates.map((t) => String(t.year)))].sort((a, b) => b - a);
+          if (derived.length > 0) {
+            setYearOptions(derived);
+          } else {
+            setYearOptions(['2026', '2025', '2024']);
+          }
+        }
+      })
+      .catch(() => {
+        const derived = [...new Set(templates.map((t) => String(t.year)))].sort((a, b) => b - a);
+        if (derived.length > 0) {
+          setYearOptions(derived);
+        } else {
+          setYearOptions(['2026', '2025', '2024']);
+        }
+      });
+  }, [templates]);
+
   // ── Derived ────────────────────────────────────────────────────────────────
-  const years = [...new Set(templates.map((t) => String(t.year)))].sort((a, b) => b - a);
+  const years = yearOptions;
 
   const filtered = templates.filter((t) => {
     const matchSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

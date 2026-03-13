@@ -57,6 +57,18 @@ export async function setSubmissionStatus({ submissionId, status }) {
   return rows[0] || null;
 }
 
+export async function touchSubmissionSubmittedBy({ submissionId, submittedBy }) {
+  const { rows } = await pool.query(
+    `UPDATE submissions
+     SET submitted_by = $2,
+         submitted_at = now()
+     WHERE id = $1
+     RETURNING id, submitted_by, submitted_at`,
+    [submissionId, submittedBy]
+  );
+  return rows[0] || null;
+}
+
 export async function listSubmissions(filters = {}, limit = 20, offset = 0) {
   const { year, governanceAreaId, officeId, status } = filters;
 

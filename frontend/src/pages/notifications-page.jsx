@@ -40,13 +40,16 @@ import {
   useMarkNotificationAsRead,
   useNotifications,
 } from '../hooks/use-notifications';
+import { useAuth } from '../hooks/use-auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NOTIFICATION DETAIL DIALOG
 // ─────────────────────────────────────────────────────────────────────────────
 function NotificationDetailDialog({ notification, open, onClose }) {
-  if (!notification) return null;
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const role = String(user?.role || '').toUpperCase();
+  if (!notification) return null;
   const config = getNotificationTypeConfig(notification.type);
   const Icon = config.icon;
 
@@ -97,10 +100,16 @@ function NotificationDetailDialog({ notification, open, onClose }) {
                   variant="outline"
                   size="sm"
                   className="w-full gap-2 text-xs mt-1"
-                  onClick={() => navigate('/submissions')}
+                  onClick={() => {
+                    if (role === 'OFFICE') {
+                      navigate('/my-checklists');
+                    } else {
+                      navigate('/submissions');
+                    }
+                  }}
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  View Submission
+                  {role === 'OFFICE' ? 'View Checklist' : 'View Submission'}
                 </Button>
               )}
             </div>

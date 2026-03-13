@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
-import { shortCache } from "../middlewares/caching.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import {
   getUnreadHandler,
@@ -15,13 +14,13 @@ const r = Router();
 r.use(requireAuth, checkSessionInactivity);
 
 // Get unread notifications
-r.get("/unread", shortCache, asyncHandler(getUnreadHandler));
+r.get("/unread", asyncHandler(getUnreadHandler));
 
 // Get unread count badge
 r.get("/unread/count", asyncHandler(getUnreadCountHandler));
 
 // Get all notifications (paginated)
-r.get("/", shortCache, asyncHandler(getNotificationsHandler));
+r.get("/", asyncHandler(getNotificationsHandler));
 
 // Mark all as read
 r.patch("/all/read", asyncHandler(markAllAsReadHandler));

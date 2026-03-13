@@ -58,7 +58,7 @@ import {
 import { toast } from 'react-hot-toast';
 
 // Import API functions
-import { getUsers, createUser, updateUser, deleteUser, setUserActive, getOffices } from '../api/users';
+import { getUsers, createUser, updateUser, deleteUser, setUserActive, getOffices, resetUserPassword } from '../api/users';
 
 const roleOptions = [
   { value: 'ADMIN', label: 'Administrator', color: 'bg-red-100 text-red-800' },
@@ -97,6 +97,9 @@ export default function UsersPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [resetTargetUser, setResetTargetUser] = useState(null);
+  const [resetGeneratedPassword, setResetGeneratedPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [copiedPassword, setCopiedPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -242,6 +245,29 @@ export default function UsersPage() {
     } catch (error) {
       console.error('Error deleting user:', error);
       toast.error(error.response?.data?.message || 'Failed to delete user');
+    }
+  };
+
+  const openResetDialog = (user) => {
+    setResetTargetUser(user);
+    setResetGeneratedPassword('');
+    setIsResetDialogOpen(true);
+  };
+
+  const handleConfirmResetPassword = async () => {
+    if (!resetTargetUser) return;
+
+    try {
+      setSubmitting(true);
+      const result = await resetUserPassword(resetTargetUser.id);
+      const newPassword = result.generatedPassword;
+      setResetGeneratedPassword(newPassword);
+      toast.success('Password reset successfully');
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      toast.error(error.response?.data?.message || 'Failed to reset password');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -612,6 +638,10 @@ export default function UsersPage() {
                                 </>
                               )}
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openResetDialog(user)}>
+                              <KeyRound className="mr-2 h-4 w-4" />
+                              Reset password
+                            </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => handleDeleteUser(user.id)}
                               className="text-red-600"
@@ -772,6 +802,52 @@ export default function UsersPage() {
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Update User
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              {resetTargetUser
+                ? `This will generate a new temporary password for ${resetTargetUser.full_name} (${resetTargetUser.email}). Their current password will no longer work.`
+                : 'This will generate a new temporary password for the selected user.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              After resetting, copy the new password and securely share it with the user.
+              They will be required to use it on their next login and should change it immediately.
+            </p>
+            {resetGeneratedPassword && (
+              <div className="space-y-2">
+                <Label>New temporary password</Label>
+                <code className="block bg-gray-100 px-3 py-2 rounded text-sm font-mono break-all select-all">
+                  {resetGeneratedPassword}
+                </code>
+                <p className="text-xs text-muted-foreground">
+                  Make sure to copy this password now; it will not be shown again.
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsResetDialogOpen(false)}
+              disabled={submitting}
+            >
+              Close
+            </Button>
+            {!resetGeneratedPassword && (
+              <Button onClick={handleConfirmResetPassword} disabled={submitting || !resetTargetUser}>
+                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Reset password
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

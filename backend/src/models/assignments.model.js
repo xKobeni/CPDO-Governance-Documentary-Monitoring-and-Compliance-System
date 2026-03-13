@@ -33,9 +33,17 @@ export async function getOfficesForGovernanceArea(governanceAreaId, year) {
        oga.year,
        oga.assigned_at,
        o.code  AS office_code,
-       o.name  AS office_name
+       o.name  AS office_name,
+       COALESCE(p.pending_review_count, 0)::int AS pending_review_count
      FROM office_governance_assignments oga
      JOIN offices o ON o.id = oga.office_id
+     LEFT JOIN (
+       SELECT office_id, governance_area_id, COUNT(*)::int AS pending_review_count
+       FROM submissions
+       WHERE year = $2
+         AND status = 'PENDING'
+       GROUP BY office_id, governance_area_id
+     ) p ON p.office_id = oga.office_id AND p.governance_area_id = oga.governance_area_id
      WHERE oga.governance_area_id = $1 AND oga.year = $2
      ORDER BY o.name`,
     [governanceAreaId, year]

@@ -49,6 +49,31 @@ export async function createSubmissionHandler(req, res) {
     submittedBy: req.user.sub,
     officeRemarks: officeRemarks ?? null,
   });
+  // For OFFICE users, notify all ADMIN/STAFF that a new submission was created,
+  // so they see something even before any files are uploaded.
+  if (req.user.role === "OFFICE") {
+    const full = await getSubmissionById(submission.id);
+    const { rows: staffUsers } = await pool.query(
+      `SELECT DISTINCT u.id
+       FROM users u
+       JOIN roles r ON r.id = u.role_id
+       WHERE r.code IN ('ADMIN', 'STAFF')
+         AND u.is_active = TRUE`,
+      []
+    );
+
+    for (const user of staffUsers) {
+      await createNotification({
+        userId: user.id,
+        type: "SUBMISSION_RECEIVED",
+        title: `New submission - ${full?.office_name ?? "Office"}`,
+        body: full
+          ? `${full.item_title} (${full.governance_code}) from ${full.office_name}`
+          : `A new submission was created by an office user.`,
+        linkSubmissionId: submission.id,
+      });
+    }
+  }
 
   return res.status(201).json({ submission });
 }

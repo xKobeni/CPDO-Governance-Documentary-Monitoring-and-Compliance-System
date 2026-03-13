@@ -51,6 +51,7 @@ import {
   listSubmissionFiles,
   uploadSubmissionFile,
 } from "../api/submissions";
+import { getYears } from "../api/years";
 
 // ─── Helpers & Config ─────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -801,6 +802,7 @@ export default function MyChecklistsPage() {
   const [loading, setLoading] = useState(true);
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
+  const [yearOptions, setYearOptions] = useState([]);
   const [officeName, setOfficeName] = useState(user?.office || "Your Office");
 
   async function loadChecklist() {
@@ -824,6 +826,25 @@ export default function MyChecklistsPage() {
     loadChecklist();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.officeId, year]);
+
+  // Load available years for the Office user (managed years with fallback)
+  useEffect(() => {
+    getYears({ includeInactive: false })
+      .then((res) => {
+        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
+        if (yrs.length > 0) {
+          setYearOptions(yrs);
+          if (!yrs.includes(year)) {
+            setYear(yrs[0]);
+          }
+        } else {
+          setYearOptions([currentYear - 1, currentYear, currentYear + 1]);
+        }
+      })
+      .catch(() => {
+        setYearOptions([currentYear - 1, currentYear, currentYear + 1]);
+      });
+  }, [currentYear]); 
 
   async function handleSubmitChecklistItem(item, { notes, file }) {
     if (!user?.officeId) throw new Error("Missing officeId");
@@ -899,7 +920,7 @@ export default function MyChecklistsPage() {
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
-              {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
+              {yearOptions.map((y) => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
             </SelectContent>

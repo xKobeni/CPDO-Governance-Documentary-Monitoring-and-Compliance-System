@@ -15,6 +15,7 @@ import TemplatesAllPage from "../pages/templates-all-page";
 import SubmissionsPage from "../pages/submissions-page";
 import TemplatesManagePage from "../pages/templates-manage-page";
 import TemplatesCategoriesPage from "../pages/templates-categories-page";
+import YearsPage from "../pages/years-page";
 
 import DashboardLayout from "../layouts/dashboard-layout";
 import AuthLayout from "../layouts/auth-layout";
@@ -54,6 +55,14 @@ export default function AppRouter() {
         <Route path="/templates" element={<TemplatesAllPage />} />
         <Route path="/templates/manage" element={<RoleGuard allowedRoles={['ADMIN']}><TemplatesManagePage /></RoleGuard>} />
         <Route path="/templates/categories" element={<RoleGuard allowedRoles={['ADMIN']}><TemplatesCategoriesPage /></RoleGuard>} />
+        <Route
+          path="/years"
+          element={
+            <RoleGuard allowedRoles={['ADMIN']}>
+              <YearsPage />
+            </RoleGuard>
+          }
+        />
         <Route 
           path="/users" 
           element={

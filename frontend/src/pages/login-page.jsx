@@ -22,7 +22,17 @@ export default function LoginPage() {
       await login({ email, password, rememberMe });
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      setError(err.message || "Login failed. Please try again.");
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message;
+
+      if (status === 401) {
+        setError("Wrong email or password. Please try again.");
+      } else if (status === 423 && message) {
+        // Account locked message from backend (e.g. too many failed attempts)
+        setError(message);
+      } else {
+        setError(message || "Login failed. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }

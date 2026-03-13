@@ -11,6 +11,7 @@ import reportsRoutes from "./reports.routes.js";
 import dashboardRoutes from "./dashboard.routes.js";
 import analyticsRoutes from "./analytics.routes.js";
 import auditRoutes from "./audit.routes.js";
+import yearsRoutes from "./years.routes.js";
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use("/reports", reportsRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/audit-logs", auditRoutes);
+router.use("/years", yearsRoutes);
 
 export default router;

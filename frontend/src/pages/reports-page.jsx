@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getReportSummary, getNoUploadReport } from '../api/reports';
+import { getYears } from '../api/years';
 import { getOffices } from '../api/offices';
 
 const STATUS_CONFIG = {
@@ -48,11 +49,10 @@ const STATUS_CONFIG = {
   REVISION_REQUESTED: { label: 'Revision Requested', icon: RotateCcw,     color: 'bg-blue-100 text-blue-800',    card: 'text-blue-600'   },
 };
 
-const currentYear = new Date().getFullYear();
-const YEAR_OPTIONS = Array.from({ length: 6 }, (_, i) => currentYear - i);
-
 export default function ReportsPage() {
+  const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(String(currentYear));
+  const [yearOptions, setYearOptions] = useState([]);
   const [offices, setOffices] = useState([]);
   const [selectedOfficeId, setSelectedOfficeId] = useState('');
 
@@ -64,7 +64,7 @@ export default function ReportsPage() {
   const [missingUploads, setMissingUploads] = useState(null);
   const [missingLoading, setMissingLoading] = useState(false);
 
-  // Load offices on mount
+  // Load offices and years on mount
   useEffect(() => {
     getOffices()
       .then((res) => {
@@ -72,6 +72,24 @@ export default function ReportsPage() {
         setOffices(Array.isArray(data) ? data : []);
       })
       .catch(() => toast.error('Failed to load offices'));
+
+    getYears({ includeInactive: false })
+      .then((res) => {
+        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
+        if (yrs.length > 0) {
+          setYearOptions(yrs);
+          if (!yrs.includes(Number(year))) {
+            setYear(String(yrs[0]));
+          }
+        } else {
+          const fallback = Array.from({ length: 6 }, (_, i) => currentYear - i);
+          setYearOptions(fallback);
+        }
+      })
+      .catch(() => {
+        const fallback = Array.from({ length: 6 }, (_, i) => currentYear - i);
+        setYearOptions(fallback);
+      });
   }, []);
 
   const loadSummary = useCallback(async () => {
@@ -163,7 +181,7 @@ export default function ReportsPage() {
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
-              {YEAR_OPTIONS.map((y) => (
+              {yearOptions.map((y) => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
             </SelectContent>

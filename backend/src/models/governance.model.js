@@ -65,6 +65,7 @@ export async function listGovernanceAreasWithStats(year) {
       ga.created_at, ga.updated_at,
       COALESCE(tpl.template_count, 0)::int AS templates,
       COALESCE(sub.submission_count, 0)::int AS submissions,
+      COALESCE(pend.pending_review_count, 0)::int AS pending_review_count,
       COALESCE(oa.offices_compliant, 0)::int AS offices_compliant,
       (SELECT COUNT(*)::int FROM offices WHERE is_active = TRUE) AS offices_total
     FROM governance_areas ga
@@ -80,6 +81,12 @@ export async function listGovernanceAreasWithStats(year) {
       WHERE year = $1
       GROUP BY governance_area_id
     ) sub ON sub.governance_area_id = ga.id
+    LEFT JOIN (
+      SELECT governance_area_id, COUNT(*)::int AS pending_review_count
+      FROM submissions
+      WHERE year = $1 AND status = 'PENDING'
+      GROUP BY governance_area_id
+    ) pend ON pend.governance_area_id = ga.id
     LEFT JOIN (
       SELECT governance_area_id, COUNT(DISTINCT office_id)::int AS offices_compliant
       FROM submissions

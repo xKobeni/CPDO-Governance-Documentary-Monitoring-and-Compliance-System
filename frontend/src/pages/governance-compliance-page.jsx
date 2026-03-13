@@ -21,6 +21,7 @@ import { cn } from '../lib/utils';
 import { getGovernanceAreas } from '../api/governance';
 import { getOffices } from '../api/offices';
 import { getComplianceMatrix } from '../api/governance';
+import { getYears } from '../api/years';
 
 // ─── Mock Data (removed — loaded from API) ───────────────────────────────────
 
@@ -71,7 +72,9 @@ function getAreaStats(areaId, offices, matrixData) {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function GovernanceCompliancePage() {
   const navigate = useNavigate();
-  const [year, setYear] = useState('2026');
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(String(currentYear));
+  const [yearOptions, setYearOptions] = useState([]);
   const [focusOffice, setFocusOffice] = useState('all');
   const [showAtRiskOnly, setShowAtRiskOnly] = useState(false);
   const [areas, setAreas] = useState([]);
@@ -91,7 +94,13 @@ export default function GovernanceCompliancePage() {
       ]);
 
       const activeAreas   = (areasRes.governanceAreas || []).filter((a) => a.is_active);
-      const activeOffices = (officesRes.offices || []).filter((o) => o.is_active);
+      const officePayload = officesRes;
+      const allOffices = Array.isArray(officePayload?.data)
+        ? officePayload.data
+        : Array.isArray(officePayload?.offices)
+        ? officePayload.offices
+        : [];
+      const activeOffices = allOffices.filter((o) => o.is_active);
 
       // Build nested lookup: { areaId: { officeId: status } }
       const matrix = {};
@@ -109,6 +118,25 @@ export default function GovernanceCompliancePage() {
       setLoading(false);
     }
   }, [year]);
+
+  // Load managed years for dropdown (with fallback)
+  useEffect(() => {
+    getYears({ includeInactive: false })
+      .then((res) => {
+        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
+        if (yrs.length > 0) {
+          setYearOptions(yrs);
+          if (!yrs.includes(Number(year))) {
+            setYear(String(yrs[0]));
+          }
+        } else {
+          setYearOptions([currentYear, currentYear - 1, currentYear - 2]);
+        }
+      })
+      .catch(() => {
+        setYearOptions([currentYear, currentYear - 1, currentYear - 2]);
+      });
+  }, [currentYear]);
 
   const handleExport = () => {
     const activeAreas = areas;
@@ -167,9 +195,9 @@ export default function GovernanceCompliancePage() {
           <Select value={year} onValueChange={setYear}>
             <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="2026">2026</SelectItem>
-              <SelectItem value="2025">2025</SelectItem>
-              <SelectItem value="2024">2024</SelectItem>
+              {yearOptions.map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>

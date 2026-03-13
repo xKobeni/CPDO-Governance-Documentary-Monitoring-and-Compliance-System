@@ -5,18 +5,50 @@ import { audit } from "../middlewares/audit.js";
 import { mediumCache } from "../middlewares/caching.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import {
-  createUserHandler, listUsersHandler, setUserActiveHandler, getUserHandler, updateUserHandler, deleteUserHandler
+  createUserHandler,
+  listUsersHandler,
+  setUserActiveHandler,
+  getUserHandler,
+  updateUserHandler,
+  deleteUserHandler,
+  resetUserPasswordHandler,
 } from "../controllers/users.controller.js";
 
 const r = Router();
 
 r.use(requireAuth, checkSessionInactivity, requireRole("ADMIN"));
 
-r.post("/", audit("CREATE_USER", "USER", null, (req) => ({ email: req.body.email, fullName: req.body.fullName, role: req.body.role })), asyncHandler(createUserHandler));
+r.post(
+  "/",
+  audit(
+    "CREATE_USER",
+    "USER",
+    null,
+    (req) => ({ email: req.body.email, fullName: req.body.fullName, role: req.body.role })
+  ),
+  asyncHandler(createUserHandler)
+);
 r.get("/", mediumCache, asyncHandler(listUsersHandler));
 r.get("/:id", mediumCache, asyncHandler(getUserHandler));
-r.patch("/:id", audit("UPDATE_USER", "USER", (req) => req.params.id, (req) => req.body), asyncHandler(updateUserHandler));
-r.patch("/:id/active", audit("SET_USER_ACTIVE", "USER", (req) => req.params.id, (req) => req.body), asyncHandler(setUserActiveHandler));
-r.delete("/:id", audit("DELETE_USER", "USER", (req) => req.params.id), asyncHandler(deleteUserHandler));
+r.patch(
+  "/:id",
+  audit("UPDATE_USER", "USER", (req) => req.params.id, (req) => req.body),
+  asyncHandler(updateUserHandler)
+);
+r.patch(
+  "/:id/active",
+  audit("SET_USER_ACTIVE", "USER", (req) => req.params.id, (req) => req.body),
+  asyncHandler(setUserActiveHandler)
+);
+r.post(
+  "/:id/reset-password",
+  audit("RESET_PASSWORD", "USER", (req) => req.params.id),
+  asyncHandler(resetUserPasswordHandler)
+);
+r.delete(
+  "/:id",
+  audit("DELETE_USER", "USER", (req) => req.params.id),
+  asyncHandler(deleteUserHandler)
+);
 
 export default r;

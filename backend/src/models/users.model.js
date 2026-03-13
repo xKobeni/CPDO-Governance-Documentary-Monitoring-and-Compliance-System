@@ -165,3 +165,15 @@ export async function deleteUser(userId) {
   );
   return rows[0] || null;
 }
+
+export async function updateUserPassword(userId, passwordHash) {
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET password_hash = $2,
+         updated_at = now()
+     WHERE id = $1
+     RETURNING id`,
+    [userId, passwordHash]
+  );
+  return rows[0] || null;
+}

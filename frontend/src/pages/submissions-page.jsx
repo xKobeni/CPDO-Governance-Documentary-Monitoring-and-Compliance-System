@@ -62,8 +62,9 @@ import {
   reviewSubmission,
   uploadSubmissionFile,
 } from "../api/submissions";
-import { getGovernanceAreas, getAssignedOffices } from "../api/governance";
+import { getGovernanceAreasWithStats, getAssignedOffices } from "../api/governance";
 import { getOfficeChecklist } from "../api/offices";
+import { getYears } from "../api/years";
 
 const STATUS_BADGE = {
   // Blue – pending / waiting for approval
@@ -467,6 +468,7 @@ export default function SubmissionsPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [year, setYear] = useState(String(currentYear));
+  const [yearOptions, setYearOptions] = useState([]);
   const [status, setStatus] = useState("all");
   const [q, setQ] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -497,8 +499,9 @@ export default function SubmissionsPage() {
   const yearNum = year ? Number(year) : undefined;
 
   const governanceQuery = useQuery({
-    queryKey: ["governance-areas"],
-    queryFn: getGovernanceAreas,
+    queryKey: ["governance-areas", "stats", year],
+    queryFn: () => getGovernanceAreasWithStats(yearNum || currentYear),
+    enabled: Boolean(yearNum),
   });
   const governanceAreas = governanceQuery.data?.governanceAreas ?? [];
 
@@ -546,6 +549,25 @@ export default function SubmissionsPage() {
   }, [rows, q]);
 
   const pagination = submissionsQuery.data?.pagination;
+
+  // Load managed years for dropdown (with fallback)
+  React.useEffect(() => {
+    getYears({ includeInactive: false })
+      .then((res) => {
+        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
+        if (yrs.length > 0) {
+          setYearOptions(yrs);
+          if (!yrs.includes(Number(year))) {
+            setYear(String(yrs[0]));
+          }
+        } else {
+          setYearOptions([currentYear, currentYear - 1, currentYear - 2]);
+        }
+      })
+      .catch(() => {
+        setYearOptions([currentYear, currentYear - 1, currentYear - 2]);
+      });
+  }, [currentYear]);
 
   const selectedGovernance = governanceAreas.find((g) => g.id === selectedGovernanceId);
   const selectedOffice = assignedOffices.find((o) => o.office_id === selectedOfficeId);
@@ -657,7 +679,7 @@ export default function SubmissionsPage() {
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
-              {[currentYear, currentYear - 1, currentYear - 2].map((y) => (
+              {yearOptions.map((y) => (
                 <SelectItem key={y} value={String(y)}>{y}</SelectItem>
               ))}
             </SelectContent>
@@ -843,7 +865,7 @@ export default function SubmissionsPage() {
                     key={g.id}
                     type="button"
                     onClick={() => handleGovernanceSelect(g.id)}
-                    className="flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all hover:shadow-sm hover:-translate-y-0.5 cursor-pointer group"
+                    className="relative flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all hover:shadow-sm hover:-translate-y-0.5 cursor-pointer group"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 group-hover:bg-blue-100 transition-colors">
                       <Folder className="h-5 w-5 text-blue-600" />
@@ -852,6 +874,11 @@ export default function SubmissionsPage() {
                       <Badge variant="outline" className="font-mono text-xs mb-1">{g.code}</Badge>
                       <p className="text-sm font-medium truncate">{g.name}</p>
                     </div>
+                    {(Number(g.pending_review_count ?? 0) > 0) && (
+                      <Badge className="absolute top-2 right-2 bg-blue-600 text-white rounded-full h-5 min-w-5 px-1.5 text-[10px] leading-none flex items-center justify-center font-bold">
+                        {Number(g.pending_review_count ?? 0)}
+                      </Badge>
+                    )}
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
                   </button>
                 ))}
@@ -892,7 +919,7 @@ export default function SubmissionsPage() {
                     key={o.office_id}
                     type="button"
                     onClick={() => handleOfficeSelect(o.office_id)}
-                    className="flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all hover:shadow-sm hover:-translate-y-0.5 cursor-pointer group"
+                    className="relative flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all hover:shadow-sm hover:-translate-y-0.5 cursor-pointer group"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 group-hover:bg-emerald-100 transition-colors">
                       <Building2 className="h-5 w-5 text-emerald-600" />
@@ -901,6 +928,11 @@ export default function SubmissionsPage() {
                       <Badge variant="outline" className="font-mono text-xs mb-1">{o.office_code}</Badge>
                       <p className="text-sm font-medium truncate">{o.office_name}</p>
                     </div>
+                    {(Number(o.pending_review_count ?? 0) > 0) && (
+                      <Badge className="absolute top-2 right-2 bg-emerald-600 text-white rounded-full h-5 min-w-5 px-1.5 text-[10px] leading-none flex items-center justify-center font-bold">
+                        {Number(o.pending_review_count ?? 0)}
+                      </Badge>
+                    )}
                     <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
                   </button>
                 ))}

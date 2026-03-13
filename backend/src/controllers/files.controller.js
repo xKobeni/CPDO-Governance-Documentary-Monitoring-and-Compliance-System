@@ -2,6 +2,9 @@ import path from "path";
 import fs from "fs/promises";
 import { getSubmissionById } from "../models/submissions.model.js";
 import { addNewFileVersion, listFiles, getUserTotalUploadedBytes } from "../models/submissionFiles.model.js";
+import { touchSubmissionSubmittedBy } from "../models/submissions.model.js";
+import { createNotification } from "../models/notifications.model.js";
+import { pool } from "../config/db.js";
 import { env } from "../config/env.js";
 
 async function cleanupTempUpload(filePath) {
@@ -42,6 +45,12 @@ export async function uploadSubmissionFileHandler(req, res) {
 
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
+  // Ensure the submission has a submitter when OFFICE uploads evidence.
+  // This also guarantees review notifications later have a valid recipient.
+  if (req.user.role === "OFFICE") {
+    await touchSubmissionSubmittedBy({ submissionId, submittedBy: req.user.sub });
+  }
+
   // Validate file extension against the checklist item's allowed_file_types
   const allowedTypes = submission.allowed_file_types; // TEXT[] from DB, e.g. ['pdf','docx']
   if (Array.isArray(allowedTypes) && allowedTypes.length > 0) {
@@ -77,6 +86,28 @@ export async function uploadSubmissionFileHandler(req, res) {
     sha256: null,
     uploadedBy: req.user.sub,
   });
+
+  // Notify STAFF/ADMIN that an OFFICE uploaded/updated evidence.
+  if (req.user.role === "OFFICE") {
+    const { rows: staffUsers } = await pool.query(
+      `SELECT DISTINCT u.id
+       FROM users u
+       JOIN roles r ON r.id = u.role_id
+       WHERE r.code IN ('ADMIN', 'STAFF')
+         AND u.is_active = TRUE`,
+      []
+    );
+
+    for (const user of staffUsers) {
+      await createNotification({
+        userId: user.id,
+        type: "SUBMISSION_RECEIVED",
+        title: `New submission file - ${submission.office_name}`,
+        body: `${submission.item_title}: ${req.file.originalname}`,
+        linkSubmissionId: submissionId,
+      });
+    }
+  }
 
   return res.status(201).json({ file: fileRow });
 }

@@ -14,6 +14,7 @@ import { Search, RefreshCw, FileText, ClipboardList, ArrowRight, Loader2, AlertT
 import { useNavigate } from 'react-router';
 import { cn } from '../lib/utils';
 import { getAllTemplates } from '../api/templates';
+import { getYears } from '../api/years';
 
 const STATUS_STYLE = {
   ACTIVE:   'bg-green-100 text-green-700 border-green-200',
@@ -29,6 +30,7 @@ export default function TemplatesAllPage() {
   const [yearFilter, setYearFilter]     = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery]   = useState('');
+  const [yearOptions, setYearOptions]   = useState([]);
 
   const loadTemplates = useCallback(async () => {
     setLoading(true);
@@ -45,7 +47,23 @@ export default function TemplatesAllPage() {
 
   useEffect(() => { loadTemplates(); }, [loadTemplates]);
 
-  const years = [...new Set(templates.map((t) => t.year))].sort((a, b) => b - a);
+  useEffect(() => {
+    const derivedYears = [...new Set(templates.map((t) => t.year))].sort((a, b) => b - a);
+    getYears({ includeInactive: false })
+      .then((res) => {
+        const managed = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
+        if (managed.length > 0) {
+          setYearOptions(managed);
+        } else {
+          setYearOptions(derivedYears);
+        }
+      })
+      .catch(() => {
+        setYearOptions(derivedYears);
+      });
+  }, [templates]);
+
+  const years = yearOptions;
 
   const filtered = templates.filter((t) => {
     const matchYear   = yearFilter === 'all' || String(t.year) === yearFilter;

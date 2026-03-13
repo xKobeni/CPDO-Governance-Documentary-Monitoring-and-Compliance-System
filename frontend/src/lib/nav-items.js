@@ -35,6 +35,11 @@ export const NAV_ITEMS = [
     roles: ["ADMIN", "STAFF"],
   },
   {
+    label: "Years",
+    href: "/years",
+    roles: ["ADMIN"],
+  },
+  {
     label: "Reports",
     href: "/reports",
     roles: ["ADMIN", "STAFF"],
