@@ -77,6 +77,85 @@ export async function deleteTemplate(id) {
   await pool.query(`DELETE FROM checklist_templates WHERE id = $1`, [id]);
 }
 
+export async function copyTemplateWithItems({ sourceTemplateId, governanceAreaId, year, title, notes, createdBy }) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows: newTplRows } = await client.query(
+      `INSERT INTO checklist_templates (governance_area_id, year, title, notes, status, created_by)
+       VALUES ($1,$2,$3,$4,'DRAFT',$5)
+       RETURNING *`,
+      [governanceAreaId, year, title, notes ?? null, createdBy ?? null]
+    );
+    const newTemplate = newTplRows[0];
+
+    const { rows: items } = await client.query(
+      `SELECT *
+       FROM checklist_items
+       WHERE template_id = $1
+       ORDER BY sort_order, item_code`,
+      [sourceTemplateId]
+    );
+
+    // Copy items while preserving parent-child structure (remap IDs)
+    const idMap = new Map(); // oldItemId -> newItemId
+    const remaining = new Map(items.map((it) => [it.id, it]));
+
+    // Insert items in waves: parents first, then children
+    while (remaining.size > 0) {
+      let insertedThisPass = 0;
+
+      for (const [oldId, it] of remaining) {
+        const parentOld = it.parent_item_id;
+        const parentNew = parentOld ? idMap.get(parentOld) : null;
+
+        if (parentOld && !parentNew) continue; // wait until parent inserted
+
+        const { rows: newItemRows } = await client.query(
+          `INSERT INTO checklist_items
+            (template_id, parent_item_id, item_code, title, description,
+             is_required, frequency, due_date, allowed_file_types, max_files,
+             sort_order, is_active)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+           RETURNING id`,
+          [
+            newTemplate.id,
+            parentNew,
+            it.item_code,
+            it.title,
+            it.description,
+            it.is_required,
+            it.frequency,
+            it.due_date,
+            it.allowed_file_types,
+            it.max_files,
+            it.sort_order,
+            it.is_active,
+          ]
+        );
+
+        idMap.set(oldId, newItemRows[0].id);
+        remaining.delete(oldId);
+        insertedThisPass += 1;
+      }
+
+      if (insertedThisPass === 0) {
+        // Broken hierarchy (e.g. parent missing). Fail fast.
+        throw new Error("Unable to copy template items due to invalid parent relationships.");
+      }
+    }
+
+    await client.query("COMMIT");
+    return newTemplate;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getChecklistItemInTemplate(itemId, templateId) {
   const { rows } = await pool.query(
     `SELECT id FROM checklist_items WHERE id = $1 AND template_id = $2`,

@@ -44,6 +44,16 @@ export async function deleteTemplate(id) {
   await api.delete(`/templates/${id}`);
 }
 
+/**
+ * Copy a template (duplicates template + checklist items) into a new DRAFT template.
+ * @param {string} sourceTemplateId
+ * @param {{ governanceAreaId?: string, year: number, title?: string, notes?: (string|null) }} data
+ */
+export async function copyTemplate(sourceTemplateId, data) {
+  const response = await api.post(`/templates/${sourceTemplateId}/copy`, data);
+  return response.data; // { template: {...} }
+}
+
 // ── Checklist Items ──────────────────────────────────────────────────────────
 
 /**

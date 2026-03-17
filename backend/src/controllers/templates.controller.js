@@ -1,9 +1,17 @@
 import { z } from "zod";
 import {
-  createTemplate, getTemplateByGovYear, getTemplateById,
-  listTemplates, updateTemplate, deleteTemplate,
-  createChecklistItem, listTemplateItems,
-  updateChecklistItem, deleteChecklistItem, getChecklistItemInTemplate,
+  createTemplate,
+  getTemplateByGovYear,
+  getTemplateById,
+  listTemplates,
+  updateTemplate,
+  deleteTemplate,
+  createChecklistItem,
+  listTemplateItems,
+  updateChecklistItem,
+  deleteChecklistItem,
+  getChecklistItemInTemplate,
+  copyTemplateWithItems,
 } from "../models/templates.model.js";
 
 export async function listTemplatesHandler(req, res) {
@@ -76,8 +84,50 @@ export async function updateTemplateHandler(req, res) {
 export async function deleteTemplateHandler(req, res) {
   const existing = await getTemplateById(req.params.id);
   if (!existing) return res.status(404).json({ message: "Template not found" });
+  if (existing.status !== "DRAFT") {
+    return res.status(409).json({ message: "Only DRAFT templates can be deleted" });
+  }
   await deleteTemplate(req.params.id);
   return res.status(204).end();
+}
+
+const copyTemplateSchema = z.object({
+  governanceAreaId: z.string().uuid().optional(),
+  year: z.number().int().min(2000).max(2100),
+  title: z.string().min(2).optional(),
+  notes: z.string().nullable().optional(),
+});
+
+export async function copyTemplateHandler(req, res) {
+  const parsed = copyTemplateSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
+
+  const source = await getTemplateById(req.params.id);
+  if (!source) return res.status(404).json({ message: "Template not found" });
+
+  const targetGovId = parsed.data.governanceAreaId ?? source.governance_area_id;
+  const targetYear = parsed.data.year;
+  const targetTitle = parsed.data.title ?? `${source.title} (Copy)`;
+  const targetNotes =
+    parsed.data.notes !== undefined
+      ? parsed.data.notes
+      : (source.notes ?? null);
+
+  const conflict = await getTemplateByGovYear(targetGovId, targetYear);
+  if (conflict) {
+    return res.status(409).json({ message: "Template already exists for that governance+year" });
+  }
+
+  const created = await copyTemplateWithItems({
+    sourceTemplateId: source.id,
+    governanceAreaId: targetGovId,
+    year: targetYear,
+    title: targetTitle,
+    notes: targetNotes,
+    createdBy: req.user?.sub ?? null,
+  });
+
+  return res.status(201).json({ template: created });
 }
 
 export async function listTemplateItemsHandler(req, res) {

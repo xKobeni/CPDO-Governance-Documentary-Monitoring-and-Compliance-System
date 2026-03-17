@@ -110,13 +110,15 @@ export default function AuditLogsPage() {
   const [actionFilter, setActionFilter] = useState('all');
   const [entityFilter, setEntityFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  const [dateRangeFrom, setDateRangeFrom] = useState('');
+  const [dateRangeTo, setDateRangeTo] = useState('');
   const [selectedLog, setSelectedLog] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   // Load data on component mount and when filters change (not search)
   useEffect(() => {
     loadAuditLogs();
-  }, [pagination.page, pagination.limit, actionFilter, entityFilter, dateFilter]);
+  }, [pagination.page, pagination.limit, actionFilter, entityFilter, dateFilter, dateRangeFrom, dateRangeTo]);
 
   // Load stats on component mount
   useEffect(() => {
@@ -151,6 +153,17 @@ export default function AuditLogsPage() {
       if (actionFilter !== 'all') params.action = actionFilter;
       if (entityFilter !== 'all') params.entityType = entityFilter;
       
+      // Date range override (custom)
+      if (dateRangeFrom || dateRangeTo) {
+        if (dateRangeFrom) {
+          const from = new Date(`${dateRangeFrom}T00:00:00`);
+          params.dateFrom = from.toISOString();
+        }
+        if (dateRangeTo) {
+          const to = new Date(`${dateRangeTo}T23:59:59.999`);
+          params.dateTo = to.toISOString();
+        }
+      } else
       // Handle date filter
       if (dateFilter !== 'all') {
         const now = new Date();
@@ -232,6 +245,17 @@ export default function AuditLogsPage() {
       if (actionFilter !== 'all') params.action = actionFilter;
       if (entityFilter !== 'all') params.entityType = entityFilter;
       
+      // Date range override (custom)
+      if (dateRangeFrom || dateRangeTo) {
+        if (dateRangeFrom) {
+          const from = new Date(`${dateRangeFrom}T00:00:00`);
+          params.dateFrom = from.toISOString();
+        }
+        if (dateRangeTo) {
+          const to = new Date(`${dateRangeTo}T23:59:59.999`);
+          params.dateTo = to.toISOString();
+        }
+      } else
       // Handle date filter
       if (dateFilter !== 'all') {
         const now = new Date();
@@ -278,7 +302,12 @@ export default function AuditLogsPage() {
   const handleFilterChange = (filterType, value) => {
     if (filterType === 'action') setActionFilter(value);
     if (filterType === 'entity') setEntityFilter(value);
-    if (filterType === 'date') setDateFilter(value);
+    if (filterType === 'date') {
+      setDateFilter(value);
+      // If switching preset filters, clear custom range
+      setDateRangeFrom('');
+      setDateRangeTo('');
+    }
     setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
   };
 
@@ -462,6 +491,48 @@ export default function AuditLogsPage() {
                 <SelectItem value="month">This Month</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Date range filter */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="dateFrom">From</Label>
+              <Input
+                id="dateFrom"
+                type="date"
+                value={dateRangeFrom}
+                onChange={(e) => {
+                  setDateRangeFrom(e.target.value);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dateTo">To</Label>
+              <Input
+                id="dateTo"
+                type="date"
+                value={dateRangeTo}
+                onChange={(e) => {
+                  setDateRangeTo(e.target.value);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setDateRangeFrom('');
+                  setDateRangeTo('');
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
+                disabled={!dateRangeFrom && !dateRangeTo}
+              >
+                Clear range
+              </Button>
+            </div>
           </div>
 
           {/* Audit Logs Table */}

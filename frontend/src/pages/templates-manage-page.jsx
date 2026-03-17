@@ -19,10 +19,10 @@ import {
 } from '../components/ui/dropdown-menu';
 import {
   Search, Plus, MoreVertical, Edit, Trash2, FileText, ClipboardList,
-  CheckCircle, Archive, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Loader2,
+  CheckCircle, Archive, ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Loader2, Copy,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getAllTemplates, createTemplate, updateTemplate, deleteTemplate } from '../api/templates';
+import { getAllTemplates, createTemplate, updateTemplate, deleteTemplate, copyTemplate } from '../api/templates';
 import { getYears } from '../api/years';
 import { getGovernanceAreas } from '../api/governance';
 
@@ -50,8 +50,10 @@ export default function TemplatesManagePage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen]     = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isCopyOpen, setIsCopyOpen]     = useState(false);
   const [selected, setSelected]         = useState(null);
   const [form, setForm]                 = useState(EMPTY_FORM);
+  const [copyForm, setCopyForm]         = useState({ governanceAreaId: '', year: String(new Date().getFullYear() + 1), title: '' });
 
   // ── Load data ──────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -182,6 +184,36 @@ export default function TemplatesManagePage() {
       await loadData();
     } catch (err) {
       setError(err?.response?.data?.message ?? 'Failed to delete template.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Copy ───────────────────────────────────────────────────────────────────
+  const openCopy = (t) => {
+    setSelected(t);
+    setCopyForm({
+      governanceAreaId: t.governance_area_id,
+      year: String(Number(t.year) + 1),
+      title: `${t.title} (Copy)`,
+    });
+    setIsCopyOpen(true);
+  };
+
+  const handleCopy = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await copyTemplate(selected.id, {
+        governanceAreaId: copyForm.governanceAreaId,
+        year: Number(copyForm.year),
+        title: copyForm.title.trim(),
+      });
+      setIsCopyOpen(false);
+      setSelected(null);
+      await loadData();
+    } catch (err) {
+      setError(err?.response?.data?.message ?? 'Failed to copy template.');
     } finally {
       setSaving(false);
     }
@@ -396,6 +428,9 @@ export default function TemplatesManagePage() {
                           <DropdownMenuItem onClick={() => openEdit(t)}>
                             <Edit className="mr-2 h-4 w-4" />Edit
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openCopy(t)}>
+                            <Copy className="mr-2 h-4 w-4" />Copy template
+                          </DropdownMenuItem>
                           {t.status !== 'ACTIVE' && (
                             <DropdownMenuItem onClick={() => setStatus(t.id, 'ACTIVE')}>
                               <CheckCircle className="mr-2 h-4 w-4" />Set Active
@@ -412,9 +447,15 @@ export default function TemplatesManagePage() {
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openDelete(t)}>
-                            <Trash2 className="mr-2 h-4 w-4" />Delete
-                          </DropdownMenuItem>
+                          {t.status === 'DRAFT' ? (
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openDelete(t)}>
+                              <Trash2 className="mr-2 h-4 w-4" />Delete
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem disabled>
+                              <Trash2 className="mr-2 h-4 w-4" />Delete (Draft only)
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -534,6 +575,59 @@ export default function TemplatesManagePage() {
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)} disabled={saving}>Cancel</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={saving}>
               {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting…</> : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Copy Dialog */}
+      <Dialog open={isCopyOpen} onOpenChange={(open) => { setIsCopyOpen(open); if (!open) setSelected(null); }}>
+        <DialogContent className="sm:max-w-110">
+          <DialogHeader>
+            <DialogTitle>Copy Template</DialogTitle>
+            <DialogDescription>
+              Create a new <strong>DRAFT</strong> template by copying <strong>{selected?.title}</strong> and all its checklist items.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Governance Area *</Label>
+              <Select value={copyForm.governanceAreaId} onValueChange={(v) => setCopyForm({ ...copyForm, governanceAreaId: v })}>
+                <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {govAreas.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      <span className="font-mono text-xs mr-2">{g.code}</span>{g.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Year *</Label>
+              <Select value={copyForm.year} onValueChange={(v) => setCopyForm({ ...copyForm, year: v })}>
+                <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {years.length > 0
+                    ? years.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)
+                    : ['2026', '2025', '2024'].map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)
+                  }
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Title *</Label>
+              <Input
+                className="col-span-3"
+                value={copyForm.title}
+                onChange={(e) => setCopyForm({ ...copyForm, title: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCopyOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleCopy} disabled={saving || !copyForm.governanceAreaId || !copyForm.year || !copyForm.title}>
+              {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Copying…</> : 'Copy'}
             </Button>
           </DialogFooter>
         </DialogContent>

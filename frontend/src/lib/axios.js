@@ -44,15 +44,18 @@ export function getSessionId() {
   return sessionId;
 }
 
-async function forceLogout({ showTimeoutAlert = false } = {}) {
+const SESSION_EXPIRED_KEY = "sessionExpiredReason";
+
+async function forceLogout({ reason = null } = {}) {
   clearAccessToken();
   clearSessionId();
   const { setAuthState } = await import("../store/auth-store");
   setAuthState({ user: null });
 
-  if (showTimeoutAlert) {
-    // Basic notification so users know it was a timeout, not an error
-    window.alert("Your session has expired due to inactivity. Please log in again.");
+  if (reason) {
+    localStorage.setItem(SESSION_EXPIRED_KEY, reason);
+  } else {
+    localStorage.removeItem(SESSION_EXPIRED_KEY);
   }
 
   window.location.href = "/login";
@@ -75,13 +78,13 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const message = error.response?.data?.message ?? "";
 
-    // If backend reports explicit inactivity timeout, treat it as a timeout and notify user
+    // If backend reports explicit inactivity timeout, show modal on login page
     if (
       status === 401 &&
       typeof message === "string" &&
       message.toLowerCase().includes("session inactive")
     ) {
-      await forceLogout({ showTimeoutAlert: true });
+      await forceLogout({ reason: "inactivity" });
       return Promise.reject(error);
     }
 

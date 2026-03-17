@@ -9,6 +9,7 @@ import {
   createTemplateHandler,
   updateTemplateHandler,
   deleteTemplateHandler,
+  copyTemplateHandler,
   listTemplateItemsHandler,
   createChecklistItemHandler,
   updateChecklistItemHandler,
@@ -38,6 +39,13 @@ r.delete("/:id",
   requireRole("ADMIN"),
   audit("DELETE_TEMPLATE", "TEMPLATE", (req) => req.params.id),
   asyncHandler(deleteTemplateHandler)
+);
+
+r.post(
+  "/:id/copy",
+  requireRole("ADMIN"),
+  audit("COPY_TEMPLATE", "TEMPLATE", (req) => req.params.id, (req) => ({ targetYear: req.body.year, targetGov: req.body.governanceAreaId })),
+  asyncHandler(copyTemplateHandler)
 );
 
 // Checklist items — read (all roles)
