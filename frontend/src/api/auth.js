@@ -32,3 +32,13 @@ export async function updateMe(payload) {
   const response = await api.patch("/auth/me", payload);
   return response.data.user;
 }
+
+export async function requestPasswordReset(email) {
+  const response = await api.post("/auth/forgot-password", { email });
+  return response.data;
+}
+
+export async function resetPassword(token, newPassword) {
+  const response = await api.post("/auth/reset-password", { token, newPassword });
+  return response.data;
+}

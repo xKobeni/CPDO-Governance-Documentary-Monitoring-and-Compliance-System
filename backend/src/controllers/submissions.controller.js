@@ -3,7 +3,7 @@ import { pool } from "../config/db.js";
 import {
   createSubmission, getSubmissionById, listSubmissions, setSubmissionStatus
 } from "../models/submissions.model.js";
-import { createReview, addVerificationCheck } from "../models/reviews.model.js";
+import { createReview, addVerificationCheck, listReviews } from "../models/reviews.model.js";
 import { createNotification } from "../models/notifications.model.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
@@ -88,6 +88,16 @@ export async function getSubmissionHandler(req, res) {
   }
 
   return res.json({ submission });
+}
+
+export async function listReviewsHandler(req, res) {
+  const submission = await getSubmissionById(req.params.id);
+  if (!submission) return res.status(404).json({ message: "Submission not found" });
+  if (req.user.role === "OFFICE" && submission.office_id !== req.user.officeId) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  const reviews = await listReviews(req.params.id);
+  return res.json({ reviews });
 }
 
 export async function listSubmissionsHandler(req, res) {

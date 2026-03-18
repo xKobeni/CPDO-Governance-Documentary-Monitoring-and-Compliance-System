@@ -4,6 +4,7 @@ import {
   FilePen,
   FileText,
   Info,
+  MessageCircle,
   XCircle,
 } from 'lucide-react';
 
@@ -27,6 +28,11 @@ export const NOTIFICATION_TYPE_CONFIG = {
     label: 'Submission Received',
     icon: FileText,
     badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
+  },
+  NEW_COMMENT: {
+    label: 'New Comment',
+    icon: MessageCircle,
+    badgeClass: 'bg-slate-100 text-slate-800 border-slate-200',
   },
   DEADLINE_REMINDER: {
     label: 'Deadline Reminder',

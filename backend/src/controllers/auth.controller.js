@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { env } from "../config/env.js";
-import { verifyPassword } from "../utils/password.js";
+import { hashPassword, verifyPassword } from "../utils/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/jwt.js";
 import { sha256 } from "../utils/tokenHash.js";
 import { writeAuditLog } from "../models/audit.model.js";
@@ -10,11 +10,13 @@ import {
   findUserAuthByEmail,
   findUserById,
   updateUserProfile,
+  updateUserPassword,
   updateLastLogin,
   recordFailedLoginAttempt,
   resetFailedLoginAttempts,
 } from "../models/users.model.js";
 import { createSession, findValidSessionByHash, revokeSession, revokeAllSessionsByUserId } from "../models/sessions.model.js";
+import { createPasswordResetToken, findValidResetToken, revokeResetTokens } from "../models/password-reset.model.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -271,4 +273,95 @@ export async function updateMe(req, res) {
   if (!updated) return res.status(404).json({ message: "User not found" });
 
   return res.json({ user: formatUserProfile(updated) });
+}
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export async function forgotPassword(req, res) {
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: "Invalid email" });
+
+  const { email } = parsed.data;
+  const user = await findUserAuthByEmail(email);
+
+  // Always return success to avoid email enumeration
+  const response = {
+    message: "If an account exists with this email, a reset code has been generated.",
+    resetToken: null,
+    expiresIn: null,
+  };
+
+  if (!user || !user.is_active) {
+    return res.json(response);
+  }
+
+  // Revoke any existing tokens for this user
+  await revokeResetTokens(user.id);
+
+  const rawToken = nanoid(12);
+  const resetToken = `${rawToken.slice(0, 6)}-${rawToken.slice(6)}`;
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+  await createPasswordResetToken(user.id, resetToken.replace(/-/g, ""), expiresAt);
+
+  try {
+    await writeAuditLog({
+      actorUserId: user.id,
+      action: "PASSWORD_RESET_REQUESTED",
+      entityType: "USER",
+      entityId: user.id,
+      metadata: { email },
+    });
+  } catch (e) {
+    // Don't break flow
+  }
+
+  response.resetToken = resetToken;
+  response.expiresIn = 3600;
+  return res.json(response);
+}
+
+export async function resetPassword(req, res) {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const msg = parsed.error.errors?.[0]?.message || "Invalid input";
+    return res.status(400).json({ message: msg });
+  }
+
+  const { token, newPassword } = parsed.data;
+  const normalizedToken = token.replace(/-/g, "");
+
+  const valid = await findValidResetToken(normalizedToken);
+  if (!valid) {
+    return res.status(400).json({ message: "Invalid or expired reset code. Please request a new one." });
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  const updated = await updateUserPassword(valid.user_id, passwordHash);
+  if (!updated) {
+    return res.status(500).json({ message: "Failed to update password" });
+  }
+
+  await revokeResetTokens(valid.user_id);
+
+  try {
+    await writeAuditLog({
+      actorUserId: valid.user_id,
+      action: "PASSWORD_RESET_COMPLETED",
+      entityType: "USER",
+      entityId: valid.user_id,
+      metadata: {},
+    });
+  } catch (e) {
+    // Don't break flow
+  }
+
+  return res.json({ message: "Password has been reset successfully. You can now log in with your new password." });
 }

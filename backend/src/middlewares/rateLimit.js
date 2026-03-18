@@ -6,3 +6,10 @@ export const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+export const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 5,                  // 5 requests per window per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+});

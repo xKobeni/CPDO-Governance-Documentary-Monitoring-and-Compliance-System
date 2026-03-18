@@ -22,6 +22,20 @@ import {
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
+import {
   CheckCircle2,
   Clock,
   AlertCircle,
@@ -41,7 +55,11 @@ import {
   Paperclip,
   Send,
   RefreshCw,
+  RotateCcw,
   Info,
+  MessageSquare,
+  MoreVertical,
+  ClipboardCheck,
 } from "lucide-react";
 import { useAuth } from "../hooks/use-auth";
 import { toast } from "react-hot-toast";
@@ -50,6 +68,10 @@ import {
   createSubmission,
   listSubmissionFiles,
   uploadSubmissionFile,
+  listSubmissionComments,
+  createSubmissionComment,
+  deleteSubmissionComment,
+  listSubmissionReviews,
 } from "../api/submissions";
 import { getYears } from "../api/years";
 
@@ -117,7 +139,10 @@ function transformApiChecklist(apiAreas) {
 
       for (const n of nodes) {
         if (n.parentId && byId.has(n.parentId)) {
-          byId.get(n.parentId).children.push(n);
+          const parent = byId.get(n.parentId);
+          parent.children.push(n);
+          n.parentTitle = parent.title;
+          n.parentItemCode = parent.itemCode || null;
         } else {
           roots.push(n);
         }
@@ -140,6 +165,17 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
 }
 
+function formatDateTime(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function daysUntil(dateStr) {
   const diff = Math.round((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
   return diff;
@@ -151,6 +187,9 @@ function SubmitDialog({ item, open, onClose, onSubmit }) {
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [currentFiles, setCurrentFiles] = useState([]);
+  const [currentFilesLoading, setCurrentFilesLoading] = useState(false);
+  const isReplace = Boolean(item?.submissionId);
 
   const allowedTypes = Array.isArray(item?.allowedFileTypes) ? item.allowedFileTypes : null;
   const acceptAttr = allowedTypes && allowedTypes.length > 0
@@ -181,6 +220,26 @@ function SubmitDialog({ item, open, onClose, onSubmit }) {
     }
   }, [open, previewUrl]);
 
+  useEffect(() => {
+    if (!open || !isReplace || !item?.submissionId) {
+      setCurrentFiles([]);
+      return;
+    }
+    let cancelled = false;
+    setCurrentFilesLoading(true);
+    listSubmissionFiles(item.submissionId)
+      .then((res) => {
+        if (!cancelled) setCurrentFiles(res.files ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentFiles([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCurrentFilesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [open, isReplace, item?.submissionId]);
+
   const handleSubmit = async () => {
     if (!file) {
       toast.error("Please choose a file to upload.");
@@ -200,7 +259,7 @@ function SubmitDialog({ item, open, onClose, onSubmit }) {
     setSubmitting(true);
     try {
       await onSubmit?.({ notes: remarks.trim() || null, file });
-      toast.success(`"${item?.title}" submitted successfully!`);
+      toast.success(isReplace ? `"${item?.title}" replaced successfully!` : `"${item?.title}" submitted successfully!`);
       setRemarks("");
       setFile(null);
       onClose();
@@ -216,20 +275,47 @@ function SubmitDialog({ item, open, onClose, onSubmit }) {
       <DialogContent className="sm:max-w-5xl max-h-[95vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload className="h-4 w-4 text-blue-600" />
-            Upload Document
+            {isReplace ? (
+              <>
+                <RotateCcw className="h-4 w-4 text-amber-600" />
+                Replace Document
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4 text-blue-600" />
+                Upload Document
+              </>
+            )}
           </DialogTitle>
           <DialogDescription>
-            Submit your office&apos;s supporting document for this checklist item.
+            {isReplace
+              ? "Upload a new file to replace your current submission. It will be set to Pending for review."
+              : "Submit your office's supporting document for this checklist item."}
           </DialogDescription>
         </DialogHeader>
         <div className="py-2 space-y-4 sm:space-y-0 sm:flex sm:items-start sm:gap-6">
           {/* Left column: details + file + remarks */}
           <div className="flex-1 space-y-4">
             <div className="rounded-lg border bg-muted/60 p-3 text-sm space-y-1">
-              <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                Target Document
-              </p>
+              {item?.parentTitle ? (
+                <>
+                  <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Parent Section
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.parentItemCode && <span className="font-bold text-foreground">{item.parentItemCode}</span>}
+                    {item.parentItemCode && " · "}
+                    <span className="font-medium">{item.parentTitle}</span>
+                  </p>
+                  <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase pt-1.5">
+                    Target Document
+                  </p>
+                </>
+              ) : (
+                <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Target Document
+                </p>
+              )}
               <p className="font-medium">{item?.title}</p>
               {item?.description ? (
                 <p className="text-xs text-muted-foreground">{item.description}</p>
@@ -241,9 +327,42 @@ function SubmitDialog({ item, open, onClose, onSubmit }) {
                 </p>
               )}
             </div>
+            {isReplace && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">
+                  Current submission (to be replaced)
+                </p>
+                {currentFilesLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading…
+                  </div>
+                ) : currentFiles.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No files in current submission.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {currentFiles.map((f) => (
+                      <div key={f.id} className="flex items-center gap-2 rounded bg-white/80 border border-amber-100 p-2">
+                        <FileText className="h-4 w-4 shrink-0 text-amber-600" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{f.file_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatBytes(f.file_size_bytes)}
+                            {f.uploaded_at ? ` · ${formatDate(f.uploaded_at)}` : ""}
+                          </p>
+                        </div>
+                        {f.is_current && (
+                          <Badge variant="outline" className="text-[10px] shrink-0">Current</Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="space-y-1">
               <Label>
-                Select File{" "}
+                {isReplace ? "Select New File " : "Select File "}
                 <span className="text-xs text-muted-foreground">
                   ({allowedLabel})
                 </span>
@@ -354,7 +473,12 @@ function SubmitDialog({ item, open, onClose, onSubmit }) {
             {submitting ? (
               <>
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Submitting...
+                {isReplace ? "Replacing…" : "Submitting…"}
+              </>
+            ) : isReplace ? (
+              <>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Replace
               </>
             ) : (
               <>
@@ -387,10 +511,18 @@ function cn(...parts) {
 }
 
 function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState([]);
   const [fileToUpload, setFileToUpload] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState(null);
 
   const submissionId = item?.submissionId ?? null;
   const submissionStatus = String(item?.submissionStatus || "").toUpperCase();
@@ -410,6 +542,32 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
     }
   }
 
+  async function refreshComments() {
+    if (!submissionId) return;
+    setCommentsLoading(true);
+    try {
+      const res = await listSubmissionComments(submissionId, { page: 1, limit: 50 });
+      setComments(res?.data ?? []);
+    } catch {
+      setComments([]);
+    } finally {
+      setCommentsLoading(false);
+    }
+  }
+
+  async function refreshReviews() {
+    if (!submissionId) return;
+    setReviewsLoading(true);
+    try {
+      const res = await listSubmissionReviews(submissionId);
+      setReviews(res?.reviews ?? []);
+    } catch {
+      setReviews([]);
+    } finally {
+      setReviewsLoading(false);
+    }
+  }
+
   async function doUpload() {
     if (!submissionId || !fileToUpload) return;
     setUploading(true);
@@ -426,14 +584,46 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
     }
   }
 
+  async function handlePostComment() {
+    const text = commentText.trim();
+    if (!text || !submissionId) return;
+    setPostingComment(true);
+    try {
+      await createSubmissionComment(submissionId, text);
+      setCommentText("");
+      await refreshComments();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to post comment.");
+    } finally {
+      setPostingComment(false);
+    }
+  }
+
+  async function handleDeleteComment(commentId) {
+    if (!submissionId) return;
+    setDeletingCommentId(commentId);
+    try {
+      await deleteSubmissionComment(submissionId, commentId);
+      await refreshComments();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to delete comment.");
+    } finally {
+      setDeletingCommentId(null);
+    }
+  }
+
   useEffect(() => {
-    if (open) refreshFiles();
+    if (open && submissionId) {
+      refreshFiles();
+      refreshComments();
+      refreshReviews();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, submissionId]);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -513,6 +703,108 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
                 </div>
               </div>
             )}
+
+            {/* Review history — formal decisions from staff/admin */}
+            <Card className="border-blue-200 bg-blue-50/30 dark:bg-blue-950/20 dark:border-blue-800/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">
+                  Reviewer decisions
+                </CardTitle>
+                <CardDescription>Formal approval decisions — updates status and notifications</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {reviewsLoading ? (
+                  <div className="flex items-center justify-center py-6 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  </div>
+                ) : reviews.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No reviews yet. Your submission is pending evaluation.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {reviews.map((r) => {
+                      const action = String(r.action || "").toUpperCase();
+                      const label = action === "APPROVE" ? "Approved" : action === "DENY" ? "Denied" : "Revision requested";
+                      const bg = action === "APPROVE" ? "bg-green-100 text-green-700 border-green-200" : action === "DENY" ? "bg-red-100 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200";
+                      return (
+                        <div key={r.id} className="rounded-lg border p-3 space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <Badge variant="outline" className={bg}>{label}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {r.reviewer_name || "Reviewer"} · {formatDateTime(r.reviewed_at)}
+                            </span>
+                          </div>
+                          {r.decision_notes && (
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{r.decision_notes}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Discussion — informal comments */}
+            <Card className="border-slate-200 bg-slate-50/50 dark:bg-slate-950/30 dark:border-slate-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  Discussion
+                  <Badge variant="secondary" className="text-xs font-normal">Comments</Badge>
+                </CardTitle>
+                <CardDescription>Informal notes and questions — does not change status</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-col gap-2">
+                  <Textarea
+                    rows={3}
+                    placeholder="Ask a question or add a note…"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    disabled={postingComment}
+                    className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
+                  />
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="secondary" onClick={handlePostComment} disabled={postingComment || !commentText.trim()}>
+                      {postingComment ? "Posting…" : "Post comment"}
+                    </Button>
+                  </div>
+                </div>
+                {commentsLoading ? (
+                  <div className="flex items-center justify-center py-4 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  </div>
+                ) : comments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-2">No comments yet. Start the conversation.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {comments.map((c) => (
+                      <div key={c.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {c.full_name || c.email || "User"}
+                              <span className="text-xs text-muted-foreground font-normal"> · {formatDateTime(c.created_at)}</span>
+                            </p>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{c.comment}</p>
+                          </div>
+                          {user?.id === c.author_user_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0 text-muted-foreground hover:text-foreground"
+                              onClick={() => handleDeleteComment(c.id)}
+                              disabled={deletingCommentId === c.id}
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -524,21 +816,44 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
   );
 }
 
-// ─── Checklist Item Row ───────────────────────────────────────────────────────
-function statusChip(submissionStatus, uiStatus) {
+// ─── Status Badge (icon + label, matches legend) ───────────────────────────────
+function StatusBadge({ submissionStatus, uiStatus }) {
   const s = String(submissionStatus || "").toUpperCase();
-  if (!submissionStatus) return { label: "NO UPLOADED", className: "bg-amber-50 text-amber-700 border-amber-200" };
-  if (s === "APPROVED") return { label: "APPROVED", className: "bg-green-100 text-green-700 border-green-200" };
-  if (s === "DENIED") return { label: "DENIED", className: "bg-red-100 text-red-700 border-red-200" };
-  if (s === "REVISION_REQUESTED") return { label: "REVISION", className: "bg-amber-50 text-amber-700 border-amber-200" };
-  if (s === "PENDING") return { label: "NOT APPROVED", className: "bg-slate-100 text-slate-700 border-slate-200" };
-  // fallback to UI status
-  return uiStatus === "completed"
-    ? { label: "APPROVED", className: "bg-green-100 text-green-700 border-green-200" }
-    : { label: "NOT APPROVED", className: "bg-slate-100 text-slate-700 border-slate-200" };
+  let label, className, Icon;
+  if (!submissionStatus) {
+    label = "No uploaded";
+    className = "bg-amber-50 text-amber-700 border-amber-200";
+    Icon = Upload;
+  } else if (s === "APPROVED") {
+    label = "Approved";
+    className = "bg-green-100 text-green-700 border-green-200";
+    Icon = CheckCircle2;
+  } else if (s === "DENIED") {
+    label = "Denied";
+    className = "bg-red-100 text-red-700 border-red-200";
+    Icon = XCircle;
+  } else if (s === "REVISION_REQUESTED") {
+    label = "Revision";
+    className = "bg-amber-50 text-amber-700 border-amber-200";
+    Icon = Clock;
+  } else if (s === "PENDING") {
+    label = "Pending";
+    className = "bg-blue-100 text-blue-700 border-blue-200";
+    Icon = Clock;
+  } else {
+    label = uiStatus === "completed" ? "Approved" : "Not approved";
+    className = uiStatus === "completed" ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200";
+    Icon = uiStatus === "completed" ? CheckCircle2 : XCircle;
+  }
+  return (
+    <Badge variant="outline" className={cn("gap-1 font-medium", className)}>
+      <Icon className="h-3 w-3" />
+      {label}
+    </Badge>
+  );
 }
 
-function ChecklistItemRow({ item, onSubmit, onView, depth = 0, expanded = true, onToggle, headerCode }) {
+function ChecklistItemRow_REMOVED({ item, onSubmit, onView, depth = 0, expanded = true, onToggle, headerCode }) {
   const isHeader = (item.children?.length ?? 0) > 0;
   const days = daysUntil(item.due);
   const dueSoon = item.status !== "completed" && days >= 0 && days <= 7;
@@ -587,7 +902,7 @@ function ChecklistItemRow({ item, onSubmit, onView, depth = 0, expanded = true, 
 
   const chip = statusChip(item.submissionStatus, item.status);
   const isApproved = String(item.submissionStatus || "").toUpperCase() === "APPROVED";
-  const actionLabel = item.submissionId ? (isApproved ? "Details" : "Replace") : "Upload";
+  const hasSubmission = Boolean(item.submissionId);
   const fileTypes = Array.isArray(item.allowedFileTypes)
     ? item.allowedFileTypes.map((t) => String(t).toLowerCase()).join(", ")
     : (item.allowedFileTypes ? String(item.allowedFileTypes) : "—");
@@ -628,9 +943,9 @@ function ChecklistItemRow({ item, onSubmit, onView, depth = 0, expanded = true, 
                 <span className="text-xs text-muted-foreground">· {fileTypes}</span>
               )}
               {item.remarks ? (
-                <span className="text-xs flex items-center gap-1 rounded-md border bg-blue-50/50 border-blue-200 px-2 py-1 text-blue-800 w-full sm:w-auto">
-                  <Info className="h-3.5 w-3.5 shrink-0 text-blue-600" />
-                  <span className="font-medium">Evaluator:</span> {item.remarks}
+                <span className="text-xs flex items-center gap-1 rounded-md border bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 px-2 py-1 text-emerald-800 dark:text-emerald-200 w-full sm:w-auto">
+                  <Info className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-medium">Office remarks:</span> {item.remarks}
                 </span>
               ) : null}
             </div>
@@ -639,25 +954,39 @@ function ChecklistItemRow({ item, onSubmit, onView, depth = 0, expanded = true, 
             <span className={cn("inline-flex items-center px-2.5 py-1 rounded-md border text-[11px] font-semibold", chip.className)}>
               {chip.label}
             </span>
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => onView(item)}
-                disabled={!item.submissionId}
-              >
-                <Eye className="mr-1 h-3.5 w-3.5" />
-                Details
-              </Button>
-              <Button
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => (item.submissionId ? onView(item) : onSubmit(item))}
-              >
-                <Upload className="mr-1 h-3.5 w-3.5" />
-                {actionLabel}
-              </Button>
+            <div className="flex items-center gap-2">
+              {hasSubmission ? (
+                <>
+                  <Button
+                    variant={isApproved ? "secondary" : "outline"}
+                    size="sm"
+                    className="h-8 text-xs gap-1.5"
+                    onClick={() => onView(item)}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    View
+                  </Button>
+                  {!isApproved && (
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs gap-1.5"
+                      onClick={() => onSubmit(item)}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Replace
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  className="h-8 text-xs gap-1.5"
+                  onClick={() => onSubmit(item)}
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  Upload
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -737,53 +1066,138 @@ function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, 
       </button>
 
       {open && (
-        <CardContent className="pt-0 space-y-2">
-          {(function render(items, depth = 0, parentCode = "") {
-            const toLetter = (n) => {
-              // 1 -> a, 2 -> b ... 26 -> z, 27 -> aa ...
-              let x = n;
-              let out = "";
-              while (x > 0) {
-                x -= 1;
-                out = String.fromCharCode(97 + (x % 26)) + out;
-                x = Math.floor(x / 26);
-              }
-              return out;
-            };
+        <CardContent className="pt-0">
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50 hover:bg-muted/50">
+                  <TableHead className="font-semibold">Item</TableHead>
+                  <TableHead className="font-semibold w-[140px]">Status</TableHead>
+                  <TableHead className="font-semibold w-[160px]">Submitted</TableHead>
+                  <TableHead className="w-[52px]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(function render(items, depth = 0, parentCode = "") {
+                  const toLetter = (n) => {
+                    let x = n;
+                    let out = "";
+                    while (x > 0) {
+                      x -= 1;
+                      out = String.fromCharCode(97 + (x % 26)) + out;
+                      x = Math.floor(x / 26);
+                    }
+                    return out;
+                  };
+                  let headerCounter = 0;
 
-            let headerCounter = 0;
+                  return items.flatMap((item) => {
+                    const isHeader = (item.children?.length ?? 0) > 0;
+                    const isExpanded = isHeader ? expandedIds.has(item.id) : true;
 
-            return items.flatMap((item) => {
-              const isHeader = (item.children?.length ?? 0) > 0;
-              const isExpanded = isHeader ? expandedIds.has(item.id) : true;
+                    let headerCode;
+                    if (isHeader) {
+                      headerCounter += 1;
+                      headerCode = item.itemCode
+                        ? item.itemCode
+                        : (depth === 0 ? String(headerCounter) : `${parentCode}.${toLetter(headerCounter)}`);
+                    }
 
-              let headerCode;
-              if (isHeader) {
-                headerCounter += 1;
-                // Prefer backend-provided item codes (authoritative).
-                // Only fall back to generated hierarchical numbering if missing.
-                headerCode = item.itemCode
-                  ? item.itemCode
-                  : (depth === 0
-                      ? String(headerCounter)
-                      : `${parentCode}.${toLetter(headerCounter)}`);
-              }
+                    if (isHeader) {
+                      return [
+                        <TableRow
+                          key={item.id}
+                          className="bg-muted/25 hover:bg-muted/25 cursor-pointer"
+                          onClick={() => toggle(item.id)}
+                        >
+                          <TableCell className="min-w-[260px] py-2.5">
+                            <div className="relative min-w-0 flex items-center gap-2" style={{ paddingLeft: depth ? depth * 12 : 0 }}>
+                              {depth > 0 && (
+                                <span aria-hidden="true" className="absolute left-0 top-0 bottom-0 w-3">
+                                  <span className="absolute left-1.5 top-0 bottom-1/2 w-px bg-border" />
+                                  <span className="absolute left-1.5 top-1/2 w-3 h-px bg-border" />
+                                </span>
+                              )}
+                              <Badge variant="secondary" className="font-mono text-xs font-bold shrink-0">{headerCode ?? ""}</Badge>
+                              <p className="text-sm font-bold truncate">{item.title}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell />
+                          <TableCell />
+                          <TableCell>{isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}</TableCell>
+                        </TableRow>,
+                        ...(isExpanded ? render(item.children, depth + 1, headerCode ?? parentCode) : []),
+                      ];
+                    }
 
-              return [
-                <ChecklistItemRow
-                  key={item.id}
-                  item={item}
-                  onSubmit={onSubmit}
-                  onView={onView}
-                  depth={depth}
-                  expanded={isExpanded}
-                  onToggle={toggle}
-                  headerCode={headerCode}
-                />,
-                ...(isHeader && isExpanded ? render(item.children, depth + 1, headerCode ?? parentCode) : []),
-              ];
-            });
-          })(area.items, 0, "")}
+                    const isApproved = String(item.submissionStatus || "").toUpperCase() === "APPROVED";
+                    const hasSubmission = Boolean(item.submissionId);
+                    const handleRowClick = () => {
+                      if (hasSubmission && isApproved) onView(item);
+                      else if (hasSubmission && !isApproved) onSubmit(item);
+                      else onSubmit(item);
+                    };
+
+                    return (
+                      <TableRow
+                        key={item.id}
+                        className="transition-colors hover:bg-muted/50 cursor-pointer"
+                        onClick={handleRowClick}
+                        title={hasSubmission && isApproved ? "Click to view" : "Click to upload"}
+                      >
+                        <TableCell className="min-w-[260px] py-2.5">
+                          <div className="relative min-w-0" style={{ paddingLeft: depth ? depth * 12 : 0 }}>
+                            {depth > 0 && (
+                              <span aria-hidden="true" className="absolute left-0 top-0 bottom-0 w-3">
+                                <span className="absolute left-1.5 top-0 bottom-0 w-px bg-border" />
+                                <span className="absolute left-1.5 top-1/2 w-3 h-px bg-border" />
+                              </span>
+                            )}
+                            <p className="text-sm font-medium">{item.title}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-2.5">
+                          <StatusBadge submissionStatus={item.submissionStatus} uiStatus={item.status} />
+                        </TableCell>
+                        <TableCell className="py-2.5 text-xs text-muted-foreground">
+                          {item.submittedAt ? formatDateTime(item.submittedAt) : "—"}
+                        </TableCell>
+                        <TableCell className="py-2.5" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {hasSubmission && (
+                                <DropdownMenuItem onClick={() => onView(item)}>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View
+                                </DropdownMenuItem>
+                              )}
+                              {hasSubmission && !isApproved && (
+                                <DropdownMenuItem onClick={() => onSubmit(item)}>
+                                  <Upload className="h-4 w-4 mr-2" />
+                                  Replace
+                                </DropdownMenuItem>
+                              )}
+                              {!hasSubmission && (
+                                <DropdownMenuItem onClick={() => onSubmit(item)}>
+                                  <Upload className="h-4 w-4 mr-2" />
+                                  Upload
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  });
+                })(area.items, 0, "")}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       )}
     </Card>

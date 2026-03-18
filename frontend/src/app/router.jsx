@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router";
 
 import LoginPage from "../pages/login-page";
+import ForgotPasswordPage from "../pages/forgot-password-page";
 import UnauthorizedPage from "../pages/unauthorized-page";
 import NotFoundPage from "../pages/not-found-page";
 import ProfilePage from "../pages/profile-page";
@@ -32,6 +33,7 @@ export default function AppRouter() {
     <Routes>
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       </Route>
 
       <Route

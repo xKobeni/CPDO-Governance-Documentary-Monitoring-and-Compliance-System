@@ -44,6 +44,11 @@ EXCEPTION WHEN undefined_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
+  ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'NEW_COMMENT';
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
   CREATE TYPE export_format AS ENUM ('PDF', 'XLSX', 'CSV');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -406,5 +411,19 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_revoked ON auth_sessions(revoked_at);
+
+-- =========================
+-- PASSWORD RESET TOKENS (for forgot password flow)
+-- =========================
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires ON password_reset_tokens(expires_at);
 
 COMMIT;

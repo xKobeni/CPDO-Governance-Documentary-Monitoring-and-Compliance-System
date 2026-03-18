@@ -57,6 +57,7 @@ import { toast } from 'react-hot-toast';
 
 import { getOffices, createOffice, updateOffice, deleteOffice, toggleOfficeStatus, getOfficeAssignments, setOfficeAssignments } from '../api/offices';
 import { getGovernanceAreas } from '../api/governance';
+import { getYears } from '../api/years';
 
 export default function OfficesPage() {
   const [offices, setOffices] = useState([]);
@@ -82,12 +83,25 @@ export default function OfficesPage() {
   const [allGovernanceAreas, setAllGovernanceAreas] = useState([]);
   const [selectedAreaIds, setSelectedAreaIds] = useState([]);
   const [assignYear, setAssignYear] = useState(new Date().getFullYear());
+  const [assignYearOptions, setAssignYearOptions] = useState([]);
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignSubmitting, setAssignSubmitting] = useState(false);
 
   // Load data on component mount
   useEffect(() => {
     loadOffices();
+  }, []);
+
+  // Load available compliance years from the year system (active years only)
+  useEffect(() => {
+    getYears({ includeInactive: false })
+      .then((res) => {
+        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
+        setAssignYearOptions(yrs.length > 0 ? yrs : [new Date().getFullYear()]);
+      })
+      .catch(() => {
+        setAssignYearOptions([new Date().getFullYear()]);
+      });
   }, []);
 
   const loadOffices = async () => {
@@ -677,7 +691,7 @@ export default function OfficesPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map(y => (
+                  {assignYearOptions.map((y) => (
                     <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                   ))}
                 </SelectContent>

@@ -8,6 +8,7 @@ import {
   createSubmissionHandler,
   getSubmissionHandler,
   listSubmissionsHandler,
+  listReviewsHandler,
   reviewSubmissionHandler
 } from "../controllers/submissions.controller.js";
 import commentsRoutes from "./comments.routes.js";
@@ -20,6 +21,7 @@ r.use(requireAuth, checkSessionInactivity);
 r.post("/", audit("CREATE_SUBMISSION", "SUBMISSION", null, (req) => ({ templateId: req.body.templateId, title: req.body.title })), asyncHandler(createSubmissionHandler));
 r.get("/", shortCache, asyncHandler(listSubmissionsHandler));
 r.get("/:id", shortCache, asyncHandler(getSubmissionHandler));
+r.get("/:id/reviews", shortCache, asyncHandler(listReviewsHandler));
 
 // Review only STAFF/ADMIN
 r.post("/:id/review", requireRole("STAFF", "ADMIN"), audit("REVIEW_SUBMISSION", "SUBMISSION", (req) => req.params.id), asyncHandler(reviewSubmissionHandler));

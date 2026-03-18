@@ -55,3 +55,10 @@ export async function deleteSubmissionComment(submissionId, commentId) {
   return response.data; // { ok: true }
 }
 
+// ── Reviews (history of formal decisions) ─────────────────────────────────────
+
+export async function listSubmissionReviews(submissionId) {
+  const response = await api.get(`/submissions/${submissionId}/reviews`);
+  return response.data; // { reviews: [...] }
+}
+

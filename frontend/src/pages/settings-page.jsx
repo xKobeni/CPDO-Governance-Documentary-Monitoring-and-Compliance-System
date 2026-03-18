@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import { useAuth } from "../hooks/use-auth";
+import { logout, requestPasswordReset, resetPassword } from "../api/auth";
+import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -7,6 +10,14 @@ import { Label } from "../components/ui/label";
 import { Separator } from "../components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
+import { Alert } from "../components/ui/alert";
 import { toast } from "react-hot-toast";
 import { 
   Shield, 
@@ -21,10 +32,22 @@ import {
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [forgotStep, setForgotStep] = useState("request");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotResetToken, setForgotResetToken] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
+  const [forgotShowPassword, setForgotShowPassword] = useState(false);
+  const [forgotShowConfirm, setForgotShowConfirm] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const [forgotSuccess, setForgotSuccess] = useState("");
 
   // Security Settings State
   const [securitySettings, setSecuritySettings] = useState({
@@ -97,6 +120,60 @@ export default function SettingsPage() {
   const passwordStrengthText = ["Very Weak", "Weak", "Fair", "Good", "Strong"][passwordStrength] || "Very Weak";
   const passwordStrengthColor = ["text-red-500", "text-orange-500", "text-yellow-500", "text-blue-500", "text-green-500"][passwordStrength] || "text-red-500";
 
+  const handleForgotRequestReset = async (e) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotError("");
+    setForgotSuccess("");
+    try {
+      const data = await requestPasswordReset(forgotEmail);
+      setForgotSuccess(data.message || "Reset code generated.");
+      setForgotResetToken(data.resetToken || "");
+      setForgotStep("reset");
+    } catch (err) {
+      setForgotError(err?.response?.data?.message || "Failed to request password reset.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleForgotResetPassword = async (e) => {
+    e.preventDefault();
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setForgotError("Passwords do not match");
+      return;
+    }
+    if (forgotNewPassword.length < 8) {
+      setForgotError("Password must be at least 8 characters");
+      return;
+    }
+    if (!forgotResetToken.trim()) {
+      setForgotError("Please enter the reset code");
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError("");
+    try {
+      await resetPassword(forgotResetToken.trim(), forgotNewPassword);
+      setForgotSuccess("Password reset successfully! Logging you out...");
+      setTimeout(async () => {
+        await logout();
+        navigate("/login", { replace: true });
+      }, 1500);
+    } catch (err) {
+      setForgotError(err?.response?.data?.message || "Failed to reset password. The code may be invalid or expired.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const closeForgotModal = () => {
+    setShowForgotPasswordModal(false);
+    setForgotStep("request");
+    setForgotError("");
+    setForgotSuccess("");
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -134,7 +211,25 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="currentPassword">Current Password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="currentPassword">Current Password</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotEmail(user?.email ?? "");
+                      setForgotStep("request");
+                      setForgotResetToken("");
+                      setForgotNewPassword("");
+                      setForgotConfirmPassword("");
+                      setForgotError("");
+                      setForgotSuccess("");
+                      setShowForgotPasswordModal(true);
+                    }}
+                    className="text-sm text-muted-foreground hover:text-foreground underline"
+                  >
+                    Forgot your current password?
+                  </button>
+                </div>
                 <div className="relative">
                   <Input
                     id="currentPassword"
@@ -402,6 +497,110 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Forgot Password Modal */}
+      <Dialog open={showForgotPasswordModal} onOpenChange={(open) => !open && closeForgotModal()}>
+        <DialogContent className="sm:max-w-md" showCloseButton={!forgotLoading}>
+          <DialogHeader>
+            <DialogTitle>Forgot Password</DialogTitle>
+            <DialogDescription>
+              {forgotStep === "request"
+                ? "Enter your email to get a reset code"
+                : "Enter the reset code and your new password"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {forgotError && <Alert variant="destructive">{forgotError}</Alert>}
+            {forgotSuccess && <Alert className="bg-green-50 text-green-800 border-green-200">{forgotSuccess}</Alert>}
+
+            {forgotStep === "request" ? (
+              <form onSubmit={handleForgotRequestReset} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="forgot-email">Email</Label>
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="admin@cpdo.gov.ph"
+                    required
+                  />
+                </div>
+                <Button type="submit" disabled={forgotLoading} className="w-full">
+                  {forgotLoading ? "Sending..." : "Get reset code"}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleForgotResetPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="forgot-token">Reset code</Label>
+                  <Input
+                    id="forgot-token"
+                    type="text"
+                    value={forgotResetToken}
+                    onChange={(e) => setForgotResetToken(e.target.value)}
+                    placeholder="XXXXXX-XXXXXX"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="forgot-new-pwd">New password</Label>
+                  <div className="relative">
+                    <Input
+                      id="forgot-new-pwd"
+                      type={forgotShowPassword ? "text" : "password"}
+                      value={forgotNewPassword}
+                      onChange={(e) => setForgotNewPassword(e.target.value)}
+                      placeholder="At least 8 characters"
+                      required
+                      minLength={8}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setForgotShowPassword(!forgotShowPassword)}
+                    >
+                      {forgotShowPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="forgot-confirm-pwd">Confirm password</Label>
+                  <div className="relative">
+                    <Input
+                      id="forgot-confirm-pwd"
+                      type={forgotShowConfirm ? "text" : "password"}
+                      value={forgotConfirmPassword}
+                      onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setForgotShowConfirm(!forgotShowConfirm)}
+                    >
+                      {forgotShowConfirm ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setForgotStep("request")} disabled={forgotLoading}>
+                    Back
+                  </Button>
+                  <Button type="submit" disabled={forgotLoading} className="flex-1">
+                    {forgotLoading ? "Resetting..." : "Reset password"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

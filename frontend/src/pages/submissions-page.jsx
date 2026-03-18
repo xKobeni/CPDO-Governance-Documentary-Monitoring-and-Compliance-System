@@ -37,6 +37,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  ClipboardCheck,
   FileText,
   Folder,
   Building2,
@@ -45,6 +46,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  StickyNote,
   Upload,
   XCircle,
   Loader2,
@@ -264,10 +266,17 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20 dark:border-emerald-800/60">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Office remarks</CardTitle>
-                  <CardDescription>Provided by the submitting office</CardDescription>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    Submission notes
+                    <Badge variant="outline" className="text-xs font-normal border-emerald-300 text-emerald-700 dark:border-emerald-600 dark:text-emerald-400">Office remarks</Badge>
+                  </CardTitle>
+                  <CardDescription>
+                    {String(user?.role || "").toUpperCase() === "OFFICE"
+                      ? "Notes you provided when submitting — edit via My Checklists"
+                      : "Notes provided by the submitting office when they created this submission — separate from the discussion thread below"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="text-sm">
                   <p className="whitespace-pre-wrap text-muted-foreground">
@@ -349,26 +358,27 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
               </CardContent>
             </Card>
 
-            {/* Comments */}
-            <Card>
+            {/* Comments — Discussion thread (informal) */}
+            <Card className="border-slate-200 bg-slate-50/50 dark:bg-slate-950/30 dark:border-slate-800">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                  Comments
+                  Discussion
+                  <Badge variant="secondary" className="text-xs font-normal">Comments</Badge>
                 </CardTitle>
-                <CardDescription>Discussion thread for this submission</CardDescription>
+                <CardDescription>Informal notes and questions — does not change status</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex flex-col gap-2">
                   <Textarea
                     rows={3}
-                    placeholder="Write a comment…"
+                    placeholder="Ask a question or add a note…"
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     disabled={createCommentMutation.isPending}
+                    className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
                   />
                   <div className="flex justify-end">
-                    <Button size="sm" onClick={handlePostComment} disabled={createCommentMutation.isPending}>
+                    <Button size="sm" variant="secondary" onClick={handlePostComment} disabled={createCommentMutation.isPending}>
                       {createCommentMutation.isPending ? "Posting…" : "Post comment"}
                     </Button>
                   </div>
@@ -377,11 +387,11 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
                 {commentsQuery.isError ? (
                   <div className="text-sm text-red-600">Failed to load comments.</div>
                 ) : comments.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No comments yet.</div>
+                  <div className="text-sm text-muted-foreground py-2">No comments yet. Start the conversation.</div>
                 ) : (
                   <div className="space-y-2">
                     {comments.map((c) => (
-                      <div key={c.id} className="rounded-md border p-3">
+                      <div key={c.id} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">
@@ -391,9 +401,9 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
                             <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{c.comment}</p>
                           </div>
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
-                            className="shrink-0"
+                            className="shrink-0 text-muted-foreground hover:text-foreground"
                             onClick={() => deleteCommentMutation.mutate(c.id)}
                             disabled={deleteCommentMutation.isPending}
                           >
@@ -407,19 +417,29 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
               </CardContent>
             </Card>
 
-            {/* Review actions */}
+            {/* Review — Formal decision (changes status) */}
             {canReview && (
-              <Card className="border-blue-200">
+              <Card className="border-2 border-blue-300 bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/40 dark:to-indigo-950/30 dark:border-blue-700">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Review</CardTitle>
-                  <CardDescription>Approve, deny, or request revision</CardDescription>
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500 text-white">
+                      <ClipboardCheck className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        Formal Review
+                        <Badge className="bg-blue-600 hover:bg-blue-700 text-white border-0">Decision</Badge>
+                      </CardTitle>
+                      <CardDescription>Official approval decision — updates status and notifies submitter</CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1.5">
                       <span className="text-xs font-medium text-muted-foreground">Action</span>
                       <Select value={reviewAction} onValueChange={setReviewAction}>
-                        <SelectTrigger>
+                        <SelectTrigger className="border-blue-200 dark:border-blue-800">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -436,6 +456,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
                         value={decisionNotes}
                         onChange={(e) => setDecisionNotes(e.target.value)}
                         placeholder="Add notes that will be included in the notification."
+                        className="border-blue-200 dark:border-blue-800"
                       />
                     </div>
                   </div>
@@ -444,7 +465,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
                   <Button
                     onClick={handleReview}
                     disabled={reviewMutation.isPending}
-                    className="gap-2"
+                    className="gap-2 bg-blue-600 hover:bg-blue-700"
                   >
                     {reviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     Submit review

@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { pool } from "../config/db.js";
 import { createComment, getSubmissionComments, getCommentById, deleteComment } from "../models/comments.model.js";
 import { getSubmissionById } from "../models/submissions.model.js";
+import { createNotification } from "../models/notifications.model.js";
+import { findUserById } from "../models/users.model.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
 const createCommentSchema = z.object({
@@ -46,6 +49,43 @@ export async function createCommentHandler(req, res) {
     authorUserId: req.user.sub,
     comment: sanitizedComment,
   });
+
+  // Notify the other side when someone comments
+  const author = await findUserById(req.user.sub);
+  const authorName = author?.full_name ?? "Someone";
+  const preview = sanitizedComment.length > 80 ? `${sanitizedComment.slice(0, 80)}…` : sanitizedComment;
+  const title = `New comment on ${submission.item_title}`;
+  const body = `${authorName}: ${preview}`;
+
+  if (req.user.role === "OFFICE") {
+    // Office commented → notify Staff and Admin
+    const { rows: staffUsers } = await pool.query(
+      `SELECT u.id FROM users u
+       JOIN roles r ON r.id = u.role_id
+       WHERE r.code IN ('ADMIN', 'STAFF') AND u.is_active = TRUE`,
+      []
+    );
+    for (const user of staffUsers) {
+      await createNotification({
+        userId: user.id,
+        type: "NEW_COMMENT",
+        title,
+        body,
+        linkSubmissionId: submissionId,
+      });
+    }
+  } else {
+    // Staff/Admin commented → notify the office user who submitted
+    if (submission.submitted_by && submission.submitted_by !== req.user.sub) {
+      await createNotification({
+        userId: submission.submitted_by,
+        type: "NEW_COMMENT",
+        title,
+        body,
+        linkSubmissionId: submissionId,
+      });
+    }
+  }
 
   return res.status(201).json({ comment });
 }

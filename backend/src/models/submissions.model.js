@@ -17,6 +17,7 @@ export async function createSubmission(payload) {
      VALUES ($1,$2,$3,$4,$5,'PENDING',$6,$7)
      ON CONFLICT (year, office_id, checklist_item_id)
      DO UPDATE SET
+       status = 'PENDING',
        submitted_by = EXCLUDED.submitted_by,
        submitted_at = now(),
        office_remarks = EXCLUDED.office_remarks

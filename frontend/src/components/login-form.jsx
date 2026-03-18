@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -113,9 +114,9 @@ export function LoginForm({
               <Field>
                 <div className="flex items-center">
                   <FieldLabel htmlFor="password">Password</FieldLabel>
-                  <a href="#" className="ml-auto text-sm text-muted-foreground hover:text-foreground cursor-pointer">
+                  <Link to="/forgot-password" className="ml-auto text-sm text-muted-foreground hover:text-foreground">
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
                 <div className="relative">
                   <Input 

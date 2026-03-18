@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { loginLimiter } from "../middlewares/rateLimit.js";
-import { login, refresh, logout, me, updateMe } from "../controllers/auth.controller.js";
+import { loginLimiter, forgotPasswordLimiter } from "../middlewares/rateLimit.js";
+import { login, refresh, logout, me, updateMe, forgotPassword, resetPassword } from "../controllers/auth.controller.js";
 import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { audit } from "../middlewares/audit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
@@ -8,6 +8,8 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 const router = Router();
 
 router.post("/login", loginLimiter, audit("LOGIN_ATTEMPT", "USER", null, (req) => ({ email: req.body.email })), asyncHandler(login));
+router.post("/forgot-password", forgotPasswordLimiter, asyncHandler(forgotPassword));
+router.post("/reset-password", forgotPasswordLimiter, asyncHandler(resetPassword));
 router.post("/refresh", asyncHandler(refresh));
 router.post("/logout", audit("LOGOUT", "USER", null, (req) => ({ userAgent: req.headers["user-agent"] })), asyncHandler(logout));
 router.get("/me", requireAuth, checkSessionInactivity, asyncHandler(me));
