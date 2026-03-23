@@ -1,22 +1,27 @@
 import { Routes, Route, Navigate } from "react-router";
+import { lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
 
-import LoginPage from "../pages/login-page";
-import ForgotPasswordPage from "../pages/forgot-password-page";
-import UnauthorizedPage from "../pages/unauthorized-page";
-import NotFoundPage from "../pages/not-found-page";
-import ProfilePage from "../pages/profile-page";
-import SettingsPage from "../pages/settings-page";
-import UsersPage from "../pages/users-page";
-import OfficesPage from "../pages/offices-page";
-import AuditLogsPage from "../pages/audit-logs-page";
-import ReportsPage from "../pages/reports-page";
-import GovernancePage from "../pages/governance-page";
-import GovernanceCompliancePage from "../pages/governance-compliance-page";
-import TemplatesAllPage from "../pages/templates-all-page";
-import SubmissionsPage from "../pages/submissions-page";
-import TemplatesManagePage from "../pages/templates-manage-page";
-import TemplatesCategoriesPage from "../pages/templates-categories-page";
-import YearsPage from "../pages/years-page";
+const LoginPage               = lazy(() => import("../pages/login-page"));
+const ForgotPasswordPage      = lazy(() => import("../pages/forgot-password-page"));
+const UnauthorizedPage        = lazy(() => import("../pages/unauthorized-page"));
+const NotFoundPage            = lazy(() => import("../pages/not-found-page"));
+const ProfilePage             = lazy(() => import("../pages/profile-page"));
+const SettingsPage            = lazy(() => import("../pages/settings-page"));
+const UsersPage               = lazy(() => import("../pages/users-page"));
+const OfficesPage             = lazy(() => import("../pages/offices-page"));
+const AuditLogsPage           = lazy(() => import("../pages/audit-logs-page"));
+const ReportsPage             = lazy(() => import("../pages/reports-page"));
+const GovernancePage          = lazy(() => import("../pages/governance-page"));
+const GovernanceCompliancePage = lazy(() => import("../pages/governance-compliance-page"));
+const TemplatesAllPage        = lazy(() => import("../pages/templates-all-page"));
+const SubmissionsPage         = lazy(() => import("../pages/submissions-page"));
+const TemplatesManagePage     = lazy(() => import("../pages/templates-manage-page"));
+const TemplatesCategoriesPage = lazy(() => import("../pages/templates-categories-page"));
+const YearsPage               = lazy(() => import("../pages/years-page"));
+const DashboardPage           = lazy(() => import("../pages/dashboard-page"));
+const MyChecklistsPage        = lazy(() => import("../pages/my-checklists-page"));
+const NotificationsPage       = lazy(() => import("../pages/notifications-page"));
 
 import DashboardLayout from "../layouts/dashboard-layout";
 import AuthLayout from "../layouts/auth-layout";
@@ -24,12 +29,17 @@ import AuthLayout from "../layouts/auth-layout";
 import ProtectedRoute from "../guards/protected-route";
 import RoleGuard from "../guards/role-guard";
 
-import DashboardPage from "../pages/dashboard-page";
-import MyChecklistsPage from "../pages/my-checklists-page";
-import NotificationsPage from "../pages/notifications-page";
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-[60vh] text-muted-foreground">
+      <Loader2 className="h-6 w-6 animate-spin" />
+    </div>
+  );
+}
 
 export default function AppRouter() {
   return (
+    <Suspense fallback={<PageLoader />}>
     <Routes>
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
@@ -106,5 +116,6 @@ export default function AppRouter() {
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+    </Suspense>
   );
 }

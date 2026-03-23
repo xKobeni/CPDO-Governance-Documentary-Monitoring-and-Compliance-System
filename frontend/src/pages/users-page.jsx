@@ -61,9 +61,9 @@ import { toast } from 'react-hot-toast';
 import { getUsers, createUser, updateUser, deleteUser, setUserActive, getOffices, resetUserPassword } from '../api/users';
 
 const roleOptions = [
-  { value: 'ADMIN', label: 'Administrator', color: 'bg-red-100 text-red-800' },
-  { value: 'STAFF', label: 'Staff Member', color: 'bg-blue-100 text-blue-800' },
-  { value: 'OFFICE', label: 'Office Head', color: 'bg-green-100 text-green-800' }
+  { value: 'ADMIN',  label: 'Administrator', color: 'bg-blue-100 text-blue-800 border-blue-200'     },
+  { value: 'STAFF',  label: 'Staff Member',  color: 'bg-orange-100 text-orange-800 border-orange-200' },
+  { value: 'OFFICE', label: 'Office Head',   color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
 ];
 
 function generatePassword() {
@@ -606,7 +606,12 @@ export default function UsersPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.is_active ? "default" : "secondary"}>
+                        <Badge
+                          variant="secondary"
+                          className={user.is_active
+                            ? "bg-green-100 text-green-700 border-green-200"
+                            : "bg-red-100 text-red-700 border-red-200"}
+                        >
                           {user.is_active ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>

@@ -548,7 +548,12 @@ export default function OfficesPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={office.isActive ? 'default' : 'secondary'}>
+                        <Badge
+                          variant="secondary"
+                          className={office.isActive
+                            ? "bg-green-100 text-green-700 border-green-200"
+                            : "bg-red-100 text-red-700 border-red-200"}
+                        >
                           {office.isActive ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>

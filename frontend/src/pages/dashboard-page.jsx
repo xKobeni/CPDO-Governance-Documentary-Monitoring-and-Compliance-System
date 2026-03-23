@@ -85,33 +85,77 @@ function deriveStatus(submission, dueDate) {
 
 function OfficeDashboard({ user }) {
   const navigate = useNavigate();
-  const year = new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const [yearOptions, setYearOptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
   const [areas, setAreas] = useState([]);
   const [officeName, setOfficeName] = useState(user?.office || "");
 
-  useEffect(() => {
+  const loadOffice = useCallback(async () => {
     if (!user?.officeId) return;
-    getOfficeChecklist(user.officeId, year)
-      .then((res) => {
-        const d = res.data;
-        if (d?.office?.name) setOfficeName(d.office.name);
-        setAreas(d?.areas ?? []);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getOfficeChecklist(user.officeId, year);
+      const d = res.data;
+      if (d?.office?.name) setOfficeName(d.office.name);
+      setAreas(d?.areas ?? []);
+      setLastRefreshed(new Date());
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to load office dashboard data.");
+    } finally {
+      setLoading(false);
+    }
   }, [user?.officeId, year]);
 
+  useEffect(() => { loadOffice(); }, [loadOffice]);
+
+  // Load years for dropdown (with fallback)
+  useEffect(() => {
+    getYears({ includeInactive: false })
+      .then((res) => {
+        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
+        if (yrs.length > 0) {
+          setYearOptions(yrs);
+          if (!yrs.includes(year)) setYear(yrs[0]);
+        } else {
+          setYearOptions(Array.from({ length: 5 }, (_, i) => currentYear - i));
+        }
+      })
+      .catch(() => setYearOptions(Array.from({ length: 5 }, (_, i) => currentYear - i)));
+  }, [currentYear]);
+
   // Compute summary from real data
-  const allItems = areas.flatMap((a) =>
-    a.items.map((item) => ({ ...item, areaName: a.name, status: deriveStatus(item.submission, item.dueDate) }))
-  );
+  const allItems = areas.flatMap((a) => {
+    const items = Array.isArray(a.items) ? a.items : [];
+    // API includes section/header items (parents). Only count leaf items (real submission targets).
+    const parentIds = new Set(
+      items
+        .map((it) => it.parentItemId ?? it.parent_item_id ?? it.parentId ?? null)
+        .filter(Boolean)
+    );
+    const leafItems = items.filter((it) => {
+      if (Array.isArray(it.children) && it.children.length > 0) return false;
+      return !parentIds.has(it.id);
+    });
+    return leafItems.map((item) => ({
+      ...item,
+      areaName: a.name,
+      status: deriveStatus(item.submission, item.dueDate),
+    }));
+  });
   const total = allItems.length;
   const completed = allItems.filter((i) => i.status === "completed").length;
   const inProgress = allItems.filter((i) => i.status === "in-progress").length;
   const pending = allItems.filter((i) => i.status === "pending").length;
   const overdue = allItems.filter((i) => i.status === "overdue").length;
   const completionPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const lastRefreshedText = lastRefreshed
+    ? lastRefreshed.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })
+    : null;
 
   // Upcoming deadlines: not completed + has due date + sort soonest first
   const today = new Date();
@@ -141,19 +185,49 @@ function OfficeDashboard({ user }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Office Dashboard</h1>
           <p className="text-muted-foreground">
             Welcome back, <span className="font-medium text-foreground">{user?.name || user?.email}</span>
             {officeName && <> · <span className="text-red-600 font-medium">{officeName}</span></>}
           </p>
+          <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" />
+            <span>Year {year}</span>
+            {lastRefreshedText && <span>· Updated {lastRefreshedText}</span>}
+          </div>
         </div>
-        <Button onClick={() => navigate("/my-checklists")} className="shrink-0">
-          <ClipboardList className="mr-2 h-4 w-4" />
-          View My Checklists
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+            <SelectTrigger className="w-28 h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(yearOptions.length > 0 ? yearOptions : [currentYear]).map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={loadOffice} disabled={loading}>
+            {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</> : <><RefreshCw className="mr-2 h-4 w-4" />Refresh</>}
+          </Button>
+          <Button onClick={() => navigate("/my-checklists")} className="shrink-0">
+            <ClipboardList className="mr-2 h-4 w-4" />
+            My Checklists
+          </Button>
+        </div>
       </div>
+
+      {error && (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
+          <span className="flex-1">{error}</span>
+          <Button variant="outline" size="sm" className="h-8" onClick={loadOffice}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -344,11 +418,11 @@ function OfficeDashboard({ user }) {
 
 // ─── Status config for compliance cells ──────────────────────────────────────
 const COMPLIANCE_STATUS = {
-  APPROVED:           { label: 'Approved',       color: 'text-green-700',  bg: 'bg-green-50',   bar: 'bg-green-500'  },
-  PENDING:            { label: 'Pending',        color: 'text-amber-700',  bg: 'bg-amber-50',   bar: 'bg-amber-400'  },
-  DENIED:             { label: 'Denied',         color: 'text-red-700',    bg: 'bg-red-50',     bar: 'bg-red-500'    },
-  REVISION_REQUESTED: { label: 'Needs Revision', color: 'text-orange-700', bg: 'bg-orange-50',  bar: 'bg-orange-500' },
-  NOT_SUBMITTED:      { label: 'Not Submitted',  color: 'text-gray-500',   bg: 'bg-muted/30',   bar: 'bg-muted'      },
+  APPROVED:           { label: 'Approved',      color: 'text-green-700',  bg: 'bg-green-50',   bar: 'bg-green-500'  },
+  PENDING:            { label: 'Pending',        color: 'text-blue-700',   bg: 'bg-blue-50',    bar: 'bg-blue-500'   },
+  DENIED:             { label: 'Not approved',   color: 'text-red-700',    bg: 'bg-red-50',     bar: 'bg-red-500'    },
+  REVISION_REQUESTED: { label: 'Not approved',   color: 'text-red-700',    bg: 'bg-red-50',     bar: 'bg-red-500'    },
+  NOT_SUBMITTED:      { label: 'No uploaded',    color: 'text-amber-700',  bg: 'bg-amber-50',   bar: 'bg-amber-400'  },
 };
 
 function AdminDashboard({ user }) {
@@ -513,22 +587,20 @@ function AdminDashboard({ user }) {
   const officeStatusOffices = activeOffices.length > 0 ? activeOffices : offices;
   const officeStatusAreas   = activeAreas.length   > 0 ? activeAreas   : areas;
   const officeStatusData = officeStatusOffices.map((o) => {
-    let approved = 0, pending = 0, denied = 0, revision = 0, notSubmitted = 0;
+    let approved = 0, pending = 0, notApproved = 0, noUploaded = 0;
     for (const area of officeStatusAreas) {
       const s = matrix[area.id]?.[o.id] || 'NOT_SUBMITTED';
-      if (s === 'APPROVED')           approved++;
-      else if (s === 'PENDING')       pending++;
-      else if (s === 'DENIED')        denied++;
-      else if (s === 'REVISION_REQUESTED') revision++;
-      else                            notSubmitted++;
+      if (s === 'APPROVED')                                    approved++;
+      else if (s === 'PENDING')                                pending++;
+      else if (s === 'DENIED' || s === 'REVISION_REQUESTED')   notApproved++;
+      else                                                     noUploaded++;
     }
     return {
       name: o.name.length > 20 ? o.name.slice(0, 18) + '…' : o.name,
       Approved: approved,
       Pending: pending,
-      Denied: denied,
-      'Needs Revision': revision,
-      'Not Submitted': notSubmitted,
+      'Not approved': notApproved,
+      'No uploaded': noUploaded,
     };
   });
 
@@ -842,11 +914,10 @@ function AdminDashboard({ user }) {
                         <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 11 }} />
                         <RechartsTooltip contentStyle={{ borderRadius: '8px', fontSize: '12px' }} />
                         <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
-                        <Bar dataKey="Approved"       stackId="a" fill="#22c55e" radius={[0,0,0,0]} maxBarSize={22} />
-                        <Bar dataKey="Pending"        stackId="a" fill="#f59e0b" maxBarSize={22} />
-                        <Bar dataKey="Needs Revision" stackId="a" fill="#f97316" maxBarSize={22} />
-                        <Bar dataKey="Denied"         stackId="a" fill="#ef4444" maxBarSize={22} />
-                        <Bar dataKey="Not Submitted"  stackId="a" fill="#d1d5db" radius={[0,4,4,0]} maxBarSize={22} />
+                        <Bar dataKey="Approved"     stackId="a" fill="#22c55e" radius={[0,0,0,0]} maxBarSize={22} />
+                        <Bar dataKey="Pending"      stackId="a" fill="#3b82f6" maxBarSize={22} />
+                        <Bar dataKey="Not approved" stackId="a" fill="#ef4444" maxBarSize={22} />
+                        <Bar dataKey="No uploaded"  stackId="a" fill="#f59e0b" radius={[0,4,4,0]} maxBarSize={22} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -1181,9 +1252,8 @@ function AdminDashboard({ user }) {
                   {activeOffices.map((o) => {
                     const approved     = activeAreas.filter((a) => matrix[a.id]?.[o.id] === 'APPROVED').length;
                     const pending      = activeAreas.filter((a) => matrix[a.id]?.[o.id] === 'PENDING').length;
-                    const denied       = activeAreas.filter((a) => matrix[a.id]?.[o.id] === 'DENIED').length;
-                    const revision     = activeAreas.filter((a) => matrix[a.id]?.[o.id] === 'REVISION_REQUESTED').length;
-                    const notSubmitted = activeAreas.filter((a) => !matrix[a.id]?.[o.id]).length;
+                    const notApproved  = activeAreas.filter((a) => matrix[a.id]?.[o.id] === 'DENIED' || matrix[a.id]?.[o.id] === 'REVISION_REQUESTED').length;
+                    const noUploaded   = activeAreas.filter((a) => !matrix[a.id]?.[o.id]).length;
                     const total        = activeAreas.length;
                     const pct          = total > 0 ? Math.round((approved / total) * 100) : 0;
                     return (
@@ -1201,10 +1271,9 @@ function AdminDashboard({ user }) {
                           </div>
                           <div className="flex flex-wrap gap-1 text-xs">
                             <span className="text-green-700 bg-green-50 rounded px-1.5 py-0.5 border border-green-200">{approved} approved</span>
-                            {pending > 0      && <span className="text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 border border-amber-200">{pending} pending</span>}
-                            {denied > 0       && <span className="text-red-700 bg-red-50 rounded px-1.5 py-0.5 border border-red-200">{denied} denied</span>}
-                            {revision > 0     && <span className="text-orange-700 bg-orange-50 rounded px-1.5 py-0.5 border border-orange-200">{revision} revision</span>}
-                            {notSubmitted > 0 && <span className="text-muted-foreground bg-muted rounded px-1.5 py-0.5 border">{notSubmitted} missing</span>}
+                            {pending > 0     && <span className="text-blue-700 bg-blue-50 rounded px-1.5 py-0.5 border border-blue-200">{pending} pending</span>}
+                            {notApproved > 0 && <span className="text-red-700 bg-red-50 rounded px-1.5 py-0.5 border border-red-200">{notApproved} not approved</span>}
+                            {noUploaded > 0  && <span className="text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 border border-amber-200">{noUploaded} no uploaded</span>}
                           </div>
                         </CardContent>
                       </Card>

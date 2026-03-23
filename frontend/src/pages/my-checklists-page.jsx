@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -999,8 +1000,9 @@ function ChecklistItemRow_REMOVED({ item, onSubmit, onView, depth = 0, expanded 
 function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, onView, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   const [expandedIds, setExpandedIds] = useState(() => new Set());
-  const flattenItems = (items) => items.flatMap((i) => [i, ...flattenItems(i.children || [])]);
-  const flat = flattenItems(area.items);
+  const flattenLeafItems = (items) =>
+    (items || []).flatMap((i) => ((i.children?.length ?? 0) > 0 ? flattenLeafItems(i.children) : [i]));
+  const flat = flattenLeafItems(area.items);
   const total = flat.length;
   const done = flat.filter((i) => i.status === "completed").length;
   const overdue = flat.filter((i) => i.status === "overdue").length;
@@ -1207,6 +1209,7 @@ function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MyChecklistsPage() {
   const { user } = useAuth();
+  const location = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [areaFilter, setAreaFilter] = useState("all");
@@ -1240,6 +1243,57 @@ export default function MyChecklistsPage() {
     loadChecklist();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.officeId, year]);
+
+  // Allow deep-linking from dashboard quick actions, e.g. /my-checklists?status=overdue
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || "");
+    const status = (params.get("status") || "").toLowerCase();
+    const allowed = new Set(["all", "no-uploaded", "pending", "not-approved", "approved"]);
+    if (allowed.has(status)) setStatusFilter(status);
+  }, [location.search]);
+
+  function matchesStatusFilter(itemStatus) {
+    if (statusFilter === "all") return true;
+    // "no-uploaded" covers both items with no submission (no-uploaded) and past-due ones (overdue)
+    if (statusFilter === "no-uploaded") return itemStatus === "no-uploaded" || itemStatus === "overdue";
+    // "pending" maps to "in-progress" — deriveStatus() never produces a bare "pending" value
+    if (statusFilter === "pending") return itemStatus === "in-progress";
+    if (statusFilter === "not-approved") return itemStatus === "not-approved";
+    if (statusFilter === "approved") return itemStatus === "completed";
+    return true;
+  }
+
+  function matchesSearchFilter(item) {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      String(item.title || "").toLowerCase().includes(q) ||
+      String(item.description || "").toLowerCase().includes(q)
+    );
+  }
+
+  function filterChecklistTree(items) {
+    // Keep section/header rows when any child matches filters.
+    // Leaf rows must match filters themselves.
+    const walk = (nodes) => {
+      const out = [];
+      for (const n of nodes || []) {
+        const children = Array.isArray(n.children) ? n.children : [];
+        if (children.length > 0) {
+          const nextChildren = walk(children);
+          // Only keep headers if they still have visible children after filtering.
+          // This prevents headers from turning into "leaf rows" that show a status badge.
+          if (nextChildren.length > 0) out.push({ ...n, children: nextChildren });
+        } else {
+          const matchSearch = matchesSearchFilter(n);
+          const matchStatus = matchesStatusFilter(n.status);
+          if (matchSearch && matchStatus) out.push(n);
+        }
+      }
+      return out;
+    };
+    return walk(items);
+  }
 
   // Load available years for the Office user (managed years with fallback)
   useEffect(() => {
@@ -1286,25 +1340,23 @@ export default function MyChecklistsPage() {
     .filter((a) => areaFilter === "all" || a.id === areaFilter)
     .map((a) => ({
       ...a,
-      items: a.items.filter((item) => {
-        const matchSearch = !search || item.title.toLowerCase().includes(search.toLowerCase()) || (item.description || "").toLowerCase().includes(search.toLowerCase());
-        const matchStatus = statusFilter === "all" || item.status === statusFilter;
-        return matchSearch && matchStatus;
-      }),
+      items: filterChecklistTree(a.items),
     }))
     .filter((a) => a.items.length > 0);
 
-  // Summary counts (all areas)
-  const allItems = checklists.flatMap((a) =>
-    (function flatten(items) {
-      return items.flatMap((i) => [i, ...flatten(i.children || [])]);
-    })(a.items)
-  );
-  const totalItems = allItems.length;
-  const completedItems = allItems.filter((i) => i.status === "completed").length;
-  const overdueItems = allItems.filter((i) => i.status === "overdue").length;
-  const noUploadedItems = allItems.filter((i) => i.status === "no-uploaded").length;
+  // Summary counts — derived from filteredAreas so the cards always match what's visible below
+  const flattenLeaves = (items) =>
+    (items || []).flatMap((i) => ((i.children?.length ?? 0) > 0 ? flattenLeaves(i.children) : [i]));
+
+  const visibleItems = filteredAreas.flatMap((a) => flattenLeaves(a.items));
+  const totalItems = visibleItems.length;
+  const completedItems = visibleItems.filter((i) => i.status === "completed").length;
+  const overdueItems = visibleItems.filter((i) => i.status === "overdue").length;
+  const noUploadedItems = visibleItems.filter((i) => i.status === "no-uploaded").length;
   const completionPct = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+  // Unfiltered leaf count — used for the progress bar and area filter dropdown availability
+  const allLeafItems = checklists.flatMap((a) => flattenLeaves(a.items));
 
   const CARD_ACCENTS = [
     "border-l-blue-500",
@@ -1342,8 +1394,8 @@ export default function MyChecklistsPage() {
         </div>
       </div>
 
-      {/* Summary strip */}
-      {!loading && checklists.length > 0 && (
+      {/* Summary strip — counts reflect current filters */}
+      {!loading && allLeafItems.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1415,11 +1467,10 @@ export default function MyChecklistsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="overdue">Overdue</SelectItem>
-            <SelectItem value="in-progress">In Progress</SelectItem>
-            <SelectItem value="no-uploaded">No Uploaded</SelectItem>
+            <SelectItem value="no-uploaded">No uploaded</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="not-approved">Not approved</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
           </SelectContent>
         </Select>
         <Select value={areaFilter} onValueChange={setAreaFilter}>
