@@ -55,11 +55,15 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
+import { useAuth } from '../hooks/use-auth';
 import { getOffices, createOffice, updateOffice, deleteOffice, toggleOfficeStatus, getOfficeAssignments, setOfficeAssignments } from '../api/offices';
 import { getGovernanceAreas } from '../api/governance';
 import { getYears } from '../api/years';
 
 export default function OfficesPage() {
+  const { user } = useAuth();
+  const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
+
   const [offices, setOffices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -335,6 +339,7 @@ export default function OfficesPage() {
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
+          {isAdmin && (
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button disabled={loading}>
@@ -408,6 +413,7 @@ export default function OfficesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+          )}
         </div>
       </div>
 
@@ -514,7 +520,7 @@ export default function OfficesPage() {
                     <TableHead>Users</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -560,6 +566,7 @@ export default function OfficesPage() {
                       <TableCell className="text-sm">
                         {formatDate(office.createdAt)}
                       </TableCell>
+                      {isAdmin && (
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -601,6 +608,7 @@ export default function OfficesPage() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

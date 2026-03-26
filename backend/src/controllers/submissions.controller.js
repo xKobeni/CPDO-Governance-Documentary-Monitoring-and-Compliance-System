@@ -4,7 +4,7 @@ import {
   createSubmission, getSubmissionById, listSubmissions, setSubmissionStatus
 } from "../models/submissions.model.js";
 import { createReview, addVerificationCheck, listReviews } from "../models/reviews.model.js";
-import { createNotification } from "../models/notifications.model.js";
+import { createNotification, createNotificationsBulk } from "../models/notifications.model.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
 const createSubmissionSchema = z.object({
@@ -62,16 +62,17 @@ export async function createSubmissionHandler(req, res) {
       []
     );
 
-    for (const user of staffUsers) {
-      await createNotification({
-        userId: user.id,
-        type: "SUBMISSION_RECEIVED",
-        title: `New submission - ${full?.office_name ?? "Office"}`,
-        body: full
-          ? `${full.item_title} (${full.governance_code}) from ${full.office_name}`
-          : `A new submission was created by an office user.`,
-        linkSubmissionId: submission.id,
-      });
+    const notifications = staffUsers.map(user => ({
+      userId: user.id,
+      type: "SUBMISSION_RECEIVED",
+      title: `New submission - ${full?.office_name ?? "Office"}`,
+      body: full
+        ? `${full.item_title} (${full.governance_code}) from ${full.office_name}`
+        : `A new submission was created by an office user.`,
+      linkSubmissionId: submission.id,
+    }));
+    if (notifications.length > 0) {
+      await createNotificationsBulk(notifications);
     }
   }
 
@@ -193,14 +194,15 @@ export async function reviewSubmissionHandler(req, res) {
     [req.user.sub]
   );
 
-  for (const user of staffUsers) {
-    await createNotification({
-      userId: user.id,
-      type: notificationType,
-      title: `${notificationTitle} - ${submission.office_name}`,
-      body: `${submission.item_title} from ${submission.office_name}`,
-      linkSubmissionId: submissionId,
-    });
+  const notifications = staffUsers.map(user => ({
+    userId: user.id,
+    type: notificationType,
+    title: `${notificationTitle} - ${submission.office_name}`,
+    body: `${submission.item_title} from ${submission.office_name}`,
+    linkSubmissionId: submissionId,
+  }));
+  if (notifications.length > 0) {
+    await createNotificationsBulk(notifications);
   }
 
   return res.json({ review, status: newStatus });

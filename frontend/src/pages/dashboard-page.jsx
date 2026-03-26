@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
@@ -52,6 +53,8 @@ import { getGovernanceAreasWithStats, getComplianceMatrix } from "../api/governa
 import { getYears } from "../api/years";
 import { getOffices } from "../api/offices";
 import { getUsers } from "../api/users";
+import { getReportSummary } from "../api/reports";
+import { listSubmissions } from "../api/submissions";
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
@@ -68,6 +71,25 @@ function healthInfo(pct) {
   if (pct >= 80) return { bar: 'bg-green-500', text: 'text-green-700', bg: 'bg-green-50', label: 'On Track' };
   if (pct >= 50) return { bar: 'bg-amber-400', text: 'text-amber-700', bg: 'bg-amber-50', label: 'Needs Attention' };
   return             { bar: 'bg-red-500',   text: 'text-red-700',   bg: 'bg-red-50',   label: 'At Risk' };
+}
+
+// Isolated so the 1-second tick never re-renders parent components
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <>
+      <span className="text-xs text-muted-foreground">
+        {now.toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      </span>
+      <span className="text-xs font-mono font-semibold text-foreground tabular-nums">
+        {now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+      </span>
+    </>
+  );
 }
 
 /** Derive a per-item UI status the same way my-checklists-page does */
@@ -87,49 +109,42 @@ function OfficeDashboard({ user }) {
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
-  const [yearOptions, setYearOptions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [lastRefreshed, setLastRefreshed] = useState(null);
-  const [areas, setAreas] = useState([]);
-  const [officeName, setOfficeName] = useState(user?.office || "");
 
-  const loadOffice = useCallback(async () => {
-    if (!user?.officeId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await getOfficeChecklist(user.officeId, year);
-      const d = res.data;
-      if (d?.office?.name) setOfficeName(d.office.name);
-      setAreas(d?.areas ?? []);
-      setLastRefreshed(new Date());
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load office dashboard data.");
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.officeId, year]);
+  // ── Data fetching via React Query (cached, no re-fetch on every nav) ─────────
+  const { data: checklistData, isFetching, error: checklistErr, refetch, dataUpdatedAt } = useQuery({
+    queryKey: ['office-checklist', user?.officeId, year],
+    queryFn: () => getOfficeChecklist(user.officeId, year),
+    enabled: Boolean(user?.officeId),
+    staleTime: 2 * 60 * 1000,
+  });
 
-  useEffect(() => { loadOffice(); }, [loadOffice]);
+  const { data: yearsData } = useQuery({
+    queryKey: ['years', 'active'],
+    queryFn: () => getYears({ includeInactive: false }),
+    staleTime: 10 * 60 * 1000,
+  });
 
-  // Load years for dropdown (with fallback)
+  const loading = isFetching && !checklistData;
+  const error = checklistErr?.response?.data?.message || (checklistErr ? "Failed to load office dashboard data." : null);
+
+  const d = checklistData?.data;
+  const areas = useMemo(() => d?.areas ?? [], [d]);
+  const officeName = d?.office?.name || user?.office || "";
+  const lastRefreshedText = dataUpdatedAt
+    ? new Date(dataUpdatedAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  const yearOptions = useMemo(() => {
+    const yrs = (yearsData?.years || []).map((y) => y.year).sort((a, b) => b - a);
+    return yrs.length > 0 ? yrs : Array.from({ length: 5 }, (_, i) => currentYear - i);
+  }, [yearsData, currentYear]);
+
   useEffect(() => {
-    getYears({ includeInactive: false })
-      .then((res) => {
-        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
-        if (yrs.length > 0) {
-          setYearOptions(yrs);
-          if (!yrs.includes(year)) setYear(yrs[0]);
-        } else {
-          setYearOptions(Array.from({ length: 5 }, (_, i) => currentYear - i));
-        }
-      })
-      .catch(() => setYearOptions(Array.from({ length: 5 }, (_, i) => currentYear - i)));
-  }, [currentYear]);
+    if (yearOptions.length > 0 && !yearOptions.includes(year)) setYear(yearOptions[0]);
+  }, [yearOptions]);
 
   // Compute summary from real data
-  const allItems = areas.flatMap((a) => {
+  const allItems = useMemo(() => areas.flatMap((a) => {
     const items = Array.isArray(a.items) ? a.items : [];
     // API includes section/header items (parents). Only count leaf items (real submission targets).
     const parentIds = new Set(
@@ -146,21 +161,18 @@ function OfficeDashboard({ user }) {
       areaName: a.name,
       status: deriveStatus(item.submission, item.dueDate),
     }));
-  });
+  }), [areas]);
+
   const total = allItems.length;
-  const completed = allItems.filter((i) => i.status === "completed").length;
-  const inProgress = allItems.filter((i) => i.status === "in-progress").length;
-  const pending = allItems.filter((i) => i.status === "pending").length;
-  const overdue = allItems.filter((i) => i.status === "overdue").length;
+  const completed = useMemo(() => allItems.filter((i) => i.status === "completed").length, [allItems]);
+  const inProgress = useMemo(() => allItems.filter((i) => i.status === "in-progress").length, [allItems]);
+  const pending = useMemo(() => allItems.filter((i) => i.status === "pending").length, [allItems]);
+  const overdue = useMemo(() => allItems.filter((i) => i.status === "overdue").length, [allItems]);
   const completionPct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const lastRefreshedText = lastRefreshed
-    ? lastRefreshed.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })
-    : null;
 
   // Upcoming deadlines: not completed + has due date + sort soonest first
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const upcomingDeadlines = allItems
+  const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+  const upcomingDeadlines = useMemo(() => allItems
     .filter((i) => i.status !== "completed" && i.dueDate)
     .map((i) => ({
       title: i.title,
@@ -168,12 +180,12 @@ function OfficeDashboard({ user }) {
       daysLeft: Math.ceil((new Date(i.dueDate) - today) / 86400000),
     }))
     .sort((a, b) => a.daysLeft - b.daysLeft)
-    .slice(0, 5);
+    .slice(0, 5), [allItems, today]);
 
   // Recent items: last 5 ordered by due date desc
-  const recentItems = [...allItems]
+  const recentItems = useMemo(() => [...allItems]
     .sort((a, b) => (b.dueDate ?? "").localeCompare(a.dueDate ?? ""))
-    .slice(0, 5);
+    .slice(0, 5), [allItems]);
 
   const statusConfig = {
     completed:     { label: "Completed",   color: "bg-green-100 text-green-700",  icon: CheckCircle2 },
@@ -209,8 +221,8 @@ function OfficeDashboard({ user }) {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={loadOffice} disabled={loading}>
-            {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</> : <><RefreshCw className="mr-2 h-4 w-4" />Refresh</>}
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</> : <><RefreshCw className="mr-2 h-4 w-4" />Refresh</>}
           </Button>
           <Button onClick={() => navigate("/my-checklists")} className="shrink-0">
             <ClipboardList className="mr-2 h-4 w-4" />
@@ -223,7 +235,7 @@ function OfficeDashboard({ user }) {
         <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
           <span className="flex-1">{error}</span>
-          <Button variant="outline" size="sm" className="h-8" onClick={loadOffice}>
+          <Button variant="outline" size="sm" className="h-8" onClick={() => refetch()}>
             Retry
           </Button>
         </div>
@@ -429,183 +441,164 @@ function AdminDashboard({ user }) {
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
 
-  // ── Live clock ───────────────────────────────────────────────────────────────
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const dateStr = now.toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const timeStr = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
   // ── Year filter ──────────────────────────────────────────────────────────────
   const [year, setYear] = useState(currentYear);
-  const [yearOptions, setYearOptions] = useState([]);
-  const [lastRefreshed, setLastRefreshed] = useState(null);
-
-  // ── Shared data ─────────────────────────────────────────────────────────────
-  const [areas,   setAreas]   = useState([]);
-  const [offices, setOffices] = useState([]);
-  const [users,   setUsers]   = useState([]);
-  const [matrix,  setMatrix]  = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
 
   // ── Governance tab filters ───────────────────────────────────────────────────
-  const [searchQuery,   setSearchQuery]   = useState('');
-  const [statusFilter,  setStatusFilter]  = useState('all');
-  const [healthFilter,  setHealthFilter]  = useState('all');
+  const [searchQuery,  setSearchQuery]  = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [healthFilter, setHealthFilter] = useState('all');
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [areasRes, officesRes, usersRes, matrixRes] = await Promise.allSettled([
-        getGovernanceAreasWithStats(year),
-        getOffices(),
-        getUsers(),
-        getComplianceMatrix(year),
-      ]);
-      if (areasRes.status === 'fulfilled') {
-        setAreas(areasRes.value.governanceAreas || []);
-      }
-      if (officesRes.status === 'fulfilled') {
-        const payload = officesRes.value;
-        const list = Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload?.offices)
-          ? payload.offices
-          : [];
-        setOffices(list);
-      }
-      if (usersRes.status === 'fulfilled') {
-        const payload = usersRes.value;
-        const list = Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload?.users)
-          ? payload.users
-          : [];
-        setUsers(list);
-      }
-      if (matrixRes.status === 'fulfilled') {
-        const m = {};
-        for (const cell of (matrixRes.value.cells || [])) {
-          if (!m[cell.governance_area_id]) m[cell.governance_area_id] = {};
-          m[cell.governance_area_id][cell.office_id] = cell.status;
-        }
-        setMatrix(m);
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load dashboard data.');
-    } finally {
-      setLoading(false);
-      setLastRefreshed(new Date());
+  // ── Data fetching via React Query (cached, no re-fetch on every nav) ─────────
+  const areasQuery  = useQuery({
+    queryKey: ['governance-areas-stats', year],
+    queryFn:  () => getGovernanceAreasWithStats(year),
+    staleTime: 2 * 60 * 1000,
+  });
+  const officesQuery = useQuery({
+    queryKey: ['offices'],
+    queryFn:  getOffices,
+    staleTime: 5 * 60 * 1000,
+  });
+  const usersQuery = useQuery({
+    queryKey: ['users'],
+    queryFn:  getUsers,
+    staleTime: 5 * 60 * 1000,
+  });
+  const matrixQuery = useQuery({
+    queryKey: ['compliance-matrix', year],
+    queryFn:  () => getComplianceMatrix(year),
+    staleTime: 2 * 60 * 1000,
+  });
+  const yearsQuery = useQuery({
+    queryKey: ['years', 'active'],
+    queryFn:  () => getYears({ includeInactive: false }),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const loading = areasQuery.isFetching || officesQuery.isFetching || usersQuery.isFetching || matrixQuery.isFetching;
+  const anyErr  = areasQuery.error || officesQuery.error || usersQuery.error || matrixQuery.error;
+  const error   = anyErr?.response?.data?.message || (anyErr ? 'Failed to load dashboard data.' : null);
+
+  const loadAll = useCallback(() => {
+    areasQuery.refetch();
+    officesQuery.refetch();
+    usersQuery.refetch();
+    matrixQuery.refetch();
+  }, [areasQuery, officesQuery, usersQuery, matrixQuery]);
+
+  // ── Derived data ─────────────────────────────────────────────────────────────
+  const areas = useMemo(() => areasQuery.data?.governanceAreas ?? [], [areasQuery.data]);
+  const offices = useMemo(() => {
+    const p = officesQuery.data;
+    return Array.isArray(p?.data) ? p.data : Array.isArray(p?.offices) ? p.offices : [];
+  }, [officesQuery.data]);
+  const users = useMemo(() => {
+    const p = usersQuery.data;
+    return Array.isArray(p?.data) ? p.data : Array.isArray(p?.users) ? p.users : [];
+  }, [usersQuery.data]);
+  const matrix = useMemo(() => {
+    const m = {};
+    for (const cell of (matrixQuery.data?.cells || [])) {
+      if (!m[cell.governance_area_id]) m[cell.governance_area_id] = {};
+      m[cell.governance_area_id][cell.office_id] = cell.status;
     }
-  }, [year]);
+    return m;
+  }, [matrixQuery.data]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  const yearOptions = useMemo(() => {
+    const yrs = (yearsQuery.data?.years || []).map((y) => y.year).sort((a, b) => b - a);
+    return yrs.length > 0 ? yrs : Array.from({ length: 5 }, (_, i) => currentYear - i);
+  }, [yearsQuery.data, currentYear]);
 
-  // Load managed years for the dropdown, with fallback
   useEffect(() => {
-    getYears({ includeInactive: false })
-      .then((res) => {
-        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
-        if (yrs.length > 0) {
-          setYearOptions(yrs);
-          if (!yrs.includes(year)) {
-            setYear(yrs[0]);
-          }
-        } else {
-          const fallback = Array.from({ length: 5 }, (_, i) => currentYear - i);
-          setYearOptions(fallback);
-        }
-      })
-      .catch(() => {
-        const fallback = Array.from({ length: 5 }, (_, i) => currentYear - i);
-        setYearOptions(fallback);
-      });
-  }, [currentYear]);
+    if (yearOptions.length > 0 && !yearOptions.includes(year)) setYear(yearOptions[0]);
+  }, [yearOptions]);
 
-  // ── Computed values ────────────────────────────────────────────────────────
-  const activeAreas   = areas.filter((a) => a.is_active);
-  const activeOffices = offices.filter((o) => o.is_active);
-  const totalSubmissions = areas.reduce((s, a) => s + (a.submissions || 0), 0);
-  const totalTemplates   = areas.reduce((s, a) => s + (a.templates   || 0), 0);
-  const atRiskCount      = activeAreas.filter((a) => a.offices_total > 0 && (a.offices_compliant / a.offices_total) < 0.5).length;
+  const lastRefreshedText = useMemo(() => {
+    const ts = matrixQuery.dataUpdatedAt || areasQuery.dataUpdatedAt;
+    return ts ? new Date(ts).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : null;
+  }, [matrixQuery.dataUpdatedAt, areasQuery.dataUpdatedAt]);
 
-  const totalCells     = activeAreas.length * activeOffices.length;
-  const approvedCells  = activeAreas.reduce((s, a) => s + activeOffices.filter((o) => matrix[a.id]?.[o.id] === 'APPROVED').length, 0);
-  const overallPct     = totalCells > 0 ? Math.round((approvedCells / totalCells) * 100) : 0;
+  // ── Computed values (memoized to prevent recalc on filter/search changes) ────
+  const activeAreas   = useMemo(() => areas.filter((a) => a.is_active), [areas]);
+  const activeOffices = useMemo(() => offices.filter((o) => o.is_active), [offices]);
+  const totalSubmissions = useMemo(() => areas.reduce((s, a) => s + (a.submissions || 0), 0), [areas]);
+  const totalTemplates   = useMemo(() => areas.reduce((s, a) => s + (a.templates   || 0), 0), [areas]);
+  const atRiskCount      = useMemo(() => activeAreas.filter((a) => a.offices_total > 0 && (a.offices_compliant / a.offices_total) < 0.5).length, [activeAreas]);
 
-  const getRoleCode = (u) => {
-    const raw =
-      (u.role && String(u.role)) ||
-      (u.role_code && String(u.role_code)) ||
-      '';
+  const totalCells    = activeAreas.length * activeOffices.length;
+  const approvedCells = useMemo(() => activeAreas.reduce((s, a) => s + activeOffices.filter((o) => matrix[a.id]?.[o.id] === 'APPROVED').length, 0), [activeAreas, activeOffices, matrix]);
+  const overallPct    = totalCells > 0 ? Math.round((approvedCells / totalCells) * 100) : 0;
+
+  const getRoleCode = useCallback((u) => {
+    const raw = (u.role && String(u.role)) || (u.role_code && String(u.role_code)) || '';
     return raw.toUpperCase();
-  };
+  }, []);
 
-  const adminCount  = users.filter((u) => getRoleCode(u) === 'ADMIN').length;
-  const staffCount  = users.filter((u) => getRoleCode(u) === 'STAFF').length;
-  const officeCount = users.filter((u) => getRoleCode(u) === 'OFFICE').length;
+  const adminCount  = useMemo(() => users.filter((u) => getRoleCode(u) === 'ADMIN').length,  [users, getRoleCode]);
+  const staffCount  = useMemo(() => users.filter((u) => getRoleCode(u) === 'STAFF').length,  [users, getRoleCode]);
+  const officeCount = useMemo(() => users.filter((u) => getRoleCode(u) === 'OFFICE').length, [users, getRoleCode]);
 
   // ── Chart data ──────────────────────────────────────────────────────────────
-  const areaChartData = activeAreas.map((a) => ({
+  const areaChartData = useMemo(() => activeAreas.map((a) => ({
     name: a.code,
     pct: a.offices_total > 0 ? Math.round((a.offices_compliant / a.offices_total) * 100) : 0,
-  }));
-  const roleData = [
+  })), [activeAreas]);
+
+  const roleData = useMemo(() => [
     { name: 'Admin',  value: adminCount,  fill: '#3b82f6' },
     { name: 'Staff',  value: staffCount,  fill: '#8b5cf6' },
     { name: 'Office', value: officeCount, fill: '#10b981' },
-  ].filter((d) => d.value > 0);
+  ].filter((d) => d.value > 0), [adminCount, staffCount, officeCount]);
 
-  // Health distribution for pie chart
-  const healthDistData = [
-    { name: 'On Track (≥80%)',      value: activeAreas.filter((a) => a.offices_total > 0 && (a.offices_compliant / a.offices_total) >= 0.8).length,  fill: '#22c55e' },
-    { name: 'Needs Attention',      value: activeAreas.filter((a) => a.offices_total > 0 && (a.offices_compliant / a.offices_total) >= 0.5 && (a.offices_compliant / a.offices_total) < 0.8).length, fill: '#f59e0b' },
-    { name: 'At Risk (<50%)',        value: atRiskCount, fill: '#ef4444' },
-    { name: 'No Data',              value: activeAreas.filter((a) => !a.offices_total).length, fill: '#d1d5db' },
-  ].filter((d) => d.value > 0);
+  const healthDistData = useMemo(() => [
+    { name: 'On Track (≥80%)', value: activeAreas.filter((a) => a.offices_total > 0 && (a.offices_compliant / a.offices_total) >= 0.8).length,                                                           fill: '#22c55e' },
+    { name: 'Needs Attention', value: activeAreas.filter((a) => a.offices_total > 0 && (a.offices_compliant / a.offices_total) >= 0.5 && (a.offices_compliant / a.offices_total) < 0.8).length, fill: '#f59e0b' },
+    { name: 'At Risk (<50%)',  value: atRiskCount,                                                                                                                                                       fill: '#ef4444' },
+    { name: 'No Data',         value: activeAreas.filter((a) => !a.offices_total).length,                                                                                                               fill: '#d1d5db' },
+  ].filter((d) => d.value > 0), [activeAreas, atRiskCount]);
 
-  // Office leaderboard — approval rate per office across all active areas
-  const officeLeaderboard = (activeOffices.length > 0 ? activeOffices : offices)
-    .map((o) => {
-      const areasToCheck = activeAreas.length > 0 ? activeAreas : areas;
-      const total    = areasToCheck.length;
-      const approved = areasToCheck.filter((a) => matrix[a.id]?.[o.id] === 'APPROVED').length;
-      const pct      = total > 0 ? Math.round((approved / total) * 100) : 0;
-      return { id: o.id, name: o.name, approved, total, pct };
-    })
-    .sort((a, b) => b.pct - a.pct);
-  const top5    = officeLeaderboard.slice(0, 5);
-  const bottom5 = officeLeaderboard.slice(-5).reverse();
+  const officeLeaderboard = useMemo(() => {
+    const areasToCheck = activeAreas.length > 0 ? activeAreas : areas;
+    return (activeOffices.length > 0 ? activeOffices : offices)
+      .map((o) => {
+        const total    = areasToCheck.length;
+        const approved = areasToCheck.filter((a) => matrix[a.id]?.[o.id] === 'APPROVED').length;
+        const pct      = total > 0 ? Math.round((approved / total) * 100) : 0;
+        return { id: o.id, name: o.name, approved, total, pct };
+      })
+      .sort((a, b) => b.pct - a.pct);
+  }, [activeAreas, areas, activeOffices, offices, matrix]);
 
-  // Areas with zero submissions
-  const zeroSubmissionAreas = areas.filter((a) => !a.submissions || a.submissions === 0);
+  const top5    = useMemo(() => officeLeaderboard.slice(0, 5),            [officeLeaderboard]);
+  const bottom5 = useMemo(() => officeLeaderboard.slice(-5).reverse(),    [officeLeaderboard]);
 
-  const officeStatusOffices = activeOffices.length > 0 ? activeOffices : offices;
-  const officeStatusAreas   = activeAreas.length   > 0 ? activeAreas   : areas;
-  const officeStatusData = officeStatusOffices.map((o) => {
-    let approved = 0, pending = 0, notApproved = 0, noUploaded = 0;
-    for (const area of officeStatusAreas) {
-      const s = matrix[area.id]?.[o.id] || 'NOT_SUBMITTED';
-      if (s === 'APPROVED')                                    approved++;
-      else if (s === 'PENDING')                                pending++;
-      else if (s === 'DENIED' || s === 'REVISION_REQUESTED')   notApproved++;
-      else                                                     noUploaded++;
-    }
-    return {
-      name: o.name.length > 20 ? o.name.slice(0, 18) + '…' : o.name,
-      Approved: approved,
-      Pending: pending,
-      'Not approved': notApproved,
-      'No uploaded': noUploaded,
-    };
-  });
+  const zeroSubmissionAreas = useMemo(() => areas.filter((a) => !a.submissions || a.submissions === 0), [areas]);
 
-  // Governance tab filtered areas
-  const filteredAreas = areas.filter((a) => {
+  const officeStatusData = useMemo(() => {
+    const sos = activeOffices.length > 0 ? activeOffices : offices;
+    const sas = activeAreas.length   > 0 ? activeAreas   : areas;
+    return sos.map((o) => {
+      let approved = 0, pending = 0, notApproved = 0, noUploaded = 0;
+      for (const area of sas) {
+        const s = matrix[area.id]?.[o.id] || 'NOT_SUBMITTED';
+        if (s === 'APPROVED')                                  approved++;
+        else if (s === 'PENDING')                              pending++;
+        else if (s === 'DENIED' || s === 'REVISION_REQUESTED') notApproved++;
+        else                                                   noUploaded++;
+      }
+      return {
+        name: o.name.length > 20 ? o.name.slice(0, 18) + '…' : o.name,
+        Approved: approved,
+        Pending: pending,
+        'Not approved': notApproved,
+        'No uploaded': noUploaded,
+      };
+    });
+  }, [activeOffices, offices, activeAreas, areas, matrix]);
+
+  const filteredAreas = useMemo(() => areas.filter((a) => {
     const q = searchQuery.toLowerCase();
     const matchSearch =
       a.name.toLowerCase().includes(q) ||
@@ -622,7 +615,7 @@ function AdminDashboard({ user }) {
       (healthFilter === 'attention' && pct >= 50 && pct < 80) ||
       (healthFilter === 'at-risk'   && pct < 50);
     return matchSearch && matchStatus && matchHealth;
-  });
+  }), [areas, searchQuery, statusFilter, healthFilter]);
 
   // ── Quick action tiles ─────────────────────────────────────────────────────
   const quickActions = [
@@ -646,8 +639,8 @@ function AdminDashboard({ user }) {
           </p>
           <div className="flex items-center gap-2 mt-1.5">
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">{dateStr}</span>
-            <span className="text-xs font-mono font-semibold text-foreground tabular-nums">{timeStr}</span>
+            <LiveClock />
+            {lastRefreshedText && <span className="text-xs text-muted-foreground">· Updated {lastRefreshedText}</span>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -664,6 +657,7 @@ function AdminDashboard({ user }) {
           <Button variant="outline" size="sm" onClick={loadAll} disabled={loading}>
             {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</> : <><RefreshCw className="mr-2 h-4 w-4" />Refresh</>}
           </Button>
+
         </div>
       </div>
 
@@ -671,7 +665,7 @@ function AdminDashboard({ user }) {
         <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
           <span>{error}</span>
-          <button className="ml-auto text-red-500 hover:text-red-700" onClick={() => setError(null)}>✕</button>
+          <button className="ml-auto text-red-500 hover:text-red-700" onClick={loadAll}>Retry</button>
         </div>
       )}
 
@@ -1381,8 +1375,369 @@ function AdminDashboard({ user }) {
   );
 }
 
+// ─── Staff Dashboard ──────────────────────────────────────────────────────────
+function StaffDashboard({ user }) {
+  const navigate = useNavigate();
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+
+  const { data: yearsData } = useQuery({
+    queryKey: ['years', 'active'],
+    queryFn: () => getYears({ includeInactive: false }),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const yearOptions = useMemo(() => {
+    const yrs = (yearsData?.years || []).map((y) => y.year).sort((a, b) => b - a);
+    return yrs.length > 0 ? yrs : Array.from({ length: 5 }, (_, i) => currentYear - i);
+  }, [yearsData, currentYear]);
+
+  useEffect(() => {
+    if (yearOptions.length > 0 && !yearOptions.includes(year)) setYear(yearOptions[0]);
+  }, [yearOptions]);
+
+  const {
+    data: summaryData, isFetching: summaryFetching,
+    refetch: refetchSummary, dataUpdatedAt: summaryUpdatedAt,
+  } = useQuery({
+    queryKey: ['report-summary-staff', year],
+    queryFn: () => getReportSummary({ year }),
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const { data: submissionsData, isFetching: submissionsFetching, refetch: refetchSubmissions } = useQuery({
+    queryKey: ['submissions-staff-recent'],
+    queryFn: () => listSubmissions({ limit: 10, page: 1 }),
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const loading = summaryFetching || submissionsFetching;
+
+  const lastRefreshedText = useMemo(() => {
+    return summaryUpdatedAt
+      ? new Date(summaryUpdatedAt).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })
+      : null;
+  }, [summaryUpdatedAt]);
+
+  const breakdown = summaryData?.breakdown || [];
+  const statusMap = useMemo(() => {
+    const m = { PENDING: 0, APPROVED: 0, DENIED: 0, REVISION_REQUESTED: 0 };
+    for (const row of breakdown) {
+      if (m[row.status] !== undefined) m[row.status] = Number(row.count);
+    }
+    return m;
+  }, [breakdown]);
+
+  const total = useMemo(
+    () => Object.values(statusMap).reduce((a, b) => a + b, 0),
+    [statusMap]
+  );
+  const reviewed = statusMap.APPROVED + statusMap.DENIED + statusMap.REVISION_REQUESTED;
+  const approvalRate = reviewed > 0 ? Math.round((statusMap.APPROVED / reviewed) * 100) : null;
+  const recentSubmissions = submissionsData?.data || [];
+
+  const chartData = useMemo(() => [
+    { name: 'Pending',        count: statusMap.PENDING,            fill: '#f59e0b' },
+    { name: 'Approved',       count: statusMap.APPROVED,           fill: '#22c55e' },
+    { name: 'Denied',         count: statusMap.DENIED,             fill: '#ef4444' },
+    { name: 'Needs Revision', count: statusMap.REVISION_REQUESTED, fill: '#3b82f6' },
+  ], [statusMap]);
+
+  const submissionStatusConfig = {
+    PENDING:            { label: 'Pending',        color: 'bg-amber-100 text-amber-700',  icon: Clock },
+    APPROVED:           { label: 'Approved',       color: 'bg-green-100 text-green-700',  icon: CheckCircle2 },
+    DENIED:             { label: 'Denied',         color: 'bg-red-100 text-red-700',      icon: XCircle },
+    REVISION_REQUESTED: { label: 'Needs Revision', color: 'bg-blue-100 text-blue-700',    icon: AlertCircle },
+  };
+
+  const quickActions = [
+    { label: 'Review Submissions', icon: ClipboardList, path: '/submissions',   color: 'text-blue-600',   bg: 'bg-blue-50' },
+    { label: 'View Reports',        icon: BarChart3,     path: '/reports',       color: 'text-violet-600', bg: 'bg-violet-50' },
+    { label: 'Notifications',       icon: Bell,          path: '/notifications', color: 'text-amber-600',  bg: 'bg-amber-50' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Welcome back, <span className="font-medium text-foreground">{user?.full_name || user?.name || user?.email}</span>
+          </p>
+          <div className="flex items-center gap-2 mt-1.5">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+            <LiveClock />
+            {lastRefreshedText && <span className="text-xs text-muted-foreground">· Updated {lastRefreshedText}</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+            <SelectTrigger className="w-28 h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {yearOptions.map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline" size="sm"
+            onClick={() => { refetchSummary(); refetchSubmissions(); }}
+            disabled={loading}
+          >
+            {loading
+              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</>
+              : <><RefreshCw className="mr-2 h-4 w-4" />Refresh</>}
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 max-w-xs">
+          <TabsTrigger value="overview" className="flex items-center gap-1.5">
+            <LayoutGrid className="h-3.5 w-3.5" />Overview
+          </TabsTrigger>
+          <TabsTrigger value="submissions" className="flex items-center gap-1.5">
+            <ClipboardList className="h-3.5 w-3.5" />Submissions
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ═══════════════════════════════ OVERVIEW TAB ════════════════════ */}
+        <TabsContent value="overview" className="space-y-6">
+          {summaryFetching && !summaryData ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin mr-3" />Loading…
+            </div>
+          ) : (
+            <>
+              {/* KPI Strip */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Submissions</CardTitle>
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{total}</div>
+                    <p className="text-xs text-muted-foreground mt-1">for {year}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Pending Review</CardTitle>
+                    <Clock className="h-4 w-4 text-amber-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{statusMap.PENDING}</div>
+                    <p className="text-xs text-muted-foreground mt-1">awaiting review</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Approved</CardTitle>
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{statusMap.APPROVED}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {total > 0 ? `${Math.round((statusMap.APPROVED / total) * 100)}% of total` : 'no submissions'}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className={statusMap.REVISION_REQUESTED > 0 ? 'border-blue-200 bg-blue-50/30' : ''}>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Needs Revision</CardTitle>
+                    <AlertCircle className={cn('h-4 w-4', statusMap.REVISION_REQUESTED > 0 ? 'text-blue-500' : 'text-muted-foreground')} />
+                  </CardHeader>
+                  <CardContent>
+                    <div className={cn('text-2xl font-bold', statusMap.REVISION_REQUESTED > 0 ? 'text-blue-600' : '')}>
+                      {statusMap.REVISION_REQUESTED}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">need follow-up</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                {/* Submission Snapshot */}
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-muted-foreground" />
+                      Submission Snapshot — {year}
+                    </CardTitle>
+                    <CardDescription>Overview of all submission statuses</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {approvalRate !== null && (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium">Approval Rate</span>
+                          <span className={cn('font-bold',
+                            approvalRate >= 80 ? 'text-green-600' : approvalRate >= 50 ? 'text-amber-600' : 'text-red-600'
+                          )}>{approvalRate}%</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-3">
+                          <div
+                            className={cn('h-3 rounded-full transition-all',
+                              approvalRate >= 80 ? 'bg-green-500' : approvalRate >= 50 ? 'bg-amber-400' : 'bg-red-500'
+                            )}
+                            style={{ width: `${approvalRate}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">{statusMap.APPROVED} approved of {reviewed} reviewed</p>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                      {[
+                        { label: 'Pending',        value: statusMap.PENDING,            icon: Clock,        color: 'text-amber-600' },
+                        { label: 'Approved',       value: statusMap.APPROVED,           icon: CheckCircle2, color: 'text-green-600' },
+                        { label: 'Denied',         value: statusMap.DENIED,             icon: XCircle,      color: 'text-red-600' },
+                        { label: 'Needs Revision', value: statusMap.REVISION_REQUESTED, icon: AlertCircle,  color: 'text-blue-600' },
+                      ].map(({ label, value, icon: Icon, color }) => (
+                        <div key={label} className="flex items-center gap-3">
+                          <div className={cn('p-2 rounded-lg bg-muted', color)}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">{label}</p>
+                            <p className="text-sm font-semibold">{value}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/reports')}>
+                      View Full Reports <ArrowRight className="ml-2 h-3 w-3" />
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Quick Actions */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="h-5 w-5 text-muted-foreground" />
+                      Quick Actions
+                    </CardTitle>
+                    <CardDescription>Jump to frequently used pages</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {quickActions.map((a) => (
+                      <button
+                        key={a.path}
+                        onClick={() => navigate(a.path)}
+                        className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted/60 transition-colors text-left border"
+                      >
+                        <div className={cn('p-1.5 rounded-md', a.bg)}>
+                          <a.icon className={cn('h-4 w-4', a.color)} />
+                        </div>
+                        {a.label}
+                        <ArrowRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Status bar chart */}
+              {total > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-muted-foreground" />
+                      Submission Status Breakdown
+                    </CardTitle>
+                    <CardDescription>Count by status for {year}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={chartData} barSize={48}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <RechartsTooltip />
+                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                          {chartData.map((entry, i) => (
+                            <Cell key={i} fill={entry.fill} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+        </TabsContent>
+
+        {/* ═══════════════════════════════ SUBMISSIONS TAB ═════════════════ */}
+        <TabsContent value="submissions" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5 text-muted-foreground" />
+                  Recent Submissions
+                </CardTitle>
+                <CardDescription>Latest submissions across all offices</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => navigate('/submissions')}>
+                View all <ArrowRight className="ml-1 h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {submissionsFetching ? (
+                <div className="flex items-center justify-center py-16 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin mr-3" />Loading…
+                </div>
+              ) : recentSubmissions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-14 text-muted-foreground gap-2">
+                  <FileText className="h-8 w-8 opacity-30" />
+                  <p className="text-sm">No submissions found</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {recentSubmissions.map((s) => {
+                    const cfg = submissionStatusConfig[s.status] || {
+                      label: s.status, color: 'bg-muted text-muted-foreground', icon: FileText,
+                    };
+                    const StatusIcon = cfg.icon;
+                    return (
+                      <div
+                        key={s.id}
+                        className="flex items-center justify-between rounded-lg border px-3 py-2.5 gap-2 hover:bg-muted/50 transition-colors cursor-pointer"
+                        onClick={() => navigate('/submissions')}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{s.item_title || s.title || 'Submission'}</p>
+                          <p className="text-xs text-muted-foreground truncate">{s.office_name || '—'}</p>
+                        </div>
+                        <Badge className={cn('text-xs shrink-0 gap-1 border-0', cfg.color)}>
+                          <StatusIcon className="h-3 w-3" />
+                          {cfg.label}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
-  if (user?.role?.toUpperCase() === "OFFICE") return <OfficeDashboard user={user} />;
+  const role = user?.role?.toUpperCase();
+  if (role === "OFFICE") return <OfficeDashboard user={user} />;
+  if (role === "STAFF")  return <StaffDashboard  user={user} />;
   return <AdminDashboard user={user} />;
 }

@@ -60,11 +60,11 @@ export default function AppRouter() {
         {/* Main application routes - properly implemented */}
         <Route path="/governance" element={<Navigate to="/dashboard" replace />} />
         <Route path="/governance/manage" element={<RoleGuard allowedRoles={['ADMIN']}><GovernancePage /></RoleGuard>} />
-        <Route path="/governance/compliance" element={<GovernanceCompliancePage />} />
+        <Route path="/governance/compliance" element={<RoleGuard allowedRoles={['ADMIN']}><GovernanceCompliancePage /></RoleGuard>} />
         <Route path="/my-checklists" element={<RoleGuard allowedRoles={['OFFICE']}><MyChecklistsPage /></RoleGuard>} />
         <Route path="/submissions" element={<SubmissionsPage />} />
         <Route path="/reviews" element={<div className="p-6"><h1 className="text-2xl font-bold">Reviews</h1><p>Manage reviews and approvals.</p></div>} />
-        <Route path="/templates" element={<TemplatesAllPage />} />
+        <Route path="/templates" element={<RoleGuard allowedRoles={['ADMIN']}><TemplatesAllPage /></RoleGuard>} />
         <Route path="/templates/manage" element={<RoleGuard allowedRoles={['ADMIN']}><TemplatesManagePage /></RoleGuard>} />
         <Route path="/templates/categories" element={<RoleGuard allowedRoles={['ADMIN']}><TemplatesCategoriesPage /></RoleGuard>} />
         <Route
@@ -86,7 +86,7 @@ export default function AppRouter() {
         <Route 
           path="/offices" 
           element={
-            <RoleGuard allowedRoles={['ADMIN']}>
+            <RoleGuard allowedRoles={['ADMIN', 'STAFF']}>
               <OfficesPage />
             </RoleGuard>
           }

@@ -26,8 +26,8 @@ r.get("/stats",             shortCache, asyncHandler(areasWithStatsHandler));
 r.get("/compliance-matrix", shortCache, asyncHandler(complianceMatrixHandler));
 r.get("/:id",               longCache,  asyncHandler(getGovernanceAreaHandler));
 
-// READ - assigned offices for a governance area (admin only)
-r.get("/:id/assigned-offices", requireRole("ADMIN"), shortCache, asyncHandler(listOfficesForAreaHandler));
+// READ - assigned offices for a governance area (admin + staff for submission review)
+r.get("/:id/assigned-offices", requireRole("ADMIN", "STAFF"), shortCache, asyncHandler(listOfficesForAreaHandler));
 
 // WRITE - ADMIN only
 r.post(

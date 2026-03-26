@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import { getSubmissionById } from "../models/submissions.model.js";
 import { addNewFileVersion, listFiles, getUserTotalUploadedBytes } from "../models/submissionFiles.model.js";
 import { touchSubmissionSubmittedBy } from "../models/submissions.model.js";
-import { createNotification } from "../models/notifications.model.js";
+import { createNotification, createNotificationsBulk } from "../models/notifications.model.js";
 import { pool } from "../config/db.js";
 import { env } from "../config/env.js";
 
@@ -98,14 +98,15 @@ export async function uploadSubmissionFileHandler(req, res) {
       []
     );
 
-    for (const user of staffUsers) {
-      await createNotification({
-        userId: user.id,
-        type: "SUBMISSION_RECEIVED",
-        title: `New submission file - ${submission.office_name}`,
-        body: `${submission.item_title}: ${req.file.originalname}`,
-        linkSubmissionId: submissionId,
-      });
+    const notifications = staffUsers.map(user => ({
+      userId: user.id,
+      type: "SUBMISSION_RECEIVED",
+      title: `New submission file - ${submission.office_name}`,
+      body: `${submission.item_title}: ${req.file.originalname}`,
+      linkSubmissionId: submissionId,
+    }));
+    if (notifications.length > 0) {
+      await createNotificationsBulk(notifications);
     }
   }
 

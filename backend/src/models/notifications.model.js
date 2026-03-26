@@ -14,6 +14,30 @@ export async function createNotification({ userId, type, title, body, linkSubmis
 }
 
 /**
+ * Bulk create notifications for multiple users
+ */
+export async function createNotificationsBulk(notifications) {
+  if (!notifications || notifications.length === 0) return [];
+  
+  const values = [];
+  const queryParams = [];
+  let paramIndex = 1;
+
+  for (const n of notifications) {
+    values.push(`($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`);
+    queryParams.push(n.userId, n.type, n.title, n.body ?? null, n.linkSubmissionId ?? null);
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO notifications (user_id, type, title, body, link_submission_id)
+     VALUES ${values.join(", ")}
+     RETURNING *`,
+    queryParams
+  );
+  return rows;
+}
+
+/**
  * Get unread notifications for a user
  */
 export async function getUnreadNotifications(userId, limit = 20, offset = 0) {

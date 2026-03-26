@@ -34,14 +34,14 @@ r.post(
   asyncHandler(createOfficeHandler)
 );
 
-// READ - List all offices
-r.get("/", requireRole("ADMIN"), mediumCache, asyncHandler(listOfficesHandler));
+// READ - List all offices (staff can view for reference)
+r.get("/", requireRole("ADMIN", "STAFF"), mediumCache, asyncHandler(listOfficesHandler));
 
 // READ - Admin overview of all assignments for a year
 r.get("/all-assignments", requireRole("ADMIN"), shortCache, asyncHandler(listAllAssignmentsHandler));
 
-// READ - Get single office by ID
-r.get("/:id", requireRole("ADMIN"), mediumCache, asyncHandler(getOfficeHandler));
+// READ - Get single office by ID (staff can view)
+r.get("/:id", requireRole("ADMIN", "STAFF"), mediumCache, asyncHandler(getOfficeHandler));
 
 // UPDATE - Update office details
 r.patch(

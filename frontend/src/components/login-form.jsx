@@ -286,6 +286,7 @@ export function LoginForm({
 
   // Handle form submission
   const handleSubmit = (e) => {
+    e.preventDefault();
     if (rememberMe && email) {
       localStorage.setItem("rememberedEmail", email);
       localStorage.setItem("rememberMe", "true");

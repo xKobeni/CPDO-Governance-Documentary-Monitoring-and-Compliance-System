@@ -7,7 +7,7 @@ export const NAV_ITEMS = [
   {
     label: "Governance",
     href: "/governance",
-    roles: ["ADMIN", "STAFF"],
+    roles: ["ADMIN"],
   },
   {
     label: "Submissions",
@@ -22,7 +22,7 @@ export const NAV_ITEMS = [
   {
     label: "Templates",
     href: "/templates",
-    roles: ["ADMIN", "STAFF"],
+    roles: ["ADMIN"],
   },
   {
     label: "Users",

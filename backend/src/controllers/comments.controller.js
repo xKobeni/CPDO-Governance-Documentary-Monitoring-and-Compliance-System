@@ -2,7 +2,7 @@ import { z } from "zod";
 import { pool } from "../config/db.js";
 import { createComment, getSubmissionComments, getCommentById, deleteComment } from "../models/comments.model.js";
 import { getSubmissionById } from "../models/submissions.model.js";
-import { createNotification } from "../models/notifications.model.js";
+import { createNotification, createNotificationsBulk } from "../models/notifications.model.js";
 import { findUserById } from "../models/users.model.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
@@ -65,14 +65,15 @@ export async function createCommentHandler(req, res) {
        WHERE r.code IN ('ADMIN', 'STAFF') AND u.is_active = TRUE`,
       []
     );
-    for (const user of staffUsers) {
-      await createNotification({
-        userId: user.id,
-        type: "NEW_COMMENT",
-        title,
-        body,
-        linkSubmissionId: submissionId,
-      });
+    const notifications = staffUsers.map(user => ({
+      userId: user.id,
+      type: "NEW_COMMENT",
+      title,
+      body,
+      linkSubmissionId: submissionId,
+    }));
+    if (notifications.length > 0) {
+      await createNotificationsBulk(notifications);
     }
   } else {
     // Staff/Admin commented → notify the office user who submitted

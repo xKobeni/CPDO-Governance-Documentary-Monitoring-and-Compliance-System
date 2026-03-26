@@ -26,7 +26,7 @@ function updateListResponse(response, updater) {
   };
 }
 
-export function useNotifications({ page = 1, limit = 100, enabled = true } = {}) {
+export function useNotifications({ page = 1, limit = 20, enabled = true } = {}) {
   return useQuery({
     queryKey: notificationKeys.list(page, limit),
     queryFn: () => getNotifications({ page, limit }),

@@ -9,3 +9,8 @@ export async function getNoUploadReport(params = {}) {
   const response = await api.get('/reports/no-upload', { params });
   return response.data;
 }
+
+export async function getReportOverview(params = {}) {
+  const response = await api.get('/dashboard/overview', { params });
+  return response.data;
+}
