@@ -87,7 +87,10 @@ export async function getAuditLogs(limit = 50, offset = 0, filters = {}) {
   };
 }
 
-export async function getAuditStats() {
+export async function getAuditStats(userId = null) {
+  const whereClause = userId ? `WHERE actor_user_id = $1` : '';
+  const params = userId ? [userId] : [];
+
   const query = `
     SELECT 
       COUNT(*) as total_logs,
@@ -96,8 +99,9 @@ export async function getAuditStats() {
       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') as logs_today,
       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as logs_week
     FROM audit_logs
+    ${whereClause}
   `;
   
-  const result = await pool.query(query);
+  const result = await pool.query(query, params);
   return result.rows[0];
 }

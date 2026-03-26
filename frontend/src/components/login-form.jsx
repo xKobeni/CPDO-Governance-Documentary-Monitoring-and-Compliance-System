@@ -236,6 +236,7 @@ export function LoginForm({
   className,
   onSubmit,
   error,
+  errorType = "error",
   isLoading,
   ...props
 }) {
@@ -311,9 +312,15 @@ export function LoginForm({
               </div>
               
               {error && (
-                <Alert variant="destructive">
-                  {error}
-                </Alert>
+                errorType === "warning" ? (
+                  <Alert className="border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200">
+                    {error}
+                  </Alert>
+                ) : (
+                  <Alert variant="destructive">
+                    {error}
+                  </Alert>
+                )
               )}
               
               <Field>

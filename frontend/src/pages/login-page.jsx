@@ -17,6 +17,7 @@ const SESSION_EXPIRED_KEY = "sessionExpiredReason";
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [errorType, setErrorType] = useState("error"); // "error" | "warning"
   const [showSessionExpired, setShowSessionExpired] = useState(false);
   const navigate = useNavigate();
 
@@ -31,6 +32,7 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+    setErrorType("error");
 
     const formData = new FormData(e.target);
     const email = formData.get("email");
@@ -45,10 +47,14 @@ export default function LoginPage() {
       const status = err?.response?.status;
       const message = err?.response?.data?.message;
 
-      if (status === 401) {
+      if (status === 403) {
+        // Account is deactivated
+        setErrorType("warning");
+        setError(message || "Your account has been deactivated. Please contact the administrator.");
+      } else if (status === 401) {
         setError("Wrong email or password. Please try again.");
       } else if (status === 423 && message) {
-        // Account locked message from backend (e.g. too many failed attempts)
+        // Account locked (too many failed attempts)
         setError(message);
       } else {
         setError(message || "Login failed. Please try again.");
@@ -90,6 +96,7 @@ export default function LoginPage() {
       <LoginForm 
         onSubmit={handleSubmit}
         error={error}
+        errorType={errorType}
         isLoading={isLoading}
         className="w-full max-w-4xl"
       />

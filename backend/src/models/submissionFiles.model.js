@@ -36,6 +36,50 @@ export async function getUserTotalUploadedBytes(userId) {
 }
 
 /**
+ * Deletes a file record and promotes the previous version to current (transaction-safe).
+ * Returns the deleted row so the caller can clean up B2.
+ */
+export async function deleteFileRecord(fileId) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const del = await client.query(
+      `DELETE FROM submission_files WHERE id = $1 RETURNING *`,
+      [fileId]
+    );
+    const deleted = del.rows[0];
+    if (!deleted) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+
+    // If the deleted file was current, promote the next most-recent version
+    if (deleted.is_current) {
+      await client.query(
+        `UPDATE submission_files
+         SET is_current = TRUE
+         WHERE id = (
+           SELECT id FROM submission_files
+           WHERE submission_id = $1
+           ORDER BY version_no DESC
+           LIMIT 1
+         )`,
+        [deleted.submission_id]
+      );
+    }
+
+    await client.query("COMMIT");
+    return deleted;
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Adds a new file version and makes it current (transaction-safe).
  */
 export async function addNewFileVersion(payload) {
@@ -49,9 +93,7 @@ export async function addNewFileVersion(payload) {
 
     const v = await client.query(
       `SELECT COALESCE(MAX(version_no), 0) as max_version
-       FROM submission_files
-       WHERE submission_id = $1
-       FOR UPDATE`,
+       FROM (SELECT version_no FROM submission_files WHERE submission_id = $1 FOR UPDATE) sub`,
       [submissionId]
     );
     const nextVersion = Number(v.rows[0].max_version) + 1;

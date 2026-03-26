@@ -26,7 +26,14 @@ export async function getAuditLogsHandler(req, res) {
     });
   }
 
-  const { rows, total } = await getAuditLogs(limit, offset, parsed.data);
+  const filters = { ...parsed.data };
+
+  // Non-admin users can only see their own activity
+  if (req.user.role !== "ADMIN") {
+    filters.actorUserId = req.user.sub;
+  }
+
+  const { rows, total } = await getAuditLogs(limit, offset, filters);
   return res.json(formatPaginatedResponse(rows, total, page, limit));
 }
 
@@ -35,7 +42,8 @@ export async function getAuditLogsHandler(req, res) {
  * @route GET /audit-logs/stats
  */
 export async function getAuditStatsHandler(req, res) {
-  const stats = await getAuditStats();
+  const userId = req.user.role !== "ADMIN" ? req.user.sub : null;
+  const stats = await getAuditStats(userId);
   return res.json({ stats });
 }
 
@@ -52,8 +60,15 @@ export async function exportAuditLogsHandler(req, res) {
     });
   }
 
+  const filters = { ...parsed.data };
+
+  // Non-admin users can only export their own activity
+  if (req.user.role !== "ADMIN") {
+    filters.actorUserId = req.user.sub;
+  }
+
   // Get all matching logs (up to 10000 for export)
-  const { rows } = await getAuditLogs(10000, 0, parsed.data);
+  const { rows } = await getAuditLogs(10000, 0, filters);
   
   // Convert to CSV
   const headers = ['Timestamp', 'Actor', 'Action', 'Entity Type', 'Entity ID', 'Metadata'];

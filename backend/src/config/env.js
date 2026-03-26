@@ -17,6 +17,11 @@ export const env = {
 
   cookieSecure: String(process.env.COOKIE_SECURE ?? "false") === "true",
   cookieDomain: process.env.COOKIE_DOMAIN || undefined,
+
+  b2KeyId: process.env.B2_KEY_ID?.trim(),
+  b2ApplicationKey: process.env.B2_APPLICATION_KEY?.trim(),
+  b2BucketName: process.env.B2_BUCKET_NAME?.trim(),
+  b2Endpoint: process.env.B2_ENDPOINT?.trim()
 };
 
 const required = ["databaseUrl", "corsOrigin", "accessSecret", "refreshSecret"];

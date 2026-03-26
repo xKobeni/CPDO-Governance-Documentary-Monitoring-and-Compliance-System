@@ -47,7 +47,7 @@ export const NAV_ITEMS = [
   {
     label: "Audit Logs",
     href: "/audit-logs",
-    roles: ["ADMIN"],
+    roles: ["ADMIN", "STAFF", "OFFICE"],
   },
   {
     label: "Notifications",

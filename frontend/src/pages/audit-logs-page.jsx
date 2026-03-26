@@ -53,6 +53,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
+import { useAuth } from '../hooks/use-auth';
 // Import the API functions
 import { getAuditLogs, getAuditStats, exportAuditLogs } from '../api/audit-logs';
 const actionTypes = [
@@ -90,6 +91,9 @@ const getEntityIcon = (entityType) => {
 };
 
 export default function AuditLogsPage() {
+  const { user } = useAuth();
+  const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
+
   const [auditLogs, setAuditLogs] = useState([]);
   const [stats, setStats] = useState({
     totalLogs: 0,
@@ -349,9 +353,13 @@ export default function AuditLogsPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Audit Logs</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {isAdmin ? 'Audit Logs' : 'My Activity Log'}
+          </h1>
           <p className="text-muted-foreground">
-            Monitor system activities and user actions
+            {isAdmin
+              ? 'Monitor system activities and user actions'
+              : 'A record of your own activity in the system'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -368,7 +376,7 @@ export default function AuditLogsPage() {
             ) : (
               <>
                 <Download className="mr-2 h-4 w-4" />
-                Export Logs
+                Export
               </>
             )}
           </Button>
@@ -390,16 +398,19 @@ export default function AuditLogsPage() {
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Logs</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {isAdmin ? 'Total Logs' : 'My Total Actions'}
+              </CardTitle>
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalLogs.toLocaleString()}</div>
             </CardContent>
           </Card>
+          {isAdmin && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Active Users</CardTitle>
@@ -409,9 +420,10 @@ export default function AuditLogsPage() {
               <div className="text-2xl font-bold">{stats.uniqueActors}</div>
             </CardContent>
           </Card>
+          )}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Entity Types</CardTitle>
+              <CardTitle className="text-sm font-medium">Action Types</CardTitle>
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -442,9 +454,11 @@ export default function AuditLogsPage() {
       {/* Filters and Search */}
       <Card>
         <CardHeader>
-          <CardTitle>System Activity Log</CardTitle>
+          <CardTitle>{isAdmin ? 'System Activity Log' : 'My Activity'}</CardTitle>
           <CardDescription>
-            Comprehensive record of all system activities and user actions
+            {isAdmin
+              ? 'Comprehensive record of all system activities and user actions'
+              : 'Showing only your own activity — actions you have performed in the system'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -547,7 +561,7 @@ export default function AuditLogsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Timestamp</TableHead>
-                    <TableHead>Actor</TableHead>
+                    {isAdmin && <TableHead>Actor</TableHead>}
                     <TableHead>Action</TableHead>
                     <TableHead>Entity</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -561,6 +575,7 @@ export default function AuditLogsPage() {
                         <TableCell className="text-sm">
                           {formatDate(log.createdAt)}
                         </TableCell>
+                        {isAdmin && (
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-muted-foreground" />
@@ -572,6 +587,7 @@ export default function AuditLogsPage() {
                             </div>
                           </div>
                         </TableCell>
+                        )}
                         <TableCell>
                           <Badge variant="outline" className={getActionBadgeColor(log.action)}>
                             {log.action}

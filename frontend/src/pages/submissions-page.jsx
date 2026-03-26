@@ -50,6 +50,9 @@ import {
   Upload,
   XCircle,
   Loader2,
+  Download,
+  Eye,
+  Trash2,
 } from "lucide-react";
 
 import { useAuth } from "../hooks/use-auth";
@@ -63,6 +66,9 @@ import {
   listSubmissions,
   reviewSubmission,
   uploadSubmissionFile,
+  downloadSubmissionFile,
+  viewSubmissionFile,
+  deleteSubmissionFile,
 } from "../api/submissions";
 import { getGovernanceAreasWithStats, getAssignedOffices } from "../api/governance";
 import { getOfficeChecklist } from "../api/offices";
@@ -129,6 +135,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const canReview = ["ADMIN", "STAFF"].includes(String(user?.role || "").toUpperCase());
+  const isAdmin = String(user?.role || "").toUpperCase() === "ADMIN";
 
   const [reviewAction, setReviewAction] = useState("APPROVE");
   const [decisionNotes, setDecisionNotes] = useState("");
@@ -339,6 +346,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
                           <TableHead>Type</TableHead>
                           <TableHead className="text-right">Size</TableHead>
                           <TableHead>Uploaded</TableHead>
+                          <TableHead />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -349,6 +357,43 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
                             <TableCell className="text-xs text-muted-foreground">{f.mime_type}</TableCell>
                             <TableCell className="text-right text-xs text-muted-foreground">{formatBytes(f.file_size_bytes)}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">{formatDateTime(f.uploaded_at)}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  title="View document"
+                                  onClick={() => viewSubmissionFile(f.id)}
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  title="Download"
+                                  onClick={() => downloadSubmissionFile(f.id, f.file_name)}
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                </Button>
+                                {isAdmin && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-destructive hover:text-destructive"
+                                    title="Delete file"
+                                    onClick={async () => {
+                                      if (!window.confirm(`Delete "${f.file_name}"? This cannot be undone.`)) return;
+                                      await deleteSubmissionFile(f.id);
+                                      queryClient.invalidateQueries({ queryKey: ["submissions", "files", submissionId] });
+                                    }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

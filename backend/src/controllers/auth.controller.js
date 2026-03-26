@@ -65,19 +65,31 @@ export async function login(req, res) {
   const { email, password } = parsed.data;
 
   const user = await findUserAuthByEmail(email);
-  if (!user || !user.is_active) {
-    // Manual audit logging for failed login (invalid user/inactive)
+
+  // Account exists but is deactivated — tell the user explicitly
+  if (user && !user.is_active) {
     try {
       await writeAuditLog({
-        actorUserId: user?.id || null,
+        actorUserId: user.id,
         action: "LOGIN_FAILED",
         entityType: "USER",
-        entityId: user?.id || null,
+        entityId: user.id,
+        metadata: { email, reason: "account_deactivated" }
+      });
+    } catch (e) { /* don't break login flow */ }
+    return res.status(403).json({ message: "Your account has been deactivated. Please contact the administrator." });
+  }
+
+  if (!user) {
+    try {
+      await writeAuditLog({
+        actorUserId: null,
+        action: "LOGIN_FAILED",
+        entityType: "USER",
+        entityId: null,
         metadata: { email, reason: "invalid_credentials" }
       });
-    } catch (e) {
-      // Don't break login flow for audit logging errors
-    }
+    } catch (e) { /* don't break login flow */ }
     return res.status(401).json({ message: "Invalid credentials" });
   }
 

@@ -11,8 +11,9 @@ import {
 
 const r = Router();
 
-// All audit log routes require authentication and ADMIN role
-r.use(requireAuth, checkSessionInactivity, requireRole("ADMIN"));
+// All audit log routes require authentication
+// ADMIN sees all logs; STAFF and OFFICE are scoped to their own activity in the controller
+r.use(requireAuth, checkSessionInactivity, requireRole("ADMIN", "STAFF", "OFFICE"));
 
 // GET - List audit logs with filters and pagination
 r.get("/", mediumCache, asyncHandler(getAuditLogsHandler));

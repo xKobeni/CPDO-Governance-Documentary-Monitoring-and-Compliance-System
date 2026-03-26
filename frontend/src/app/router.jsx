@@ -106,7 +106,7 @@ export default function AppRouter() {
         <Route 
           path="/audit-logs" 
           element={
-            <RoleGuard allowedRoles={['ADMIN']}>
+            <RoleGuard allowedRoles={['ADMIN', 'STAFF', 'OFFICE']}>
               <AuditLogsPage />
             </RoleGuard>
           }

@@ -1,19 +1,9 @@
 import multer from "multer";
+import multerS3 from "multer-s3";
 import path from "path";
-import fs from "fs";
 import { nanoid } from "nanoid";
-
-const uploadDir = path.resolve("uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const safeExt = path.extname(file.originalname).toLowerCase();
-    const name = `${Date.now()}-${nanoid(16)}${safeExt}`;
-    cb(null, name);
-  },
-});
+import { b2Client } from "../config/b2.js";
+import { env } from "../config/env.js";
 
 const allowedMimeToExt = new Map([
   ["application/pdf", ".pdf"],
@@ -24,7 +14,15 @@ const allowedMimeToExt = new Map([
 ]);
 
 export const upload = multer({
-  storage,
+  storage: multerS3({
+    s3: b2Client,
+    bucket: env.b2BucketName,
+    key: (req, file, cb) => {
+      const safeExt = path.extname(file.originalname).toLowerCase();
+      cb(null, `uploads/${Date.now()}-${nanoid(16)}${safeExt}`);
+    },
+    contentType: multerS3.AUTO_CONTENT_TYPE,
+  }),
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
   fileFilter: (req, file, cb) => {
     const expectedExt = allowedMimeToExt.get(file.mimetype);

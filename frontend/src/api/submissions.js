@@ -38,6 +38,35 @@ export async function uploadSubmissionFile(submissionId, file) {
   return response.data; // { file: {...} }
 }
 
+export async function downloadSubmissionFile(fileId, fileName) {
+  const response = await api.get(`/files/${fileId}/download`, {
+    responseType: "blob",
+  });
+  const url = window.URL.createObjectURL(response.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function deleteSubmissionFile(fileId) {
+  const response = await api.delete(`/files/${fileId}`);
+  return response.data;
+}
+
+export async function viewSubmissionFile(fileId) {
+  const response = await api.get(`/files/${fileId}/download`, {
+    responseType: "blob",
+  });
+  const url = window.URL.createObjectURL(response.data);
+  window.open(url, "_blank");
+  // Revoke after a delay to allow the new tab to load the blob
+  setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+}
+
 // ── Comments (nested under submission) ────────────────────────────────────────
 
 export async function listSubmissionComments(submissionId, params = {}) {

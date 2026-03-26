@@ -1,17 +1,28 @@
 import path from "path";
-import fs from "fs/promises";
+import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { b2Client } from "../config/b2.js";
 import { getSubmissionById } from "../models/submissions.model.js";
-import { addNewFileVersion, listFiles, getUserTotalUploadedBytes } from "../models/submissionFiles.model.js";
+import {
+  addNewFileVersion,
+  listFiles,
+  getUserTotalUploadedBytes,
+  getSubmissionFileById,
+  deleteFileRecord,
+} from "../models/submissionFiles.model.js";
 import { touchSubmissionSubmittedBy } from "../models/submissions.model.js";
-import { createNotification, createNotificationsBulk } from "../models/notifications.model.js";
+import { createNotificationsBulk } from "../models/notifications.model.js";
 import { pool } from "../config/db.js";
 import { env } from "../config/env.js";
 
-async function cleanupTempUpload(filePath) {
-  if (!filePath) return;
+async function cleanupB2Upload(key) {
+  if (!key) return;
   try {
-    await fs.unlink(filePath);
+    await b2Client.send(new DeleteObjectCommand({
+      Bucket: env.b2BucketName,
+      Key: key,
+    }));
   } catch {
+    // Cleanup failure should not mask the original error
   }
 }
 
@@ -33,33 +44,29 @@ export async function uploadSubmissionFileHandler(req, res) {
   const submission = await getSubmissionById(submissionId);
   if (!submission) return res.status(404).json({ message: "Submission not found" });
 
-  // OFFICE restriction
   if (req.user.role === "OFFICE" && submission.office_id !== req.user.officeId) {
     return res.status(403).json({ message: "Forbidden" });
   }
 
-  // Lock rule: if approved, only allow upload if revision requested
   if (submission.status === "APPROVED") {
     return res.status(409).json({ message: "Submission is approved and locked" });
   }
 
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-  // Ensure the submission has a submitter when OFFICE uploads evidence.
-  // This also guarantees review notifications later have a valid recipient.
   if (req.user.role === "OFFICE") {
     await touchSubmissionSubmittedBy({ submissionId, submittedBy: req.user.sub });
   }
 
-  // Validate file extension against the checklist item's allowed_file_types
-  const allowedTypes = submission.allowed_file_types; // TEXT[] from DB, e.g. ['pdf','docx']
+  // Validate against checklist's allowed_file_types (file is already in B2 at this point)
+  const allowedTypes = submission.allowed_file_types;
   if (Array.isArray(allowedTypes) && allowedTypes.length > 0) {
-    const ext = path.extname(req.file.originalname).toLowerCase().replace(/^\./, '');
-    const normalised = allowedTypes.map((t) => t.toLowerCase().replace(/^\./, ''));
+    const ext = path.extname(req.file.originalname).toLowerCase().replace(/^\./, "");
+    const normalised = allowedTypes.map((t) => t.toLowerCase().replace(/^\./, ""));
     if (!normalised.includes(ext)) {
-      await cleanupTempUpload(req.file.path);
+      await cleanupB2Upload(req.file.key);
       return res.status(422).json({
-        message: `File type not accepted. Allowed: ${normalised.map((t) => `.${t}`).join(', ')}`,
+        message: `File type not accepted. Allowed: ${normalised.map((t) => `.${t}`).join(", ")}`,
         allowedTypes: normalised,
       });
     }
@@ -68,26 +75,23 @@ export async function uploadSubmissionFileHandler(req, res) {
   const totalUploaded = await getUserTotalUploadedBytes(req.user.sub);
   const projectedTotal = totalUploaded + req.file.size;
   if (projectedTotal > env.uploadQuotaBytes) {
-    await cleanupTempUpload(req.file.path);
+    await cleanupB2Upload(req.file.key);
     return res.status(413).json({
       message: "Storage quota exceeded",
       quotaBytes: env.uploadQuotaBytes,
     });
   }
 
-  const storedKey = path.join("uploads", req.file.filename).replace(/\\/g, "/");
-
   const fileRow = await addNewFileVersion({
     submissionId,
     fileName: req.file.originalname,
     mimeType: req.file.mimetype,
     fileSizeBytes: req.file.size,
-    storageKey: storedKey,
+    storageKey: req.file.key,
     sha256: null,
     uploadedBy: req.user.sub,
   });
 
-  // Notify STAFF/ADMIN that an OFFICE uploaded/updated evidence.
   if (req.user.role === "OFFICE") {
     const { rows: staffUsers } = await pool.query(
       `SELECT DISTINCT u.id
@@ -98,7 +102,7 @@ export async function uploadSubmissionFileHandler(req, res) {
       []
     );
 
-    const notifications = staffUsers.map(user => ({
+    const notifications = staffUsers.map((user) => ({
       userId: user.id,
       type: "SUBMISSION_RECEIVED",
       title: `New submission file - ${submission.office_name}`,
@@ -111,4 +115,50 @@ export async function uploadSubmissionFileHandler(req, res) {
   }
 
   return res.status(201).json({ file: fileRow });
+}
+
+export async function deleteSubmissionFileHandler(req, res) {
+  const file = await getSubmissionFileById(req.params.fileId);
+  if (!file) return res.status(404).json({ message: "File not found" });
+
+  const deleted = await deleteFileRecord(req.params.fileId);
+  if (!deleted) return res.status(404).json({ message: "File not found" });
+
+  // Remove from B2 — best-effort, don't fail the request if cleanup errors
+  await cleanupB2Upload(deleted.storage_key);
+
+  return res.json({ message: "File deleted", fileId: deleted.id });
+}
+
+export async function downloadSubmissionFileHandler(req, res) {
+  const file = await getSubmissionFileById(req.params.fileId);
+  if (!file) return res.status(404).json({ message: "File not found" });
+
+  if (req.user.role === "OFFICE" && file.office_id !== req.user.officeId) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  const command = new GetObjectCommand({
+    Bucket: env.b2BucketName,
+    Key: file.storage_key,
+  });
+
+  const s3Response = await b2Client.send(command);
+
+  res.setHeader("Content-Type", file.mime_type);
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${encodeURIComponent(file.file_name)}"`
+  );
+  if (s3Response.ContentLength) {
+    res.setHeader("Content-Length", s3Response.ContentLength);
+  }
+
+  s3Response.Body.on("error", () => {
+    if (!res.headersSent) {
+      res.status(502).json({ message: "Error streaming file from storage" });
+    }
+  });
+
+  s3Response.Body.pipe(res);
 }

@@ -61,6 +61,7 @@ import {
   MessageSquare,
   MoreVertical,
   ClipboardCheck,
+  Download,
 } from "lucide-react";
 import { useAuth } from "../hooks/use-auth";
 import { toast } from "react-hot-toast";
@@ -69,6 +70,8 @@ import {
   createSubmission,
   listSubmissionFiles,
   uploadSubmissionFile,
+  downloadSubmissionFile,
+  viewSubmissionFile,
   listSubmissionComments,
   createSubmissionComment,
   deleteSubmissionComment,
@@ -680,9 +683,29 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
                           v{f.version_no} · {formatBytes(f.file_size_bytes)} · {formatDate(f.uploaded_at)}
                         </p>
                       </div>
-                      {f.is_current && (
-                        <Badge variant="outline" className="text-[10px]">Current</Badge>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {f.is_current && (
+                          <Badge variant="outline" className="text-[10px]">Current</Badge>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="View document"
+                          onClick={() => viewSubmissionFile(f.id)}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Download"
+                          onClick={() => downloadSubmissionFile(f.id, f.file_name)}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
