@@ -201,7 +201,7 @@ function OfficeDashboard({ user }) {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Office Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back, <span className="font-medium text-foreground">{user?.name || user?.email}</span>
+            Welcome back, <span className="font-medium text-foreground">{user?.fullName || user?.name || (user?.username) || (user?.email ? user.email.split('@')[0] : 'User')}</span>
             {officeName && <> · <span className="text-red-600 font-medium">{officeName}</span></>}
           </p>
           <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -635,7 +635,7 @@ function AdminDashboard({ user }) {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back, <span className="font-medium text-foreground">{user?.name || user?.email}</span>
+            Welcome back, <span className="font-medium text-foreground">{user?.fullName || user?.name || (user?.username) || (user?.email ? user.email.split('@')[0] : 'User')}</span>
           </p>
           <div className="flex items-center gap-2 mt-1.5">
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />

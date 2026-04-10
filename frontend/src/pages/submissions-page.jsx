@@ -141,6 +141,9 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
   const [decisionNotes, setDecisionNotes] = useState("");
   const [commentText, setCommentText] = useState("");
   const [fileToUpload, setFileToUpload] = useState(null);
+  const [fileToDelete, setFileToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
 
   const submissionQuery = useQuery({
     queryKey: ["submissions", "detail", submissionId],
@@ -212,9 +215,15 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
   const files = filesQuery.data?.files ?? [];
   const comments = commentsQuery.data?.data ?? [];
 
+  const currentFile = files.find((f) => f.is_current) ?? null;
+
   function handleUpload() {
     if (!fileToUpload) return;
-    uploadMutation.mutate(fileToUpload);
+    if (currentFile) {
+      setShowReplaceConfirm(true);
+    } else {
+      uploadMutation.mutate(fileToUpload);
+    }
   }
 
   function handleReview() {
@@ -228,6 +237,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -383,11 +393,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
                                     size="icon"
                                     className="h-7 w-7 text-destructive hover:text-destructive"
                                     title="Delete file"
-                                    onClick={async () => {
-                                      if (!window.confirm(`Delete "${f.file_name}"? This cannot be undone.`)) return;
-                                      await deleteSubmissionFile(f.id);
-                                      queryClient.invalidateQueries({ queryKey: ["submissions", "files", submissionId] });
-                                    }}
+                                    onClick={() => setFileToDelete(f)}
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
@@ -522,6 +528,96 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
         )}
       </DialogContent>
     </Dialog>
+
+    {/* Replace file confirmation modal */}
+    <Dialog open={showReplaceConfirm} onOpenChange={(open) => { if (!open) setShowReplaceConfirm(false); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Replace Existing File?
+          </DialogTitle>
+          <DialogDescription className="pt-1">
+            This submission already has a current file:{" "}
+            <span className="font-medium text-foreground">"{currentFile?.file_name}"</span>.
+            <br />
+            Uploading <span className="font-medium text-foreground">"{fileToUpload?.name}"</span> will
+            permanently delete the old file from storage. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => setShowReplaceConfirm(false)}
+            disabled={uploadMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={uploadMutation.isPending}
+            onClick={() => {
+              setShowReplaceConfirm(false);
+              uploadMutation.mutate(fileToUpload);
+            }}
+          >
+            {uploadMutation.isPending ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Uploading…</>
+            ) : (
+              <><Upload className="mr-2 h-4 w-4" />Yes, Replace</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Delete file confirmation modal */}
+    <Dialog open={Boolean(fileToDelete)} onOpenChange={(open) => { if (!open) setFileToDelete(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <Trash2 className="h-5 w-5" />
+            Delete File
+          </DialogTitle>
+          <DialogDescription className="pt-1">
+            Are you sure you want to permanently delete{" "}
+            <span className="font-medium text-foreground">"{fileToDelete?.file_name}"</span>?
+            <br />
+            This will remove the file from storage and cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => setFileToDelete(null)}
+            disabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={isDeleting}
+            onClick={async () => {
+              if (!fileToDelete) return;
+              setIsDeleting(true);
+              try {
+                await deleteSubmissionFile(fileToDelete.id);
+                queryClient.invalidateQueries({ queryKey: ["submissions", "files", submissionId] });
+                setFileToDelete(null);
+              } finally {
+                setIsDeleting(false);
+              }
+            }}
+          >
+            {isDeleting ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting…</>
+            ) : (
+              <><Trash2 className="mr-2 h-4 w-4" />Delete File</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

@@ -5,6 +5,7 @@ import {
   FileText,
   Info,
   MessageCircle,
+  RefreshCw,
   XCircle,
 } from 'lucide-react';
 
@@ -28,6 +29,11 @@ export const NOTIFICATION_TYPE_CONFIG = {
     label: 'Submission Received',
     icon: FileText,
     badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
+  },
+  FILE_REPLACED: {
+    label: 'File Replaced',
+    icon: RefreshCw,
+    badgeClass: 'bg-purple-100 text-purple-800 border-purple-200',
   },
   NEW_COMMENT: {
     label: 'New Comment',

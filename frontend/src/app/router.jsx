@@ -22,6 +22,7 @@ const YearsPage               = lazy(() => import("../pages/years-page"));
 const DashboardPage           = lazy(() => import("../pages/dashboard-page"));
 const MyChecklistsPage        = lazy(() => import("../pages/my-checklists-page"));
 const NotificationsPage       = lazy(() => import("../pages/notifications-page"));
+const FileManagerPage         = lazy(() => import("../pages/file-manager-page"));
 
 import DashboardLayout from "../layouts/dashboard-layout";
 import AuthLayout from "../layouts/auth-layout";
@@ -99,7 +100,14 @@ export default function AppRouter() {
             </RoleGuard>
           }
         />
-        <Route path="/files" element={<div className="p-6"><h1 className="text-2xl font-bold">File Management</h1><p>Manage files and documents.</p></div>} />
+        <Route 
+          path="/file-manager" 
+          element={
+            <RoleGuard allowedRoles={['ADMIN', 'STAFF']}>
+              <FileManagerPage />
+            </RoleGuard>
+          } 
+        />
         <Route path="/comments" element={<div className="p-6"><h1 className="text-2xl font-bold">Comments</h1><p>View and manage comments.</p></div>} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/settings" element={<SettingsPage />} />

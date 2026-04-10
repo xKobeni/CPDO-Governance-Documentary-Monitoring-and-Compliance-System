@@ -8,11 +8,22 @@ import {
   getUserTotalUploadedBytes,
   getSubmissionFileById,
   deleteFileRecord,
+  getAllFileExplorerData,
 } from "../models/submissionFiles.model.js";
 import { touchSubmissionSubmittedBy } from "../models/submissions.model.js";
 import { createNotificationsBulk } from "../models/notifications.model.js";
 import { pool } from "../config/db.js";
 import { env } from "../config/env.js";
+
+export async function getFileExplorerHandler(req, res) {
+  // Only ADMIN and STAFF should be able to reach this based on the route middleware, 
+  // but let's be double sure.
+  if (req.user.role !== "ADMIN" && req.user.role !== "STAFF") {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  const files = await getAllFileExplorerData();
+  return res.json({ files });
+}
 
 async function cleanupB2Upload(key) {
   if (!key) return;
@@ -82,6 +93,10 @@ export async function uploadSubmissionFileHandler(req, res) {
     });
   }
 
+  // Capture the current file's B2 key before it gets replaced
+  const existingFiles = await listFiles(submissionId);
+  const previousCurrent = existingFiles.find((f) => f.is_current) ?? null;
+
   const fileRow = await addNewFileVersion({
     submissionId,
     fileName: req.file.originalname,
@@ -92,25 +107,54 @@ export async function uploadSubmissionFileHandler(req, res) {
     uploadedBy: req.user.sub,
   });
 
-  if (req.user.role === "OFFICE") {
-    const { rows: staffUsers } = await pool.query(
-      `SELECT DISTINCT u.id
-       FROM users u
-       JOIN roles r ON r.id = u.role_id
-       WHERE r.code IN ('ADMIN', 'STAFF')
-         AND u.is_active = TRUE`,
-      []
-    );
+  const isReplacement = Boolean(previousCurrent);
 
-    const notifications = staffUsers.map((user) => ({
-      userId: user.id,
-      type: "SUBMISSION_RECEIVED",
-      title: `New submission file - ${submission.office_name}`,
-      body: `${submission.item_title}: ${req.file.originalname}`,
-      linkSubmissionId: submissionId,
-    }));
-    if (notifications.length > 0) {
-      await createNotificationsBulk(notifications);
+  // Delete the previous version from B2 now that the new one is saved
+  if (previousCurrent?.storage_key) {
+    await cleanupB2Upload(previousCurrent.storage_key);
+  }
+
+  if (req.user.role === "OFFICE") {
+    if (isReplacement) {
+      // Replacement — notify ADMIN only with a distinct message
+      const { rows: admins } = await pool.query(
+        `SELECT DISTINCT u.id
+         FROM users u
+         JOIN roles r ON r.id = u.role_id
+         WHERE r.code = 'ADMIN'
+           AND u.is_active = TRUE`
+      );
+
+      const notifications = admins.map((u) => ({
+        userId: u.id,
+        type: "FILE_REPLACED",
+        title: `File replaced - ${submission.office_name}`,
+        body: `${submission.item_title}: "${previousCurrent.file_name}" was replaced with "${req.file.originalname}"`,
+        linkSubmissionId: submissionId,
+      }));
+      if (notifications.length > 0) {
+        await createNotificationsBulk(notifications);
+      }
+    } else {
+      // First-time upload — notify ADMIN + STAFF
+      const { rows: staffUsers } = await pool.query(
+        `SELECT DISTINCT u.id
+         FROM users u
+         JOIN roles r ON r.id = u.role_id
+         WHERE r.code IN ('ADMIN', 'STAFF')
+           AND u.is_active = TRUE`
+      );
+
+      const notifications = staffUsers.map((u) => ({
+        userId: u.id,
+        type: "SUBMISSION_RECEIVED",
+        title: `New submission file - ${submission.office_name}`,
+        body: `${submission.item_title}: ${req.file.originalname}`,
+        linkSubmissionId: submissionId,
+      }));
+      if (notifications.length > 0) {
+        await createNotificationsBulk(notifications);
+      }
     }
   }
 

@@ -49,6 +49,11 @@ EXCEPTION WHEN undefined_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
+  ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'FILE_REPLACED';
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
   CREATE TYPE export_format AS ENUM ('PDF', 'XLSX', 'CSV');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

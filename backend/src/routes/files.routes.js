@@ -10,12 +10,14 @@ import {
   listSubmissionFilesHandler,
   downloadSubmissionFileHandler,
   deleteSubmissionFileHandler,
+  getFileExplorerHandler,
 } from "../controllers/files.controller.js";
 
 const r = Router();
 
 r.use(requireAuth, checkSessionInactivity);
 
+r.get("/explorer", requireRole("ADMIN", "STAFF"), shortCache, asyncHandler(getFileExplorerHandler));
 r.get("/:submissionId", shortCache, asyncHandler(listSubmissionFilesHandler));
 r.get("/:fileId/download", asyncHandler(downloadSubmissionFileHandler));
 r.delete(

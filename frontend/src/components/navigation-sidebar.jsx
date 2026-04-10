@@ -45,6 +45,7 @@ const iconMap = {
   "/offices": Building2,
   "/years": Calendar,
   "/reports": BarChart,
+  "/file-manager": Folder,
   "/audit-logs": BarChart3,
   "/notifications": Bell,
 };
@@ -86,7 +87,7 @@ export const NavigationSidebar = React.memo(function NavigationSidebar({ classNa
     },
     {
       label: 'Reports & Logs',
-      hrefs: ['/reports', '/audit-logs'],
+      hrefs: ['/reports', '/file-manager', '/audit-logs'],
     },
     {
       label: 'Notifications',
@@ -217,14 +218,14 @@ export const NavigationSidebar = React.memo(function NavigationSidebar({ classNa
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <div className="w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-white text-xs font-medium shrink-0">
-                  {(user?.name || user?.email || 'U').charAt(0).toUpperCase()}
+                  {(user?.fullName || user?.name || user?.email || 'U').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 text-left min-w-0">
                   <p className="text-xs font-medium text-foreground truncate">
-                    {user?.name || (user?.email ? user.email.split('@')[0] : 'User')}
+                    {user?.fullName || user?.name || (user?.username) || (user?.email ? user.email.split('@')[0] : 'User')}
                   </p>
-                  <p className="text-[10px] text-muted-foreground truncate">
-                    {user?.email || 'user@cpdo.gov.ph'}
+                  <p className="text-[10px] text-muted-foreground truncate capitalize">
+                    {user?.role ? user.role.toLowerCase() : (user?.email || 'user@cpdo.gov.ph')}
                   </p>
                 </div>
                 <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />

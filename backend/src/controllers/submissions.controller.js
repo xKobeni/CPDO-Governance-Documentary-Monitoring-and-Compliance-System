@@ -40,6 +40,23 @@ export async function createSubmissionHandler(req, res) {
   if (!ref) return res.status(404).json({ message: "Checklist item not found" });
   if (ref.year !== year) return res.status(400).json({ message: "Checklist item template year mismatch" });
 
+  // Block re-submission if a PENDING or APPROVED submission already exists
+  const { rows: existing } = await pool.query(
+    `SELECT id, status FROM submissions
+     WHERE year = $1 AND office_id = $2 AND checklist_item_id = $3
+     LIMIT 1`,
+    [year, officeId, checklistItemId]
+  );
+  if (existing.length > 0) {
+    const s = existing[0].status;
+    if (s === "PENDING") {
+      return res.status(409).json({ message: "A submission for this item is already pending review. Please wait for a decision before resubmitting." });
+    }
+    if (s === "APPROVED") {
+      return res.status(409).json({ message: "This submission has already been approved and cannot be replaced." });
+    }
+  }
+
   const submission = await createSubmission({
     year,
     officeId,

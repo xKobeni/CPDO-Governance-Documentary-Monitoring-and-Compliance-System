@@ -520,6 +520,7 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
   const [files, setFiles] = useState([]);
   const [fileToUpload, setFileToUpload] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
   const [comments, setComments] = useState([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [reviews, setReviews] = useState([]);
@@ -572,8 +573,20 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
     }
   }
 
+  const currentFile = files.find((f) => f.is_current) ?? null;
+
+  function handleUploadClick() {
+    if (!submissionId || !fileToUpload) return;
+    if (currentFile) {
+      setShowReplaceConfirm(true);
+    } else {
+      doUpload();
+    }
+  }
+
   async function doUpload() {
     if (!submissionId || !fileToUpload) return;
+    setShowReplaceConfirm(false);
     setUploading(true);
     try {
       await uploadSubmissionFile(submissionId, fileToUpload);
@@ -626,6 +639,7 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
   }, [open, submissionId]);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
@@ -721,7 +735,7 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
                   disabled={uploading}
                 />
                 <div className="flex justify-end">
-                  <Button onClick={doUpload} disabled={!fileToUpload || uploading} className="gap-2">
+                  <Button onClick={handleUploadClick} disabled={!fileToUpload || uploading} className="gap-2">
                     {uploading ? <><Loader2 className="h-4 w-4 animate-spin" />Uploading…</> : <><Upload className="h-4 w-4" />Upload</>}
                   </Button>
                 </div>
@@ -837,6 +851,45 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Replace file confirmation modal */}
+    <Dialog open={showReplaceConfirm} onOpenChange={(open) => { if (!open) setShowReplaceConfirm(false); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Replace Existing File?
+          </DialogTitle>
+          <DialogDescription className="pt-1">
+            This submission already has a current file:{" "}
+            <span className="font-medium text-foreground">"{currentFile?.file_name}"</span>.
+            <br />
+            Uploading <span className="font-medium text-foreground">"{fileToUpload?.name}"</span> will
+            permanently delete the old file from storage. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => setShowReplaceConfirm(false)}
+            disabled={uploading}
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={uploading}
+            onClick={doUpload}
+          >
+            {uploading ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Uploading…</>
+            ) : (
+              <><Upload className="mr-2 h-4 w-4" />Yes, Replace</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
@@ -1155,11 +1208,12 @@ function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, 
                       ];
                     }
 
-                    const isApproved = String(item.submissionStatus || "").toUpperCase() === "APPROVED";
+                    const submissionStatus = String(item.submissionStatus || "").toUpperCase();
+                    const isApproved = submissionStatus === "APPROVED";
+                    const isPending = submissionStatus === "PENDING";
                     const hasSubmission = Boolean(item.submissionId);
                     const handleRowClick = () => {
-                      if (hasSubmission && isApproved) onView(item);
-                      else if (hasSubmission && !isApproved) onSubmit(item);
+                      if (hasSubmission && (isApproved || isPending)) onView(item);
                       else onSubmit(item);
                     };
 
@@ -1168,7 +1222,11 @@ function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, 
                         key={item.id}
                         className="transition-colors hover:bg-muted/50 cursor-pointer"
                         onClick={handleRowClick}
-                        title={hasSubmission && isApproved ? "Click to view" : "Click to upload"}
+                        title={
+                          isPending ? "Awaiting review — click to view" :
+                          isApproved ? "Approved — click to view" :
+                          "Click to upload"
+                        }
                       >
                         <TableCell className="min-w-[260px] py-2.5">
                           <div className="relative min-w-0" style={{ paddingLeft: depth ? depth * 12 : 0 }}>
@@ -1201,7 +1259,7 @@ function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, 
                                   View
                                 </DropdownMenuItem>
                               )}
-                              {hasSubmission && !isApproved && (
+                              {hasSubmission && !isApproved && !isPending && (
                                 <DropdownMenuItem onClick={() => onSubmit(item)}>
                                   <Upload className="h-4 w-4 mr-2" />
                                   Replace

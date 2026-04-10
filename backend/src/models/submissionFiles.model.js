@@ -123,3 +123,25 @@ export async function addNewFileVersion(payload) {
     client.release();
   }
 }
+
+/**
+ * Returns a flat list of all current files along with mapped structural 
+ * metadata (year, office, governance area) for the file explorer.
+ */
+export async function getAllFileExplorerData() {
+  const { rows } = await pool.query(
+    `SELECT sf.id, sf.file_name, sf.mime_type, sf.file_size_bytes, sf.uploaded_at, sf.version_no,
+            s.id as submission_id, s.year, s.status,
+            o.id as office_id, o.name as office_name,
+            ga.id as governance_area_id, ga.name as governance_name,
+            ci.id as item_id, ci.title as item_title
+     FROM submission_files sf
+     JOIN submissions s ON s.id = sf.submission_id
+     JOIN offices o ON o.id = s.office_id
+     JOIN governance_areas ga ON ga.id = s.governance_area_id
+     JOIN checklist_items ci ON ci.id = s.checklist_item_id
+     WHERE sf.is_current = TRUE
+     ORDER BY s.year DESC, o.name ASC, ga.name ASC, ci.title ASC, sf.uploaded_at DESC`
+  );
+  return rows;
+}

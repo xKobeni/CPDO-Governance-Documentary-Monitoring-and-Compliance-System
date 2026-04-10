@@ -45,6 +45,11 @@ export const NAV_ITEMS = [
     roles: ["ADMIN", "STAFF"],
   },
   {
+    label: "File Manager",
+    href: "/file-manager",
+    roles: ["ADMIN", "STAFF"],
+  },
+  {
     label: "Audit Logs",
     href: "/audit-logs",
     roles: ["ADMIN", "STAFF", "OFFICE"],

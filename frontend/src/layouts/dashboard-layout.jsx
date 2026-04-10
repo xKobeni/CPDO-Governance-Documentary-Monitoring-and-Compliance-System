@@ -112,6 +112,7 @@ function DashboardLayout() {
       "/audit-logs": "Audit Logs",
       "/profile": "Profile",
       "/notifications": "Notifications",
+      "/file-manager": "File Manager",
     };
     return pathTitles[path] || "CPDO Monitoring System";
   };

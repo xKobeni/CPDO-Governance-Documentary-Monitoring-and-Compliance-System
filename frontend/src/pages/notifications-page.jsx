@@ -177,6 +177,7 @@ export default function NotificationsPage() {
     { label: 'Total',     value: notifications.length,              accent: 'border-l-slate-400',   valueClass: 'text-foreground',  icon: Bell          },
     { label: 'Unread',    value: unreadCount,                        accent: 'border-l-blue-500',    valueClass: 'text-blue-600',    icon: Bell          },
     { label: 'Comments',  value: typeCounts.NEW_COMMENT ?? 0,        accent: 'border-l-slate-500',    valueClass: 'text-slate-600',   icon: getNotificationTypeConfig('NEW_COMMENT').icon },
+    { label: 'Replaced',  value: typeCounts.FILE_REPLACED ?? 0,      accent: 'border-l-purple-500',  valueClass: 'text-purple-600',  icon: getNotificationTypeConfig('FILE_REPLACED').icon },
     { label: 'Approved',  value: typeCounts.APPROVED ?? 0,           accent: 'border-l-emerald-500', valueClass: 'text-emerald-600', icon: getNotificationTypeConfig('APPROVED').icon },
     { label: 'Denied',    value: typeCounts.DENIED ?? 0,             accent: 'border-l-red-500',     valueClass: 'text-red-600',     icon: getNotificationTypeConfig('DENIED').icon },
     { label: 'Revisions', value: typeCounts.REVISION_REQUESTED ?? 0, accent: 'border-l-amber-500',   valueClass: 'text-amber-600',   icon: getNotificationTypeConfig('REVISION_REQUESTED').icon },
