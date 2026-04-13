@@ -149,6 +149,10 @@ export async function reviewSubmissionHandler(req, res) {
   const submission = await getSubmissionById(submissionId);
   if (!submission) return res.status(404).json({ message: "Submission not found" });
 
+  if (submission.status === "APPROVED") {
+    return res.status(400).json({ message: "This submission is already approved." });
+  }
+
   const review = await createReview({
     submissionId,
     reviewedBy: req.user.sub,

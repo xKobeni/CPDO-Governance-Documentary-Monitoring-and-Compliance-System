@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../hooks/use-auth";
 import { logout, requestPasswordReset, resetPassword } from "../api/auth";
@@ -9,7 +9,6 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Separator } from "../components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -19,15 +18,14 @@ import {
 } from "../components/ui/dialog";
 import { Alert } from "../components/ui/alert";
 import { toast } from "react-hot-toast";
-import { 
-  Shield, 
-  Monitor, 
+import {
+  Shield,
   Info,
   Save,
   Eye,
   EyeOff,
   Check,
-  X
+  X,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -56,22 +54,6 @@ export default function SettingsPage() {
     confirmPassword: ""
   });
 
-  // Display Settings State
-  const [displaySettings, setDisplaySettings] = useState({
-    theme: "system",
-    language: "en",
-    dateFormat: "MM/DD/YYYY",
-    timezone: "Asia/Manila",
-    itemsPerPage: "20"
-  });
-
-  useEffect(() => {
-    const savedDisplay = localStorage.getItem("displaySettings");
-    if (savedDisplay) {
-      setDisplaySettings(JSON.parse(savedDisplay));
-    }
-  }, []);
-
   const handlePasswordChange = async () => {
     if (securitySettings.newPassword !== securitySettings.confirmPassword) {
       toast.error("New passwords do not match");
@@ -99,11 +81,6 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDisplaySave = () => {
-    localStorage.setItem("displaySettings", JSON.stringify(displaySettings));
-    toast.success("Display preferences saved");
   };
 
   const getPasswordStrength = (password) => {
@@ -188,14 +165,10 @@ export default function SettingsPage() {
 
       {/* Settings Tabs */}
       <Tabs defaultValue="security" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="security" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
             Security
-          </TabsTrigger>
-          <TabsTrigger value="display" className="flex items-center gap-2">
-            <Monitor className="h-4 w-4" />
-            Display
           </TabsTrigger>
           <TabsTrigger value="system" className="flex items-center gap-2">
             <Info className="h-4 w-4" />
@@ -343,109 +316,6 @@ export default function SettingsPage() {
                       Change Password
                     </>
                   )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Display Settings */}
-        <TabsContent value="display" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Display Preferences</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Theme</Label>
-                  <Select 
-                    value={displaySettings.theme} 
-                    onValueChange={(value) => setDisplaySettings(prev => ({ ...prev, theme: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="light">Light</SelectItem>
-                      <SelectItem value="dark">Dark</SelectItem>
-                      <SelectItem value="system">System</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Language</Label>
-                  <Select 
-                    value={displaySettings.language} 
-                    onValueChange={(value) => setDisplaySettings(prev => ({ ...prev, language: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="en">English</SelectItem>
-                      <SelectItem value="fil">Filipino</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Date Format</Label>
-                  <Select 
-                    value={displaySettings.dateFormat} 
-                    onValueChange={(value) => setDisplaySettings(prev => ({ ...prev, dateFormat: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
-                      <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
-                      <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Timezone</Label>
-                  <Select 
-                    value={displaySettings.timezone} 
-                    onValueChange={(value) => setDisplaySettings(prev => ({ ...prev, timezone: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Asia/Manila">Asia/Manila (PHT)</SelectItem>
-                      <SelectItem value="UTC">UTC</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Items Per Page</Label>
-                  <Select 
-                    value={displaySettings.itemsPerPage} 
-                    onValueChange={(value) => setDisplaySettings(prev => ({ ...prev, itemsPerPage: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                      <SelectItem value="100">100</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-4">
-                <Button onClick={handleDisplaySave}>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Preferences
                 </Button>
               </div>
             </CardContent>

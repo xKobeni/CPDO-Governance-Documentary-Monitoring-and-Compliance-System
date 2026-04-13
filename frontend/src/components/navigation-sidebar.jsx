@@ -87,7 +87,7 @@ export const NavigationSidebar = React.memo(function NavigationSidebar({ classNa
     },
     {
       label: 'Reports & Logs',
-      hrefs: ['/reports', '/file-manager', '/audit-logs'],
+      hrefs: ['/reports', '/audit-logs'],
     },
     {
       label: 'Notifications',

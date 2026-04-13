@@ -131,7 +131,7 @@ function formatBytes(bytes) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function SubmissionDetailsDialog({ submissionId, open, onClose }) {
+function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const canReview = ["ADMIN", "STAFF"].includes(String(user?.role || "").toUpperCase());
@@ -167,11 +167,14 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
     mutationFn: ({ action, decisionNotes }) =>
       reviewSubmission(submissionId, { action, decisionNotes: decisionNotes || null }),
     onSuccess: async () => {
-      toast.success("Review submitted");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["submissions"] }),
         queryClient.invalidateQueries({ queryKey: ["submissions", "detail", submissionId] }),
       ]);
+      onClose();
+      window.setTimeout(() => {
+        toast.success("Review submitted");
+      }, 150);
     },
     onError: (err) => {
       toast.error(err?.response?.data?.message || "Failed to submit review");
@@ -214,6 +217,8 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
   const submission = submissionQuery.data?.submission;
   const files = filesQuery.data?.files ?? [];
   const comments = commentsQuery.data?.data ?? [];
+  const isApproved = String(submission?.status || "").toUpperCase() === "APPROVED";
+  const showFormalReview = canReview && !isApproved;
 
   const currentFile = files.find((f) => f.is_current) ?? null;
 
@@ -468,8 +473,22 @@ function SubmissionDetailsDialog({ submissionId, open, onClose }) {
               </CardContent>
             </Card>
 
+            {canReview && isApproved && (
+              <Card className="border border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/25 dark:border-emerald-800/60">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    Formal review
+                  </CardTitle>
+                  <CardDescription>
+                    No further decision is required — this submission is already approved.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            )}
+
             {/* Review — Formal decision (changes status) */}
-            {canReview && (
+            {showFormalReview && (
               <Card className="border-2 border-blue-300 bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/40 dark:to-indigo-950/30 dark:border-blue-700">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">

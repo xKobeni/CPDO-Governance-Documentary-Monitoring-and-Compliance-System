@@ -44,11 +44,12 @@ export const NAV_ITEMS = [
     href: "/reports",
     roles: ["ADMIN", "STAFF"],
   },
-  {
-    label: "File Manager",
-    href: "/file-manager",
-    roles: ["ADMIN", "STAFF"],
-  },
+  // Hidden from sidebar — route still exists in router for direct access if needed.
+  // {
+  //   label: "File Manager",
+  //   href: "/file-manager",
+  //   roles: ["ADMIN", "STAFF"],
+  // },
   {
     label: "Audit Logs",
     href: "/audit-logs",
