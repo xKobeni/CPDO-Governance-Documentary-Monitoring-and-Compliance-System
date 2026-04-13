@@ -20,10 +20,10 @@ import {
 } from '../components/ui/dropdown-menu';
 import {
   Plus, MoreVertical, Edit, Trash2, Search, AlertTriangle, ListTodo, Tag,
-  ChevronRight, RefreshCw, ChevronsRight, Loader2, FileUp, Layers,
+  ChevronRight, RefreshCw, ChevronsRight, Loader2, FileUp, Layers, Copy,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getAllTemplates, getTemplateItems, createChecklistItem, updateChecklistItem, deleteChecklistItem } from '../api/templates';
+import { getAllTemplates, getTemplateItems, createChecklistItem, updateChecklistItem, deleteChecklistItem, importTemplateItems } from '../api/templates';
 
 const FREQ_STYLE = {
   ANNUAL:      'bg-blue-50 text-blue-700 border-blue-200',
@@ -341,8 +341,11 @@ export default function TemplatesCategoriesPage() {
   const [isAddOpen, setIsAddOpen]       = useState(false);
   const [isEditOpen, setIsEditOpen]     = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [selected, setSelected]         = useState(null);
   const [form, setForm]                 = useState(EMPTY_ITEM);
+  const [importForm, setImportForm]     = useState({ sourceTemplateId: '' });
+  const [importConfirm, setImportConfirm] = useState('');
 
   // Cache so switching back to a previously-loaded template is instant
   const itemsCache  = useRef({});
@@ -418,6 +421,28 @@ export default function TemplatesCategoriesPage() {
     const matchActive = showInactive || i.is_active;
     return matchSearch && matchActive;
   });
+
+  const openImport = () => {
+    const fallback = templates.find((t) => t.id !== selectedTemplateId)?.id ?? '';
+    setImportForm({ sourceTemplateId: fallback });
+    setImportConfirm('');
+    setIsImportOpen(true);
+  };
+
+  const handleImportAll = async () => {
+    if (!selectedTemplateId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await importTemplateItems(selectedTemplateId, { sourceTemplateId: importForm.sourceTemplateId });
+      setIsImportOpen(false);
+      await loadItems(selectedTemplateId);
+    } catch (err) {
+      setError(err?.response?.data?.message ?? 'Failed to copy categories from another template.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const parseFileTypes = (s) =>
     s ? s.split(',').map((x) => x.trim().replace(/^\./, '')).filter(Boolean) : [];
@@ -581,9 +606,11 @@ export default function TemplatesCategoriesPage() {
               </SelectContent>
             </Select>
             {template && (
-              <Badge className={cn('text-xs border', template.status === 'ACTIVE' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200')}>
-                {template.status}
-              </Badge>
+              <>
+                <Badge className={cn('text-xs border', template.status === 'ACTIVE' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200')}>
+                  {template.status}
+                </Badge>
+              </>
             )}
           </div>
           {template && !loadingItems && (
@@ -593,6 +620,19 @@ export default function TemplatesCategoriesPage() {
               <span className="flex items-center gap-1"><ChevronRight className="h-3.5 w-3.5" />{rawItems.length - rootItems.length} sub-items</span>
               <span className="flex items-center gap-1">{totalActive} active · {rawItems.length - totalActive} inactive</span>
               <span className="flex items-center gap-1">{required} required</span>
+            </div>
+          )}
+          {template && (
+            <div className="mt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openImport}
+                disabled={saving || loadingItems || templates.length < 2}
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                Copy all categories from another template
+              </Button>
             </div>
           )}
         </CardContent>
@@ -695,8 +735,8 @@ export default function TemplatesCategoriesPage() {
                         <TableCell>
                           <div style={{ paddingLeft: depth > 0 ? `${depth * 20}px` : '0' }} className="flex items-start gap-1.5">
                             {depth > 0 && <span className="text-muted-foreground/50 font-mono text-xs shrink-0 mt-0.5 select-none">└─</span>}
-                            <div className="min-w-0">
-                              <div className={cn('text-sm', isRoot ? 'font-bold' : depth === 1 ? 'font-medium' : '')}>{item.title}</div>
+                            <div className="min-w-0 max-w-xl">
+                              <div className={cn('text-sm whitespace-normal break-words leading-snug', isRoot ? 'font-bold' : depth === 1 ? 'font-medium' : '')}>{item.title}</div>
                               {item.description && <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-xs">{item.description}</div>}
                             </div>
                           </div>
@@ -795,6 +835,59 @@ export default function TemplatesCategoriesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Copy all categories */}
+      <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Copy all categories</DialogTitle>
+            <DialogDescription>
+              Copy <strong>all checklist items</strong> from another template into <strong>{template?.governance_code} · {template?.year}</strong>.
+              Existing items are kept; imported items get unique codes if needed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-5 py-2">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">From *</Label>
+              <Select value={importForm.sourceTemplateId} onValueChange={(v) => setImportForm({ sourceTemplateId: v })}>
+                <SelectTrigger className="col-span-3 w-full"><SelectValue placeholder="Select source template" /></SelectTrigger>
+                <SelectContent>
+                  {templates.filter((t) => t.id !== selectedTemplateId).map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      <span className="font-mono text-xs mr-2">{t.governance_code}</span>
+                      {t.year} · {t.title.length > 45 ? `${t.title.slice(0, 45)}…` : t.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Confirm *</Label>
+              <div className="col-span-3 space-y-1.5">
+                <Input
+                  className="w-full"
+                  value={importConfirm}
+                  onChange={(e) => setImportConfirm(e.target.value)}
+                  placeholder="Type COPY to enable"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Type <span className="font-mono font-semibold">COPY</span> to confirm this bulk action.
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsImportOpen(false)} disabled={saving}>Cancel</Button>
+            <Button
+              onClick={handleImportAll}
+              disabled={saving || !importForm.sourceTemplateId || importConfirm.trim().toUpperCase() !== 'COPY'}
+            >
+              {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Copying…</> : 'Copy all categories'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

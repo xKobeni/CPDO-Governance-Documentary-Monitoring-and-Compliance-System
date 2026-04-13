@@ -93,3 +93,13 @@ export async function updateChecklistItem(templateId, itemId, data) {
 export async function deleteChecklistItem(templateId, itemId) {
   await api.delete(`/templates/${templateId}/items/${itemId}`);
 }
+
+/**
+ * Import all checklist items from one template into another.
+ * @param {string} targetTemplateId
+ * @param {{ sourceTemplateId: string }} data
+ */
+export async function importTemplateItems(targetTemplateId, data) {
+  const response = await api.post(`/templates/${targetTemplateId}/items/import`, data);
+  return response.data; // { items: [...] }
+}

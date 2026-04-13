@@ -1,10 +1,20 @@
 import "dotenv/config";
 
+/** @returns {boolean | undefined} undefined = infer from DATABASE_URL */
+function parseDatabaseSsl(raw) {
+  if (raw == null || String(raw).trim() === "") return undefined;
+  const v = String(raw).trim().toLowerCase();
+  if (["true", "1", "yes", "require"].includes(v)) return true;
+  if (["false", "0", "no", "disable"].includes(v)) return false;
+  return undefined;
+}
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? 5000),
 
   databaseUrl: process.env.DATABASE_URL,
+  databaseSsl: parseDatabaseSsl(process.env.DATABASE_SSL),
 
   corsOrigin: process.env.CORS_ORIGIN,
 

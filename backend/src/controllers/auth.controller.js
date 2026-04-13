@@ -15,7 +15,7 @@ import {
   recordFailedLoginAttempt,
   resetFailedLoginAttempts,
 } from "../models/users.model.js";
-import { createSession, findValidSessionByHash, revokeSession, revokeAllSessionsByUserId } from "../models/sessions.model.js";
+import { createSession, findValidSessionByHash, revokeSession } from "../models/sessions.model.js";
 import { createPasswordResetToken, findValidResetToken, revokeResetTokens } from "../models/password-reset.model.js";
 
 const loginSchema = z.object({
@@ -252,18 +252,13 @@ export async function logout(req, res) {
   const token = req.cookies?.refresh_token;
   if (token) {
     const session = await findValidSessionByHash(sha256(token));
-    if (session?.user_id) {
-      await revokeAllSessionsByUserId(session.user_id);
+    if (session?.id) {
+      await revokeSession(session.id);
     } else {
       try {
-        const payload = verifyRefreshToken(token);
-        if (payload?.sub) {
-          await revokeAllSessionsByUserId(payload.sub);
-        }
+        verifyRefreshToken(token);
       } catch {
-        if (session?.id) {
-          await revokeSession(session.id);
-        }
+        // Ignore invalid token on logout; clearing cookie is enough.
       }
     }
   }

@@ -31,9 +31,13 @@ import {
   getNotificationTypeConfig,
 } from "../lib/notifications";
 
-// 30 minute idle timeout matching the backend; warn 5 minutes before
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-const WARN_BEFORE_MS  =  5 * 60 * 1000;
+// Keep idle handling aligned with backend inactivity timeout.
+const inactivityTimeoutMinutes = Number(import.meta.env.VITE_INACTIVITY_TIMEOUT_MINUTES ?? 15);
+const safeInactivityTimeoutMinutes = Number.isFinite(inactivityTimeoutMinutes) && inactivityTimeoutMinutes > 1
+  ? inactivityTimeoutMinutes
+  : 15;
+const IDLE_TIMEOUT_MS = safeInactivityTimeoutMinutes * 60 * 1000;
+const WARN_BEFORE_MS = Math.min(5, Math.max(1, Math.floor(safeInactivityTimeoutMinutes / 3))) * 60 * 1000;
 
 function DashboardLayout() {
   const { user } = useAuth();

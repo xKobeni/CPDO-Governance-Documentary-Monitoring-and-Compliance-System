@@ -57,6 +57,6 @@ export async function checkSessionInactivity(req, res, next) {
 
     next();
   } catch {
-    return res.status(401).json({ message: "Session check failed" });
+    return res.status(500).json({ message: "Session check failed" });
   }
 }

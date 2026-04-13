@@ -156,6 +156,110 @@ export async function copyTemplateWithItems({ sourceTemplateId, governanceAreaId
   }
 }
 
+function nextUniqueCodeFactory(existingCodes) {
+  const used = new Set(existingCodes);
+  return (base) => {
+    let candidate = base;
+    if (!used.has(candidate)) {
+      used.add(candidate);
+      return candidate;
+    }
+    candidate = `${base}-COPY`;
+    let n = 2;
+    while (used.has(candidate)) {
+      candidate = `${base}-COPY${n}`;
+      n += 1;
+    }
+    used.add(candidate);
+    return candidate;
+  };
+}
+
+export async function importTemplateItems({ sourceTemplateId, targetTemplateId }) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows: existingCodes } = await client.query(
+      `SELECT item_code FROM checklist_items WHERE template_id = $1`,
+      [targetTemplateId]
+    );
+    const nextCode = nextUniqueCodeFactory(existingCodes.map((r) => r.item_code));
+
+    const { rows: maxSortRows } = await client.query(
+      `SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM checklist_items WHERE template_id = $1`,
+      [targetTemplateId]
+    );
+    const sortOffset = (maxSortRows[0]?.max_sort ?? 0) + 1;
+
+    const { rows: items } = await client.query(
+      `SELECT *
+       FROM checklist_items
+       WHERE template_id = $1
+       ORDER BY sort_order, item_code`,
+      [sourceTemplateId]
+    );
+
+    // Copy items while preserving parent-child structure (remap IDs)
+    const idMap = new Map(); // oldItemId -> newItemId
+    const remaining = new Map(items.map((it) => [it.id, it]));
+    const inserted = [];
+
+    while (remaining.size > 0) {
+      let insertedThisPass = 0;
+
+      for (const [oldId, it] of remaining) {
+        const parentOld = it.parent_item_id;
+        const parentNew = parentOld ? idMap.get(parentOld) : null;
+        if (parentOld && !parentNew) continue;
+
+        const newCode = nextCode(it.item_code);
+
+        const { rows: newItemRows } = await client.query(
+          `INSERT INTO checklist_items
+            (template_id, parent_item_id, item_code, title, description,
+             is_required, frequency, due_date, allowed_file_types, max_files,
+             sort_order, is_active)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+           RETURNING *`,
+          [
+            targetTemplateId,
+            parentNew,
+            newCode,
+            it.title,
+            it.description,
+            it.is_required,
+            it.frequency,
+            it.due_date,
+            it.allowed_file_types,
+            it.max_files,
+            (it.sort_order ?? 0) + sortOffset,
+            it.is_active,
+          ]
+        );
+
+        const newItem = newItemRows[0];
+        idMap.set(oldId, newItem.id);
+        inserted.push(newItem);
+        remaining.delete(oldId);
+        insertedThisPass += 1;
+      }
+
+      if (insertedThisPass === 0) {
+        throw new Error("Unable to import template items due to invalid parent relationships.");
+      }
+    }
+
+    await client.query("COMMIT");
+    return inserted;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getChecklistItemInTemplate(itemId, templateId) {
   const { rows } = await pool.query(
     `SELECT id FROM checklist_items WHERE id = $1 AND template_id = $2`,

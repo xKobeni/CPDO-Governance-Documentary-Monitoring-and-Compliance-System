@@ -12,6 +12,7 @@ import {
   deleteChecklistItem,
   getChecklistItemInTemplate,
   copyTemplateWithItems,
+  importTemplateItems,
 } from "../models/templates.model.js";
 
 export async function listTemplatesHandler(req, res) {
@@ -214,4 +215,29 @@ export async function deleteChecklistItemHandler(req, res) {
   const { itemId } = req.params;
   await deleteChecklistItem(itemId);
   return res.status(204).end();
+}
+
+const importItemsSchema = z.object({
+  sourceTemplateId: z.string().uuid(),
+});
+
+export async function importTemplateItemsHandler(req, res) {
+  const targetTemplateId = req.params.templateId;
+  const parsed = importItemsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
+
+  const [source, target] = await Promise.all([
+    getTemplateById(parsed.data.sourceTemplateId),
+    getTemplateById(targetTemplateId),
+  ]);
+  if (!source) return res.status(404).json({ message: "Source template not found" });
+  if (!target) return res.status(404).json({ message: "Target template not found" });
+  if (source.id === target.id) return res.status(409).json({ message: "Source and target templates must be different" });
+
+  const inserted = await importTemplateItems({
+    sourceTemplateId: source.id,
+    targetTemplateId: target.id,
+  });
+
+  return res.status(201).json({ items: inserted });
 }

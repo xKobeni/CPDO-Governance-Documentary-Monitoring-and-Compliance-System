@@ -7,6 +7,7 @@ const api = axios.create({
 
 let accessToken = localStorage.getItem("accessToken");
 let sessionId = localStorage.getItem("sessionId");
+let refreshPromise = null;
 
 export function setAccessToken(token) {
   accessToken = token;
@@ -61,6 +62,29 @@ async function forceLogout({ reason = null } = {}) {
   window.location.href = "/login";
 }
 
+function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = axios
+      .post(
+        `${import.meta.env.VITE_API_URL}/auth/refresh`,
+        {},
+        { withCredentials: true }
+      )
+      .then((refreshResponse) => {
+        const newToken = refreshResponse.data?.accessToken;
+        const newSessionId = refreshResponse.data?.sessionId;
+        setAccessToken(newToken);
+        if (newSessionId) setSessionId(newSessionId);
+        return { newToken, newSessionId };
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+}
+
 api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
@@ -77,6 +101,7 @@ api.interceptors.response.use(
     const originalRequest = error.config;
     const status = error.response?.status;
     const message = error.response?.data?.message ?? "";
+    if (!originalRequest) return Promise.reject(error);
 
     // If backend reports explicit inactivity timeout, show modal on login page
     if (
@@ -97,16 +122,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshResponse = await axios.post(
-          `${import.meta.env.VITE_API_URL}/auth/refresh`,
-          {},
-          { withCredentials: true }
-        );
-
-        const newToken = refreshResponse.data?.accessToken;
-        const newSessionId = refreshResponse.data?.sessionId;
-        setAccessToken(newToken);
-        if (newSessionId) setSessionId(newSessionId);
+        const { newToken, newSessionId } = await refreshAccessToken();
 
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         if (newSessionId) originalRequest.headers["x-session-id"] = newSessionId;

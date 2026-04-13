@@ -14,6 +14,7 @@ import {
   createChecklistItemHandler,
   updateChecklistItemHandler,
   deleteChecklistItemHandler,
+  importTemplateItemsHandler,
 } from "../controllers/templates.controller.js";
 
 const r = Router();
@@ -66,6 +67,13 @@ r.delete("/:templateId/items/:itemId",
   requireRole("ADMIN"),
   audit("DELETE_CHECKLIST_ITEM", "CHECKLIST_ITEM", (req) => req.params.itemId),
   asyncHandler(deleteChecklistItemHandler)
+);
+
+r.post(
+  "/:templateId/items/import",
+  requireRole("ADMIN"),
+  audit("IMPORT_TEMPLATE_ITEMS", "TEMPLATE", (req) => req.params.templateId, (req) => ({ sourceTemplateId: req.body.sourceTemplateId })),
+  asyncHandler(importTemplateItemsHandler)
 );
 
 export default r;
