@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
+import { commentCreateLimiter, commentDeleteLimiter } from "../middlewares/rateLimit.js";
 import { audit } from "../middlewares/audit.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import {
@@ -20,9 +21,9 @@ const noCache = (_req, res, next) => {
 r.get("/", noCache, asyncHandler(getCommentsHandler));
 
 // Create a comment
-r.post("/", audit("CREATE_COMMENT", "SUBMISSION_COMMENT", (req) => req.params.submissionId, (req) => ({ content: req.body.content?.substring(0,100) + '...', submissionId: req.params.submissionId })), asyncHandler(createCommentHandler));
+r.post("/", commentCreateLimiter, audit("CREATE_COMMENT", "SUBMISSION_COMMENT", (req) => req.params.submissionId, (req) => ({ content: req.body.content?.substring(0,100) + '...', submissionId: req.params.submissionId })), asyncHandler(createCommentHandler));
 
 // Delete a comment
-r.delete("/:commentId", audit("DELETE_COMMENT", "SUBMISSION_COMMENT", (req) => req.params.commentId, (req) => ({ commentId: req.params.commentId, submissionId: req.params.submissionId })), asyncHandler(deleteCommentHandler));
+r.delete("/:commentId", commentDeleteLimiter, audit("DELETE_COMMENT", "SUBMISSION_COMMENT", (req) => req.params.commentId, (req) => ({ commentId: req.params.commentId, submissionId: req.params.submissionId })), asyncHandler(deleteCommentHandler));
 
 export default r;

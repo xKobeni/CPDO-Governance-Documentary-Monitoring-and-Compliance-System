@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
+import { fileUploadLimiter } from "../middlewares/rateLimit.js";
 import { upload } from "../middlewares/upload.js";
 import { audit } from "../middlewares/audit.js";
 import { shortCache } from "../middlewares/caching.js";
@@ -28,6 +29,7 @@ r.delete(
 );
 r.post(
   "/:submissionId/upload",
+  fileUploadLimiter,
   upload.single("file"),
   audit("UPLOAD_FILE", "SUBMISSION", (req) => req.params.submissionId, (req) => ({ 
     fileName: req.file?.originalname, 

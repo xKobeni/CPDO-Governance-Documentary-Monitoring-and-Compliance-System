@@ -9,6 +9,7 @@ import compression from "compression";
 import { env } from "./config/env.js";
 import { logger } from "./config/logger.js";
 import routes from "./routes/index.js";
+import { apiGlobalLimiter } from "./middlewares/rateLimit.js";
 import { errorHandler, notFound } from "./middlewares/errors.js";
 
 export function createApp() {
@@ -36,7 +37,7 @@ export function createApp() {
 
   app.get("/health", (req, res) => res.json({ ok: true }));
 
-  app.use("/api", routes);
+  app.use("/api", apiGlobalLimiter, routes);
 
   app.use(notFound);
   app.use(errorHandler);

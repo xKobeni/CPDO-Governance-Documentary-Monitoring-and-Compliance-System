@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { hashPassword, verifyPassword } from "../utils/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/jwt.js";
 import { sha256 } from "../utils/tokenHash.js";
+import { setCsrfCookie } from "../utils/csrf.js";
 import { writeAuditLog } from "../models/audit.model.js";
 
 import {
@@ -56,6 +57,7 @@ function setRefreshCookie(res, token) {
 
 function clearAuthCookies(res) {
   res.clearCookie("refresh_token", { path: "/api/auth" });
+  res.clearCookie("csrf_token", { path: "/" });
 }
 
 export async function login(req, res) {
@@ -182,6 +184,7 @@ export async function login(req, res) {
 
   // We used sid independent of DB id; that's fine. If you want DB session id as sid, tell me.
   setRefreshCookie(res, refreshToken);
+  setCsrfCookie(res, { secure: env.cookieSecure });
   await updateLastLogin(user.id);
 
   const accessToken = signAccessToken(accessPayload);
@@ -243,6 +246,7 @@ export async function refresh(req, res) {
   });
 
   setRefreshCookie(res, newRefreshToken);
+  setCsrfCookie(res, { secure: env.cookieSecure });
 
   const accessToken = signAccessToken(accessPayload);
   return res.json({ accessToken, sessionId: newSession.id });
@@ -300,9 +304,7 @@ export async function forgotPassword(req, res) {
 
   // Always return success to avoid email enumeration
   const response = {
-    message: "If an account exists with this email, a reset code has been generated.",
-    resetToken: null,
-    expiresIn: null,
+    message: "If an account exists with this email, password reset instructions have been sent.",
   };
 
   if (!user || !user.is_active) {
@@ -330,8 +332,6 @@ export async function forgotPassword(req, res) {
     // Don't break flow
   }
 
-  response.resetToken = resetToken;
-  response.expiresIn = 3600;
   return res.json(response);
 }
 

@@ -9,6 +9,14 @@ let accessToken = localStorage.getItem("accessToken");
 let sessionId = localStorage.getItem("sessionId");
 let refreshPromise = null;
 
+function getCsrfTokenFromCookie() {
+  const parts = document.cookie.split("; ");
+  const match = parts.find((entry) => entry.startsWith("csrf_token="));
+  if (!match) return null;
+  const value = match.slice("csrf_token=".length);
+  return value ? decodeURIComponent(value) : null;
+}
+
 export function setAccessToken(token) {
   accessToken = token;
   if (token) {
@@ -64,11 +72,15 @@ async function forceLogout({ reason = null } = {}) {
 
 function refreshAccessToken() {
   if (!refreshPromise) {
+    const csrfToken = getCsrfTokenFromCookie();
     refreshPromise = axios
       .post(
         `${import.meta.env.VITE_API_URL}/auth/refresh`,
         {},
-        { withCredentials: true }
+        {
+          withCredentials: true,
+          headers: csrfToken ? { "x-csrf-token": csrfToken } : {},
+        }
       )
       .then((refreshResponse) => {
         const newToken = refreshResponse.data?.accessToken;
@@ -91,6 +103,13 @@ api.interceptors.request.use((config) => {
   }
   if (sessionId) {
     config.headers["x-session-id"] = sessionId;
+  }
+  const method = (config.method || "get").toLowerCase();
+  if (["post", "put", "patch", "delete"].includes(method)) {
+    const csrfToken = getCsrfTokenFromCookie();
+    if (csrfToken) {
+      config.headers["x-csrf-token"] = csrfToken;
+    }
   }
   return config;
 });

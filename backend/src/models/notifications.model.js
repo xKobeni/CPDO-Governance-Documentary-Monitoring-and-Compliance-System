@@ -123,6 +123,8 @@ export async function getUnreadCount(userId) {
  */
 export async function deleteOldNotifications(daysOld = 30) {
   await pool.query(
-    `DELETE FROM notifications WHERE created_at < now() - interval '${daysOld} days'`
+    `DELETE FROM notifications
+     WHERE created_at < now() - ($1::int * interval '1 day')`,
+    [daysOld]
   );
 }
