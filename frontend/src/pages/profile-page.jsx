@@ -21,6 +21,7 @@ import {
   Shield,
   Building
 } from "lucide-react";
+import HelpTourOverlay from "../components/help-tour-overlay";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -103,9 +104,9 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="profile-root">
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start" data-tour-id="profile-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
           <p className="text-muted-foreground">
@@ -122,9 +123,9 @@ export default function ProfilePage() {
         </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-3" data-tour-id="profile-main-grid">
         {/* Profile Card */}
-        <div className="md:col-span-1">
+        <div className="md:col-span-1" data-tour-id="profile-summary">
           <Card>
             <CardContent className="pt-6">
               <div className="flex flex-col items-center text-center space-y-4">
@@ -194,7 +195,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Information Cards */}
-        <div className="md:col-span-2 space-y-6">
+        <div className="md:col-span-2 space-y-6" data-tour-id="profile-details">
           {/* Personal Information */}
           <Card>
             <CardHeader>
@@ -323,6 +324,42 @@ export default function ProfilePage() {
 
         </div>
       </div>
+
+      <HelpTourOverlay
+        buttonLabel="Profile page help"
+        steps={[
+          {
+            title: "Profile page overview",
+            description: "This page contains your account profile, personal details, and role information.",
+            selector: '[data-tour-id="profile-header"]',
+            selectorLabel: "Profile header",
+          },
+          {
+            title: "Edit profile details",
+            description: "Use Edit Profile to update your full name, then save changes from the personal information section.",
+            selector: '[data-tour-id="profile-header"]',
+            selectorLabel: "Edit profile action",
+          },
+          {
+            title: "Review account summary",
+            description: "This section shows your avatar, email, role badge, account status, and quick account stats.",
+            selector: '[data-tour-id="profile-summary"]',
+            selectorLabel: "Profile summary and quick stats",
+          },
+          {
+            title: "Manage personal information",
+            description: "View or edit your personal information here, including full name and account metadata.",
+            selector: '[data-tour-id="profile-details"]',
+            selectorLabel: "Personal information section",
+          },
+          {
+            title: "Understand role permissions",
+            description: "Check your current role and access scope from the Role & Permissions card.",
+            selector: '[data-tour-id="profile-details"]',
+            selectorLabel: "Role and permissions section",
+          },
+        ]}
+      />
     </div>
   );
 }

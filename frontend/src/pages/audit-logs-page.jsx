@@ -56,6 +56,7 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../hooks/use-auth';
 // Import the API functions
 import { getAuditLogs, getAuditStats, exportAuditLogs } from '../api/audit-logs';
+import HelpTourOverlay from '../components/help-tour-overlay';
 const actionTypes = [
   'CREATE_USER', 'UPDATE_USER', 'DELETE_USER', 'SET_USER_ACTIVE',
   'CREATE_OFFICE', 'UPDATE_OFFICE', 'DELETE_OFFICE', 'SET_OFFICE_ACTIVE',
@@ -349,9 +350,9 @@ export default function AuditLogsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="audit-root">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center" data-tour-id="audit-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
             {isAdmin ? 'Audit Logs' : 'My Activity Log'}
@@ -362,7 +363,7 @@ export default function AuditLogsPage() {
               : 'A record of your own activity in the system'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" data-tour-id="audit-actions">
           <Button variant="outline" onClick={loadAuditLogs} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -385,7 +386,7 @@ export default function AuditLogsPage() {
 
       {/* Statistics Cards */}
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5" data-tour-id="audit-kpis">
           {[1,2,3,4,5].map(i => (
             <Card key={i}>
               <CardContent className="p-6">
@@ -398,7 +399,7 @@ export default function AuditLogsPage() {
           ))}
         </div>
       ) : (
-        <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
+        <div className={`grid gap-4 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`} data-tour-id="audit-kpis">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -452,7 +453,7 @@ export default function AuditLogsPage() {
       )}
 
       {/* Filters and Search */}
-      <Card>
+      <Card data-tour-id="audit-log-panel">
         <CardHeader>
           <CardTitle>{isAdmin ? 'System Activity Log' : 'My Activity'}</CardTitle>
           <CardDescription>
@@ -462,7 +463,7 @@ export default function AuditLogsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row gap-4" data-tour-id="audit-filters">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -568,7 +569,7 @@ export default function AuditLogsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLogs.map((log) => {
+                  {filteredLogs.map((log, idx) => {
                     const EntityIcon = getEntityIcon(log.entityType);
                     return (
                       <TableRow key={log.id}>
@@ -607,7 +608,11 @@ export default function AuditLogsPage() {
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0">
+                              <Button
+                                variant="ghost"
+                                className="h-8 w-8 p-0"
+                                data-tour-id={idx === 0 ? "audit-row-action-btn" : undefined}
+                              >
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -771,6 +776,48 @@ export default function AuditLogsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <HelpTourOverlay
+        buttonLabel="Audit logs page help"
+        steps={[
+          {
+            title: "Audit logs overview",
+            description: "This page tracks system events and user actions for accountability and investigation.",
+            selector: '[data-tour-id="audit-header"]',
+            selectorLabel: "Audit logs header",
+          },
+          {
+            title: "Use header actions",
+            description: "Use Refresh to load newest logs and Export to download filtered audit records.",
+            selector: '[data-tour-id="audit-actions"]',
+            selectorLabel: "Refresh and export actions",
+          },
+          {
+            title: "Read activity KPIs",
+            description: "These cards summarize log volume, actors, action types, and recent activity windows.",
+            selector: '[data-tour-id="audit-kpis"]',
+            selectorLabel: "Audit statistics cards",
+          },
+          {
+            title: "Filter audit records",
+            description: "Use search, action/entity filters, and date range controls to narrow the result set.",
+            selector: '[data-tour-id="audit-filters"]',
+            selectorLabel: "Audit filter controls",
+          },
+          {
+            title: "Review logs table",
+            description: "The table shows timestamp, actor, action, and target entity for each audit event.",
+            selector: '[data-tour-id="audit-log-panel"]',
+            selectorLabel: "Audit log table",
+          },
+          {
+            title: "Use the row action button",
+            description: "Use the three-dot action button to open full details, copy log ID, or copy metadata.",
+            selector: '[data-tour-id="audit-row-action-btn"]',
+            selectorLabel: "Row action button (three dots)",
+          },
+        ]}
+      />
     </div>
   );
 }

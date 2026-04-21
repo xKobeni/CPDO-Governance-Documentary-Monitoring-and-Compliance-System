@@ -62,6 +62,7 @@ import {
   getAssignedOffices,
 } from '../api/governance';
 import { getYears } from '../api/years';
+import HelpTourOverlay from '../components/help-tour-overlay';
 
 const EMPTY_FORM = { code: '', name: '', description: '', sortOrder: '', isActive: true };
 
@@ -251,7 +252,7 @@ export default function GovernancePage() {
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="gov-manage-root">
 
       {/* ── Error Banner ───────────────────────────────────────────────────── */}
       {error && (
@@ -263,7 +264,7 @@ export default function GovernancePage() {
       )}
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center" data-tour-id="gov-manage-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Manage Governance Areas</h1>
           <p className="text-muted-foreground">
@@ -352,7 +353,7 @@ export default function GovernancePage() {
       </div>
 
       {/* ── Stats Cards ────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3" data-tour-id="gov-manage-stats">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Areas</CardTitle>
@@ -386,7 +387,7 @@ export default function GovernancePage() {
       </div>
 
       {/* ── Table Card ─────────────────────────────────────────────────────── */}
-      <Card>
+      <Card data-tour-id="gov-manage-directory">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <LayoutList className="h-5 w-5" />
@@ -397,7 +398,7 @@ export default function GovernancePage() {
         <CardContent className="space-y-4">
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3" data-tour-id="gov-manage-filters">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -725,6 +726,42 @@ export default function GovernancePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <HelpTourOverlay
+        buttonLabel="Governance page help"
+        steps={[
+          {
+            title: "Governance area management",
+            description: "Use this page to define and maintain governance areas used by templates and compliance tracking.",
+            selector: '[data-tour-id="gov-manage-header"]',
+            selectorLabel: "Page header and actions",
+          },
+          {
+            title: "Add or refresh areas",
+            description: "Use Add Area to create a new governance area and Refresh to pull the latest records.",
+            selector: '[data-tour-id="gov-manage-header"]',
+            selectorLabel: "Header action buttons",
+          },
+          {
+            title: "Read area statistics",
+            description: "These cards summarize total, active, and inactive areas so you can quickly monitor system setup.",
+            selector: '[data-tour-id="gov-manage-stats"]',
+            selectorLabel: "Area summary cards",
+          },
+          {
+            title: "Filter the directory",
+            description: "Search by code, name, or description and filter by status to find specific governance areas faster.",
+            selector: '[data-tour-id="gov-manage-filters"]',
+            selectorLabel: "Search and status filters",
+          },
+          {
+            title: "Manage records from the table",
+            description: "Open row actions to edit, activate/deactivate, view assigned offices, or delete areas.",
+            selector: '[data-tour-id="gov-manage-directory"]',
+            selectorLabel: "Governance area directory",
+          },
+        ]}
+      />
 
     </div>
   );

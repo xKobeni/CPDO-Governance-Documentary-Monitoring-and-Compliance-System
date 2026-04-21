@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { AlertTriangle, Calendar, Loader2, Plus, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react';
 import { getYears, createYear, updateYear } from '../api/years';
+import HelpTourOverlay from '../components/help-tour-overlay';
 
 export default function YearsPage() {
   const [years, setYears] = useState([]);
@@ -80,7 +81,7 @@ export default function YearsPage() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="years-root">
       {/* Error banner */}
       {error && (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
@@ -96,14 +97,14 @@ export default function YearsPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between" data-tour-id="years-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Manage Years</h1>
           <p className="text-muted-foreground">
             Configure which reporting years are available across dashboards, templates, and reports.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" data-tour-id="years-actions">
           <Button variant="outline" size="sm" onClick={loadYears} disabled={loading}>
             {loading ? (
               <>
@@ -125,7 +126,7 @@ export default function YearsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3" data-tour-id="years-stats">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Years</CardTitle>
@@ -165,7 +166,7 @@ export default function YearsPage() {
       </div>
 
       {/* Table */}
-      <Card>
+      <Card data-tour-id="years-directory">
         <CardHeader>
           <CardTitle>Year Directory</CardTitle>
           <CardDescription>
@@ -198,7 +199,7 @@ export default function YearsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  years.map((y) => (
+                  years.map((y, idx) => (
                     <TableRow key={y.id}>
                       <TableCell className="font-mono text-sm">{y.year}</TableCell>
                       <TableCell>
@@ -227,6 +228,7 @@ export default function YearsPage() {
                           size="sm"
                           onClick={() => toggleActive(y)}
                           disabled={saving}
+                          data-tour-id={idx === 0 ? "years-row-action-btn" : undefined}
                         >
                           {y.is_active ? (
                             <>
@@ -249,6 +251,42 @@ export default function YearsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <HelpTourOverlay
+        buttonLabel="Years page help"
+        steps={[
+          {
+            title: "Year configuration overview",
+            description: "Use this page to control which reporting years are available throughout the system.",
+            selector: '[data-tour-id="years-header"]',
+            selectorLabel: "Page header and actions",
+          },
+          {
+            title: "Add and refresh years",
+            description: "Use Add Year to create a new reporting period and Refresh to reload current year settings.",
+            selector: '[data-tour-id="years-actions"]',
+            selectorLabel: "Header action buttons",
+          },
+          {
+            title: "Read year statistics",
+            description: "These cards show total configured years, active years, and the current calendar year reference.",
+            selector: '[data-tour-id="years-stats"]',
+            selectorLabel: "Year summary cards",
+          },
+          {
+            title: "Manage year statuses",
+            description: "Use the directory table to activate/deactivate years and control which appear in dropdowns.",
+            selector: '[data-tour-id="years-directory"]',
+            selectorLabel: "Year directory table",
+          },
+          {
+            title: "Use the action button",
+            description: "Use the row action button to activate or deactivate a specific year so it appears (or hides) in year dropdowns.",
+            selector: '[data-tour-id="years-row-action-btn"]',
+            selectorLabel: "Row action button",
+          },
+        ]}
+      />
 
       {/* Create dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>

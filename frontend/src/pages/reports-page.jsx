@@ -50,6 +50,7 @@ import { getGovernanceAreasWithStats, getComplianceMatrix } from '../api/governa
 import { getYears } from '../api/years';
 import { getOffices } from '../api/offices';
 import { useAuth } from '../hooks/use-auth';
+import HelpTourOverlay from '../components/help-tour-overlay';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -428,10 +429,10 @@ export default function ReportsPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="reports-root">
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4" data-tour-id="reports-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -441,7 +442,7 @@ export default function ReportsPage() {
             )}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" data-tour-id="reports-controls">
           <Select
             value={year}
             onValueChange={(v) => setYear(v)}
@@ -492,22 +493,22 @@ export default function ReportsPage() {
       </div>
 
       {/* ── Tabs ────────────────────────────────────────────────────────────── */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} data-tour-id="reports-tabs">
         <TabsList variant="line" className="w-full justify-start border-b pb-0 h-auto rounded-none gap-0">
-          <TabsTrigger value="overview" className="px-4 py-2.5">
+          <TabsTrigger value="overview" data-tour-tab="overview" className="px-4 py-2.5">
             <Activity className="h-3.5 w-3.5" />
             Overview
           </TabsTrigger>
-          <TabsTrigger value="status" className="px-4 py-2.5">
+          <TabsTrigger value="status" data-tour-tab="status" className="px-4 py-2.5">
             <BarChart3 className="h-3.5 w-3.5" />
             Submission Status
           </TabsTrigger>
-          <TabsTrigger value="missing" className="px-4 py-2.5">
+          <TabsTrigger value="missing" data-tour-tab="missing" className="px-4 py-2.5">
             <FileX className="h-3.5 w-3.5" />
             Missing Uploads
           </TabsTrigger>
           {isAdminOrStaff && (
-            <TabsTrigger value="rankings" className="px-4 py-2.5">
+            <TabsTrigger value="rankings" data-tour-tab="rankings" className="px-4 py-2.5">
               <Trophy className="h-3.5 w-3.5" />
               Office Rankings
             </TabsTrigger>
@@ -542,7 +543,7 @@ export default function ReportsPage() {
               const ar   = kpis.approvalRate != null ? `${kpis.approvalRate}%` : '—';
               const reviewed_ = kpis.reviewedSubmissions || 0;
               return (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" data-tour-id="reports-kpis">
                   <KpiCard label="Total" value={t.toLocaleString()} sub={`submissions in ${year}`} icon={FileText} color="text-foreground" bg="bg-muted" />
                   <KpiCard label="Approved"      value={app.toLocaleString()} sub={t > 0 ? `${((app/t)*100).toFixed(1)}% of total` : '—'} icon={CheckCircle2} color="text-green-600"  bg="bg-green-100"  accentBar="bg-green-500"  pct={t > 0 ? (app/t)*100 : 0} />
                   <KpiCard label="Pending"        value={pen.toLocaleString()} sub={t > 0 ? `${((pen/t)*100).toFixed(1)}% of total` : '—'} icon={Clock}        color="text-amber-600"  bg="bg-amber-100"  accentBar="bg-amber-400"  pct={t > 0 ? (pen/t)*100 : 0} />
@@ -650,7 +651,7 @@ export default function ReportsPage() {
           </div>
 
           {/* Recent submissions */}
-          <Card>
+          <Card data-tour-id="reports-recent">
             <CardHeader className="flex flex-row items-start justify-between gap-3">
               <div>
                 <CardTitle className="text-base">Recent Submissions</CardTitle>
@@ -1136,6 +1137,59 @@ export default function ReportsPage() {
           </TabsContent>
         )}
       </Tabs>
+
+      <HelpTourOverlay
+        buttonLabel="Reports page help"
+        steps={[
+          {
+            title: "Reports overview",
+            description: "This page helps you analyze submissions, approval status, missing uploads, and office compliance rankings.",
+            selector: '[data-tour-id="reports-header"]',
+            selectorLabel: "Reports header",
+          },
+          {
+            title: "Set report context",
+            description: "Use year and office filters, then Refresh to load the latest report data before exporting or printing.",
+            selector: '[data-tour-id="reports-controls"]',
+            selectorLabel: "Year, office, and action controls",
+          },
+          {
+            title: "Switch report modules",
+            description: "Use these tabs to move between Overview, Submission Status, Missing Uploads, and Rankings.",
+            selector: '[data-tour-id="reports-tabs"]',
+            selectorLabel: "Report tabs",
+            tabValue: "overview",
+          },
+          {
+            title: "Read overview KPIs",
+            description: "These KPI cards summarize total submissions, approvals, pending items, revisions, denials, and approval rate.",
+            selector: '[data-tour-id="reports-kpis"]',
+            selectorLabel: "Overview KPI cards",
+            tabValue: "overview",
+          },
+          {
+            title: "Review recent submissions",
+            description: "Use this section to inspect the latest records and export recent submission data as CSV.",
+            selector: '[data-tour-id="reports-recent"]',
+            selectorLabel: "Recent submissions table",
+            tabValue: "overview",
+          },
+          {
+            title: "Analyze status distribution",
+            description: "In Submission Status tab, compare counts and percentages per status, then export the summary report.",
+            selector: '[data-tour-tab="status"]',
+            selectorLabel: "Submission Status tab",
+            tabValue: "status",
+          },
+          {
+            title: "Check missing uploads",
+            description: "In Missing Uploads tab, identify checklist items with no file uploads and export office-specific gaps.",
+            selector: '[data-tour-tab="missing"]',
+            selectorLabel: "Missing Uploads tab",
+            tabValue: "missing",
+          },
+        ]}
+      />
     </div>
   );
 }

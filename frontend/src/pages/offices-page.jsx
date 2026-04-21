@@ -59,6 +59,7 @@ import { useAuth } from '../hooks/use-auth';
 import { getOffices, createOffice, updateOffice, deleteOffice, toggleOfficeStatus, getOfficeAssignments, setOfficeAssignments } from '../api/offices';
 import { getGovernanceAreas } from '../api/governance';
 import { getYears } from '../api/years';
+import HelpTourOverlay from '../components/help-tour-overlay';
 
 export default function OfficesPage() {
   const { user } = useAuth();
@@ -325,16 +326,16 @@ export default function OfficesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="offices-root">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center" data-tour-id="offices-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Office Management</h1>
           <p className="text-muted-foreground">
             Manage office hierarchy and organizational structure
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" data-tour-id="offices-actions">
           <Button variant="outline" size="sm" onClick={loadOffices} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -419,7 +420,7 @@ export default function OfficesPage() {
 
       {/* Statistics Cards */}
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-tour-id="offices-stats">
           {[1,2,3,4].map(i => (
             <Card key={i}>
               <CardContent className="p-6">
@@ -432,7 +433,7 @@ export default function OfficesPage() {
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-tour-id="offices-stats">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Offices</CardTitle>
@@ -473,7 +474,7 @@ export default function OfficesPage() {
       )}
 
       {/* Filters and Search */}
-      <Card>
+      <Card data-tour-id="offices-directory">
         <CardHeader>
           <CardTitle>Office Directory</CardTitle>
           <CardDescription>
@@ -481,7 +482,7 @@ export default function OfficesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row gap-4" data-tour-id="offices-filters">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -524,7 +525,7 @@ export default function OfficesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedOffices.map((office) => (
+                  {paginatedOffices.map((office, idx) => (
                     <TableRow key={office.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -570,7 +571,11 @@ export default function OfficesPage() {
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
+                            <Button
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              data-tour-id={idx === 0 ? "offices-row-action-btn" : undefined}
+                            >
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -686,6 +691,42 @@ export default function OfficesPage() {
           )}
         </CardContent>
       </Card>
+
+      <HelpTourOverlay
+        buttonLabel="Offices page help"
+        steps={[
+          {
+            title: "Office management overview",
+            description: "This page manages office records used across users, assignments, and reporting.",
+            selector: '[data-tour-id="offices-header"]',
+            selectorLabel: "Page header and actions",
+          },
+          {
+            title: "Create and refresh offices",
+            description: "Use Add Office to register new offices and Refresh to sync the latest office directory.",
+            selector: '[data-tour-id="offices-actions"]',
+            selectorLabel: "Header action buttons",
+          },
+          {
+            title: "Review office statistics",
+            description: "These cards summarize total offices, active/inactive status, and total linked users.",
+            selector: '[data-tour-id="offices-stats"]',
+            selectorLabel: "Office summary cards",
+          },
+          {
+            title: "Filter office list",
+            description: "Search by office name/code and filter by active status to quickly locate offices.",
+            selector: '[data-tour-id="offices-filters"]',
+            selectorLabel: "Search and status filters",
+          },
+          {
+            title: "Manage office actions",
+            description: "Use row actions to edit offices, assign governance areas, toggle status, or delete eligible records.",
+            selector: '[data-tour-id="offices-directory"]',
+            selectorLabel: "Office directory table",
+          },
+        ]}
+      />
 
       {/* Assign Governance Areas Dialog */}
       <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>

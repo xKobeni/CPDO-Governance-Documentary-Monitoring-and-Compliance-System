@@ -27,6 +27,7 @@ import {
   Check,
   X,
 } from "lucide-react";
+import HelpTourOverlay from "../components/help-tour-overlay";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -152,9 +153,9 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="settings-root">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center" data-tour-id="settings-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
           <p className="text-muted-foreground">
@@ -164,13 +165,13 @@ export default function SettingsPage() {
       </div>
 
       {/* Settings Tabs */}
-      <Tabs defaultValue="security" className="space-y-6">
+      <Tabs defaultValue="security" className="space-y-6" data-tour-id="settings-tabs">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="security" className="flex items-center gap-2">
+          <TabsTrigger value="security" data-tour-tab="security" className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
             Security
           </TabsTrigger>
-          <TabsTrigger value="system" className="flex items-center gap-2">
+          <TabsTrigger value="system" data-tour-tab="system" className="flex items-center gap-2">
             <Info className="h-4 w-4" />
             System
           </TabsTrigger>
@@ -178,7 +179,7 @@ export default function SettingsPage() {
 
         {/* Security Settings */}
         <TabsContent value="security" className="space-y-6">
-          <Card>
+          <Card data-tour-id="settings-security-panel">
             <CardHeader>
               <CardTitle>Change Password</CardTitle>
             </CardHeader>
@@ -324,7 +325,7 @@ export default function SettingsPage() {
 
         {/* System Information */}
         <TabsContent value="system" className="space-y-6">
-          <Card>
+          <Card data-tour-id="settings-system-panel">
             <CardHeader>
               <CardTitle>System Information</CardTitle>
             </CardHeader>
@@ -471,6 +472,39 @@ export default function SettingsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <HelpTourOverlay
+        buttonLabel="Settings page help"
+        steps={[
+          {
+            title: "Settings overview",
+            description: "Use this page to manage password security and view system/account environment details.",
+            selector: '[data-tour-id="settings-header"]',
+            selectorLabel: "Settings header",
+          },
+          {
+            title: "Switch settings tabs",
+            description: "Use Security and System tabs to move between password controls and environment information.",
+            selector: '[data-tour-id="settings-tabs"]',
+            selectorLabel: "Settings tabs",
+            tabValue: "security",
+          },
+          {
+            title: "Manage password security",
+            description: "Update your password here, check password strength, and use the forgot-password flow if needed.",
+            selector: '[data-tour-id="settings-security-panel"]',
+            selectorLabel: "Security settings panel",
+            tabValue: "security",
+          },
+          {
+            title: "Review system information",
+            description: "Check app version, environment, user ID, and browser/screen details in this panel.",
+            selector: '[data-tour-id="settings-system-panel"]',
+            selectorLabel: "System information panel",
+            tabValue: "system",
+          },
+        ]}
+      />
     </div>
   );
 }

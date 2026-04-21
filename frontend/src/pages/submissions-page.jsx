@@ -73,6 +73,7 @@ import {
 import { getGovernanceAreasWithStats, getAssignedOffices } from "../api/governance";
 import { getOfficeChecklist } from "../api/offices";
 import { getYears } from "../api/years";
+import HelpTourOverlay from "../components/help-tour-overlay";
 
 const STATUS_BADGE = {
   // Blue – pending / waiting for approval
@@ -693,6 +694,29 @@ export default function SubmissionsPage() {
   });
   const assignedOffices = assignedOfficesQuery.data?.data ?? [];
 
+  /** Tutorial auto-pick: prefer areas/offices with pending items, then any submissions, else first */
+  const tourGovernanceId = useMemo(() => {
+    if (!governanceAreas.length) return null;
+    const pending = governanceAreas.find(
+      (g) => Number(g.pending_review_count ?? 0) > 0
+    );
+    if (pending) return pending.id;
+    const subs = governanceAreas.find(
+      (g) => Number(g.submissions ?? 0) > 0
+    );
+    if (subs) return subs.id;
+    return governanceAreas[0].id;
+  }, [governanceAreas]);
+
+  const tourOfficeId = useMemo(() => {
+    if (!assignedOffices.length) return null;
+    const pending = assignedOffices.find(
+      (o) => Number(o.pending_review_count ?? 0) > 0
+    );
+    if (pending) return pending.office_id;
+    return assignedOffices[0]?.office_id ?? null;
+  }, [assignedOffices]);
+
   // For the final step, use the office checklist tree so we can include parent/root headers.
   const officeChecklistQuery = useQuery({
     queryKey: ["offices", selectedOfficeId, "checklist", year],
@@ -845,9 +869,84 @@ export default function SubmissionsPage() {
     setPage(1);
   };
 
+  const tutorialSteps = useMemo(() => {
+    if (!canReview) {
+      return [
+        {
+          title: "Your submissions page",
+          description: "This page shows all submissions from your office and their latest review status.",
+          selector: '[data-tour-id="submissions-header"]',
+          selectorLabel: "Submissions header",
+        },
+        {
+          title: "Set year and refresh",
+          description: "Change the reporting year and refresh to load the latest submission statuses.",
+          selector: '[data-tour-id="submissions-header"]',
+          selectorLabel: "Year selector and refresh",
+        },
+        {
+          title: "Filter your list",
+          description: "Use search and status filters to find specific governance items or review outcomes quickly.",
+          selector: '[data-tour-id="submissions-office-filters"]',
+          selectorLabel: "Office filters",
+        },
+        {
+          title: "Open submission details",
+          description: "Click any row to open files, comments, and full submission history in the details dialog.",
+          selector: '[data-tour-id="submissions-office-table"]',
+          selectorLabel: "Submissions table",
+        },
+      ];
+    }
+
+    return [
+      {
+        title: "Submission review workflow",
+        description: "This page uses a 3-step drilldown: governance area, assigned office, then checklist submissions.",
+        selector: '[data-tour-id="submissions-header"]',
+        selectorLabel: "Submissions header",
+      },
+      {
+        title: "Track your current path",
+        description: "Use the breadcrumb to move back to governance or office level while reviewing.",
+        selector: '[data-tour-id="submissions-breadcrumb"]',
+        selectorLabel: "Review breadcrumb",
+      },
+      {
+        title: "Choose a governance area",
+        description:
+          "Start by selecting a governance area. Areas with a blue badge show pending reviews; the tour’s next steps prefer an area that already has submission activity.",
+        selector: '[data-tour-id="submissions-governance-level"]',
+        selectorLabel: "Governance selection",
+      },
+      {
+        title: "Choose an assigned office",
+        description:
+          "After selecting a governance area, pick an office. The tour automatically highlights an area with pending reviews when available, then an office that has items to review.",
+        selector: '[data-tour-id="submissions-office-level"]',
+        selectorLabel: "Office selection",
+        preActionSelector: '[data-tour-id="submissions-tour-pick-governance"]',
+      },
+      {
+        title: "Review checklist submissions",
+        description:
+          "Filter by status or keyword, then open each row to upload files, comment, and submit decisions. The tour picks an office with pending items when possible so this table shows real work.",
+        selector: '[data-tour-id="submissions-review-level"]',
+        selectorLabel: "Checklist review table",
+        preActionSelector: '[data-tour-id="submissions-tour-pick-office"]',
+      },
+      {
+        title: "Use breadcrumb to move back",
+        description: "Use the breadcrumb to step back from office level to governance level without reloading the page.",
+        selector: '[data-tour-id="submissions-breadcrumb"]',
+        selectorLabel: "Breadcrumb navigation",
+      },
+    ];
+  }, [canReview]);
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+    <div className="space-y-6" data-tour-id="submissions-root">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3" data-tour-id="submissions-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Submissions</h1>
           <p className="text-muted-foreground">
@@ -883,7 +982,7 @@ export default function SubmissionsPage() {
 
       {/* OFFICE view: flat submissions list + legend */}
       {!canReview && (
-        <Card>
+        <Card data-tour-id="submissions-office-table">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Your submissions</CardTitle>
             <CardDescription>Track what you’ve submitted and its review status.</CardDescription>
@@ -903,7 +1002,7 @@ export default function SubmissionsPage() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3" data-tour-id="submissions-office-filters">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -987,7 +1086,7 @@ export default function SubmissionsPage() {
       {canReview && (
         <>
       {/* Breadcrumb */}
-      <nav className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+      <nav className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-muted/30 px-3 py-2 text-sm" data-tour-id="submissions-breadcrumb">
         <button
           type="button"
           onClick={() => { handleGovernanceSelect(null); setSelectedOfficeId(null); }}
@@ -1017,7 +1116,7 @@ export default function SubmissionsPage() {
 
       {/* Level 1: Governance areas */}
       {!selectedGovernanceId && (
-        <Card className="border-l-4 border-l-blue-500 transition-all hover:shadow-md">
+        <Card className="border-l-4 border-l-blue-500 transition-all hover:shadow-md" data-tour-id="submissions-governance-level">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="flex items-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
@@ -1046,6 +1145,7 @@ export default function SubmissionsPage() {
                     key={g.id}
                     type="button"
                     onClick={() => handleGovernanceSelect(g.id)}
+                    data-tour-id={tourGovernanceId && g.id === tourGovernanceId ? "submissions-tour-pick-governance" : undefined}
                     className="relative flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all hover:shadow-sm hover:-translate-y-0.5 cursor-pointer group"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 group-hover:bg-blue-100 transition-colors">
@@ -1071,7 +1171,7 @@ export default function SubmissionsPage() {
 
       {/* Level 2: Offices assigned to selected governance */}
       {selectedGovernanceId && !selectedOfficeId && (
-        <Card className="border-l-4 border-l-emerald-500 transition-all hover:shadow-md">
+        <Card className="border-l-4 border-l-emerald-500 transition-all hover:shadow-md" data-tour-id="submissions-office-level">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div className="flex items-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
@@ -1100,6 +1200,7 @@ export default function SubmissionsPage() {
                     key={o.office_id}
                     type="button"
                     onClick={() => handleOfficeSelect(o.office_id)}
+                    data-tour-id={tourOfficeId && o.office_id === tourOfficeId ? "submissions-tour-pick-office" : undefined}
                     className="relative flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all hover:shadow-sm hover:-translate-y-0.5 cursor-pointer group"
                   >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 group-hover:bg-emerald-100 transition-colors">
@@ -1125,7 +1226,7 @@ export default function SubmissionsPage() {
 
       {/* Level 3: Submissions to review for selected office */}
       {selectedGovernanceId && selectedOfficeId && (
-        <Card className="border-l-4 border-l-rose-500 transition-all hover:shadow-md">
+        <Card className="border-l-4 border-l-rose-500 transition-all hover:shadow-md" data-tour-id="submissions-review-level">
           <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3">
             <div className="flex items-center gap-2">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-50">
@@ -1269,6 +1370,8 @@ export default function SubmissionsPage() {
         open={Boolean(selectedId)}
         onClose={() => setSelectedId(null)}
       />
+
+      <HelpTourOverlay steps={tutorialSteps} buttonLabel="Submissions page help" />
     </div>
   );
 }

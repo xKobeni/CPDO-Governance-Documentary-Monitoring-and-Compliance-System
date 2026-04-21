@@ -59,6 +59,7 @@ import { toast } from 'react-hot-toast';
 
 // Import API functions
 import { getUsers, createUser, updateUser, deleteUser, setUserActive, getOffices, resetUserPassword } from '../api/users';
+import HelpTourOverlay from '../components/help-tour-overlay';
 
 const roleOptions = [
   { value: 'ADMIN',  label: 'Administrator', color: 'bg-blue-100 text-blue-800 border-blue-200'     },
@@ -319,16 +320,16 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="users-root">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center" data-tour-id="users-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
           <p className="text-muted-foreground">
             Manage user accounts, roles, and permissions
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" data-tour-id="users-actions">
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -470,7 +471,7 @@ export default function UsersPage() {
 
       {/* Stats Cards */}
       {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-tour-id="users-stats">
           {[1,2,3,4].map(i => (
             <Card key={i}>
               <CardContent className="p-6">
@@ -483,7 +484,7 @@ export default function UsersPage() {
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-tour-id="users-stats">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -524,7 +525,7 @@ export default function UsersPage() {
       )}
 
       {/* Filters and Search */}
-      <Card>
+      <Card data-tour-id="users-directory">
         <CardHeader>
           <CardTitle>Users</CardTitle>
           <CardDescription>
@@ -532,7 +533,7 @@ export default function UsersPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row gap-4" data-tour-id="users-filters">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -587,7 +588,7 @@ export default function UsersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedUsers.map((user) => (
+                  {paginatedUsers.map((user, idx) => (
                     <TableRow key={user.id}>
                       <TableCell>
                         <div>
@@ -621,7 +622,11 @@ export default function UsersPage() {
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
+                            <Button
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              data-tour-id={idx === 0 ? "users-row-action-btn" : undefined}
+                            >
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -736,6 +741,48 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      <HelpTourOverlay
+        buttonLabel="Users page help"
+        steps={[
+          {
+            title: "User management overview",
+            description: "Use this page to manage accounts, roles, and office assignments.",
+            selector: '[data-tour-id="users-header"]',
+            selectorLabel: "Page header and actions",
+          },
+          {
+            title: "Create and refresh users",
+            description: "Use Add User to create accounts and Refresh to reload the latest records.",
+            selector: '[data-tour-id="users-actions"]',
+            selectorLabel: "Header action buttons",
+          },
+          {
+            title: "Read user statistics",
+            description: "These cards summarize total, active, admin, and inactive users for quick monitoring.",
+            selector: '[data-tour-id="users-stats"]',
+            selectorLabel: "User summary cards",
+          },
+          {
+            title: "Filter user records",
+            description: "Search by name or email, then filter by role and status to find accounts quickly.",
+            selector: '[data-tour-id="users-filters"]',
+            selectorLabel: "Search and filter controls",
+          },
+          {
+            title: "Manage user actions",
+            description: "Use table row actions to edit users, toggle active status, reset passwords, or delete accounts.",
+            selector: '[data-tour-id="users-directory"]',
+            selectorLabel: "Users directory table",
+          },
+          {
+            title: "Use the action button",
+            description: "Click the three-dot action button on a user row to open quick actions like edit, activate/deactivate, reset password, and delete.",
+            selector: '[data-tour-id="users-row-action-btn"]',
+            selectorLabel: "Row action button (three dots)",
+          },
+        ]}
+      />
 
       {/* Edit User Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

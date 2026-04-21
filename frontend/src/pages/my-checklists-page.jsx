@@ -78,6 +78,7 @@ import {
   listSubmissionReviews,
 } from "../api/submissions";
 import { getYears } from "../api/years";
+import HelpTourOverlay from "../components/help-tour-overlay";
 
 // ─── Helpers & Config ─────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -1248,7 +1249,12 @@ function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, 
                         <TableCell className="py-2.5" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                data-tour-id="my-checklists-item-actions"
+                              >
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -1449,9 +1455,9 @@ export default function MyChecklistsPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="my-checklists-root">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4" data-tour-id="my-checklists-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Checklists</h1>
           <p className="text-muted-foreground flex items-center gap-1.5 mt-1">
@@ -1461,7 +1467,7 @@ export default function MyChecklistsPage() {
             <span>Compliance Year {year}</span>
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0" data-tour-id="my-checklists-actions">
           <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
             <SelectTrigger className="w-[120px] h-9">
               <SelectValue placeholder="Year" />
@@ -1477,7 +1483,7 @@ export default function MyChecklistsPage() {
 
       {/* Summary strip — counts reflect current filters */}
       {!loading && allLeafItems.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-tour-id="my-checklists-kpis">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Items</CardTitle>
@@ -1522,7 +1528,7 @@ export default function MyChecklistsPage() {
       )}
 
       {/* Status legend */}
-      <nav className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+      <nav className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs" data-tour-id="my-checklists-legend">
         <span className="font-medium text-muted-foreground">Status:</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" /> No uploaded</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-blue-500" /> Pending</span>
@@ -1531,7 +1537,7 @@ export default function MyChecklistsPage() {
       </nav>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3" data-tour-id="my-checklists-filters">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -1593,7 +1599,7 @@ export default function MyChecklistsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4" data-tour-id="my-checklists-area-list">
           {filteredAreas.map((area, idx) => (
             <ChecklistAreaCard
               key={area.id}
@@ -1606,6 +1612,54 @@ export default function MyChecklistsPage() {
           ))}
         </div>
       )}
+
+      <HelpTourOverlay
+        buttonLabel="My checklists help"
+        steps={[
+          {
+            title: "My Checklists overview",
+            description: "This page is your office workspace for uploading and tracking compliance checklist requirements.",
+            selector: '[data-tour-id="my-checklists-header"]',
+            selectorLabel: "My Checklists header",
+          },
+          {
+            title: "Choose compliance year",
+            description: "Use the year selector to switch reporting periods and view the correct checklist requirements.",
+            selector: '[data-tour-id="my-checklists-actions"]',
+            selectorLabel: "Year selector",
+          },
+          {
+            title: "Track checklist progress",
+            description: "These KPI cards summarize completed items, missing uploads, and overdue tasks for this year.",
+            selector: '[data-tour-id="my-checklists-kpis"]',
+            selectorLabel: "Checklist summary cards",
+          },
+          {
+            title: "Understand status labels",
+            description: "Use this status legend to interpret item states like No uploaded, Pending, Not approved, and Approved.",
+            selector: '[data-tour-id="my-checklists-legend"]',
+            selectorLabel: "Status legend",
+          },
+          {
+            title: "Filter your checklist",
+            description: "Use search, status, and area filters to quickly find the exact requirement you need to work on.",
+            selector: '[data-tour-id="my-checklists-filters"]',
+            selectorLabel: "Checklist filters",
+          },
+          {
+            title: "Upload or replace documents",
+            description: "Open an item to upload files, replace non-approved submissions, and view review history and comments.",
+            selector: '[data-tour-id="my-checklists-area-list"]',
+            selectorLabel: "Checklist area and item list",
+          },
+          {
+            title: "Use item action buttons",
+            description: "Use the item action menu to quickly open View, Upload, or Replace actions based on each checklist item's current status.",
+            selector: '[data-tour-id="my-checklists-item-actions"]',
+            selectorLabel: "Checklist item action menu",
+          },
+        ]}
+      />
 
       {/* Submit Dialog */}
       <SubmitDialog

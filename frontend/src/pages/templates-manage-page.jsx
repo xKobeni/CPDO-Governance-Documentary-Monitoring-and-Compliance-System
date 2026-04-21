@@ -25,6 +25,7 @@ import { cn } from '../lib/utils';
 import { getAllTemplates, createTemplate, updateTemplate, deleteTemplate, copyTemplate } from '../api/templates';
 import { getYears } from '../api/years';
 import { getGovernanceAreas } from '../api/governance';
+import HelpTourOverlay from '../components/help-tour-overlay';
 
 const STATUS_STYLE = {
   ACTIVE:   'bg-green-100 text-green-700 border-green-200 hover:bg-green-100',
@@ -231,10 +232,10 @@ export default function TemplatesManagePage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="templates-manage-root">
 
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center" data-tour-id="templates-manage-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Manage Templates</h1>
           <p className="text-muted-foreground">Create and manage governance compliance templates</p>
@@ -319,7 +320,7 @@ export default function TemplatesManagePage() {
       )}
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3" data-tour-id="templates-manage-stats">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Templates</CardTitle>
@@ -344,7 +345,7 @@ export default function TemplatesManagePage() {
       </div>
 
       {/* Table Card */}
-      <Card>
+      <Card data-tour-id="templates-manage-directory">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><ClipboardList className="h-5 w-5" />Template Directory</CardTitle>
           <CardDescription>All compliance templates across governance areas and years</CardDescription>
@@ -352,7 +353,7 @@ export default function TemplatesManagePage() {
         <CardContent className="space-y-4">
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3" data-tour-id="templates-manage-filters">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input className="pl-9" placeholder="Search templates..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} />
@@ -632,6 +633,42 @@ export default function TemplatesManagePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <HelpTourOverlay
+        buttonLabel="Templates manage help"
+        steps={[
+          {
+            title: "Template management overview",
+            description: "This page lets you create, update, copy, archive, and delete governance templates.",
+            selector: '[data-tour-id="templates-manage-header"]',
+            selectorLabel: "Manage Templates header",
+          },
+          {
+            title: "Create and refresh templates",
+            description: "Use Create Template to add a new governance template and Refresh to sync current records.",
+            selector: '[data-tour-id="templates-manage-header"]',
+            selectorLabel: "Header actions",
+          },
+          {
+            title: "Monitor status distribution",
+            description: "These cards show active, draft, and archived template counts for quick planning checks.",
+            selector: '[data-tour-id="templates-manage-stats"]',
+            selectorLabel: "Template status cards",
+          },
+          {
+            title: "Use template filters",
+            description: "Search by title or governance area, then filter by year and status to narrow your list.",
+            selector: '[data-tour-id="templates-manage-filters"]',
+            selectorLabel: "Directory filters",
+          },
+          {
+            title: "Manage templates from the table",
+            description: "Use row actions to edit details, duplicate templates, change status, or delete draft templates.",
+            selector: '[data-tour-id="templates-manage-directory"]',
+            selectorLabel: "Template directory table",
+          },
+        ]}
+      />
     </div>
   );
 }

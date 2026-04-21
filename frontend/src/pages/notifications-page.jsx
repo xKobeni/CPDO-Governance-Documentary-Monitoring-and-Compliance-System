@@ -41,6 +41,7 @@ import {
   useNotifications,
 } from '../hooks/use-notifications';
 import { useAuth } from '../hooks/use-auth';
+import HelpTourOverlay from '../components/help-tour-overlay';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NOTIFICATION DETAIL DIALOG
@@ -185,9 +186,9 @@ export default function NotificationsPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="notifications-root">
       {/* ── Header ── */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between" data-tour-id="notifications-header">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -196,7 +197,7 @@ export default function NotificationsPage() {
               : "You're all caught up!"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" data-tour-id="notifications-actions">
           {unreadCount > 0 && (
             <Button
               variant="outline"
@@ -223,7 +224,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" data-tour-id="notifications-kpis">
         {KPI_CARDS.map((kpi) => {
           const KpiIcon = kpi.icon;
           return (
@@ -241,14 +242,14 @@ export default function NotificationsPage() {
       </div>
 
       {/* ── Filter & List ── */}
-      <Card>
+      <Card data-tour-id="notifications-panel">
         <CardHeader className="pb-0">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <Bell className="h-4 w-4 text-muted-foreground" />
               All Notifications
             </CardTitle>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2" data-tour-id="notifications-filters">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
@@ -272,7 +273,7 @@ export default function NotificationsPage() {
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4" data-tour-id="notifications-read-tabs">
             <Tabs value={readFilter} onValueChange={setReadFilter}>
               <TabsList>
                 <TabsTrigger value="all">
@@ -323,7 +324,7 @@ export default function NotificationsPage() {
             </div>
           ) : (
             <>
-              <div className="space-y-2">
+              <div className="space-y-2" data-tour-id="notifications-list">
                 {filtered.map(notif => {
                   const config = getNotificationTypeConfig(notif.type);
                   const Icon = config.icon;
@@ -384,6 +385,54 @@ export default function NotificationsPage() {
         notification={selected}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
+      />
+
+      <HelpTourOverlay
+        buttonLabel="Notifications page help"
+        steps={[
+          {
+            title: "Notifications overview",
+            description: "This page centralizes alerts for comments, approvals, denials, revisions, and deadline reminders.",
+            selector: '[data-tour-id="notifications-header"]',
+            selectorLabel: "Notifications header",
+          },
+          {
+            title: "Use quick actions",
+            description: "Use Mark all as read and Refresh to clean up unread alerts and fetch the latest notifications.",
+            selector: '[data-tour-id="notifications-actions"]',
+            selectorLabel: "Header action buttons",
+          },
+          {
+            title: "Read notification KPIs",
+            description: "These cards summarize total, unread, and type-based notification counts.",
+            selector: '[data-tour-id="notifications-kpis"]',
+            selectorLabel: "Notification summary cards",
+          },
+          {
+            title: "Filter notifications",
+            description: "Use search and type filter to quickly find related alerts.",
+            selector: '[data-tour-id="notifications-filters"]',
+            selectorLabel: "Search and type filters",
+          },
+          {
+            title: "Switch read status view",
+            description: "Use All, Unread, and Read tabs to focus on the notifications you need to process.",
+            selector: '[data-tour-id="notifications-read-tabs"]',
+            selectorLabel: "Read status tabs",
+          },
+          {
+            title: "Open notification details",
+            description: "Click any notification card to mark it as read and view full details in a modal.",
+            selector: '[data-tour-id="notifications-list"]',
+            selectorLabel: "Notification list",
+          },
+          {
+            title: "Take action from details",
+            description: "Open a notification to view context and use its action button to jump directly to the related checklist or submission page.",
+            selector: '[data-tour-id="notifications-list"]',
+            selectorLabel: "Notification detail actions",
+          },
+        ]}
       />
     </div>
   );

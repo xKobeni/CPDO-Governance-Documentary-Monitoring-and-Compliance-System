@@ -60,6 +60,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   Legend, ResponsiveContainer,
 } from 'recharts';
+import HelpTourOverlay from "../components/help-tour-overlay";
 
 const CARD_ACCENTS = [
   'border-l-blue-500', 'border-l-violet-500', 'border-l-emerald-500', 'border-l-amber-500',
@@ -195,9 +196,9 @@ function OfficeDashboard({ user }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="dashboard-root">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3" data-tour-id="dashboard-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Office Dashboard</h1>
           <p className="text-muted-foreground">
@@ -249,7 +250,7 @@ function OfficeDashboard({ user }) {
       ) : (
         <>
           {/* Stat Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-tour-id="dashboard-kpis">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Checklist Items</CardTitle>
@@ -292,7 +293,7 @@ function OfficeDashboard({ user }) {
             </Card>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3" data-tour-id="dashboard-main-panels">
             {/* Overall Progress */}
             <Card className="lg:col-span-2">
               <CardHeader>
@@ -382,7 +383,7 @@ function OfficeDashboard({ user }) {
           </div>
 
           {/* Recent Checklist Items */}
-          <Card>
+          <Card data-tour-id="dashboard-recent-items">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-muted-foreground" />
@@ -629,9 +630,9 @@ function AdminDashboard({ user }) {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="dashboard-root">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3" data-tour-id="dashboard-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
@@ -670,12 +671,12 @@ function AdminDashboard({ user }) {
       )}
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs defaultValue="overview" className="space-y-4" data-tour-id="dashboard-tabs">
         <TabsList className="grid w-full grid-cols-4 max-w-xl">
-          <TabsTrigger value="overview"    className="flex items-center gap-1.5"><LayoutGrid className="h-3.5 w-3.5" />Overview</TabsTrigger>
-          <TabsTrigger value="governance"  className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" />Governance</TabsTrigger>
-          <TabsTrigger value="compliance"  className="flex items-center gap-1.5"><BarChart3 className="h-3.5 w-3.5" />Compliance</TabsTrigger>
-          <TabsTrigger value="org"         className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />Org</TabsTrigger>
+          <TabsTrigger value="overview" data-tour-tab="overview" className="flex items-center gap-1.5"><LayoutGrid className="h-3.5 w-3.5" />Overview</TabsTrigger>
+          <TabsTrigger value="governance" data-tour-tab="governance" className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" />Governance</TabsTrigger>
+          <TabsTrigger value="compliance" data-tour-tab="compliance" className="flex items-center gap-1.5"><BarChart3 className="h-3.5 w-3.5" />Compliance</TabsTrigger>
+          <TabsTrigger value="org" data-tour-tab="org" className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />Org</TabsTrigger>
         </TabsList>
 
         {/* ═══════════════════════════════ OVERVIEW TAB ════════════════════ */}
@@ -688,7 +689,7 @@ function AdminDashboard({ user }) {
             </div>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-tour-id="dashboard-kpis">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Active Gov. Areas</CardTitle>
@@ -699,7 +700,7 @@ function AdminDashboard({ user }) {
                     <p className="text-xs text-muted-foreground mt-1">of {areas.length} total</p>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card data-tour-id="dashboard-quick-actions">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Active Offices</CardTitle>
                     <Building2 className="h-4 w-4 text-emerald-500" />
@@ -731,7 +732,7 @@ function AdminDashboard({ user }) {
                 </Card>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-3" data-tour-id="dashboard-main-panels">
                 {/* System Snapshot */}
                 <Card className="lg:col-span-2">
                   <CardHeader>
@@ -807,7 +808,7 @@ function AdminDashboard({ user }) {
               </div>
 
               {/* Charts Row */}
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-4 lg:grid-cols-2" data-tour-id="dashboard-charts">
                 {/* Bar Chart — Compliance by Area */}
                 <Card>
                   <CardHeader>
@@ -1093,7 +1094,7 @@ function AdminDashboard({ user }) {
           </div>
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3" data-tour-id="dashboard-governance-filters">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input className="pl-9" placeholder="Search by code, name, or description..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
@@ -1457,9 +1458,9 @@ function StaffDashboard({ user }) {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="dashboard-root">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3" data-tour-id="dashboard-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
@@ -1495,12 +1496,12 @@ function StaffDashboard({ user }) {
       </div>
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs defaultValue="overview" className="space-y-4" data-tour-id="dashboard-tabs">
         <TabsList className="grid w-full grid-cols-2 max-w-xs">
-          <TabsTrigger value="overview" className="flex items-center gap-1.5">
+          <TabsTrigger value="overview" data-tour-tab="overview" className="flex items-center gap-1.5">
             <LayoutGrid className="h-3.5 w-3.5" />Overview
           </TabsTrigger>
-          <TabsTrigger value="submissions" className="flex items-center gap-1.5">
+          <TabsTrigger value="submissions" data-tour-tab="submissions" className="flex items-center gap-1.5">
             <ClipboardList className="h-3.5 w-3.5" />Submissions
           </TabsTrigger>
         </TabsList>
@@ -1514,7 +1515,7 @@ function StaffDashboard({ user }) {
           ) : (
             <>
               {/* KPI Strip */}
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-tour-id="dashboard-kpis">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Submissions</CardTitle>
@@ -1561,7 +1562,7 @@ function StaffDashboard({ user }) {
                 </Card>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-3" data-tour-id="dashboard-main-panels">
                 {/* Submission Snapshot */}
                 <Card className="lg:col-span-2">
                   <CardHeader>
@@ -1677,7 +1678,7 @@ function StaffDashboard({ user }) {
 
         {/* ═══════════════════════════════ SUBMISSIONS TAB ═════════════════ */}
         <TabsContent value="submissions" className="space-y-4">
-          <Card>
+          <Card data-tour-id="dashboard-submissions-recent">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
@@ -1736,8 +1737,143 @@ function StaffDashboard({ user }) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const role = user?.role?.toUpperCase();
-  if (role === "OFFICE") return <OfficeDashboard user={user} />;
-  if (role === "STAFF")  return <StaffDashboard  user={user} />;
-  return <AdminDashboard user={user} />;
+  const role = useMemo(() => {
+    const candidates = [user?.role, user?.role_code]
+      .map((v) => String(v || "").trim().toUpperCase())
+      .filter(Boolean);
+    if (candidates.some((v) => v === "OFFICE" || v.includes("OFFICE"))) return "OFFICE";
+    if (candidates.some((v) => v === "STAFF" || v.includes("STAFF"))) return "STAFF";
+    return "ADMIN";
+  }, [user?.role, user?.role_code]);
+  const tutorialSteps = useMemo(() => {
+    if (role === "OFFICE") {
+      return [
+        {
+          title: "Welcome to your office dashboard",
+          description: "This dashboard gives your office a quick snapshot of checklist progress, deadlines, and latest activity.",
+          selector: '[data-tour-id="dashboard-header"]',
+          selectorLabel: "Dashboard header",
+        },
+        {
+          title: "Set year and refresh data",
+          description: "Before reviewing tasks, choose the correct compliance year and use Refresh to load the latest status.",
+          selector: '[data-tour-id="dashboard-header"]',
+          selectorLabel: "Year selector and refresh button",
+        },
+        {
+          title: "Read your KPI cards first",
+          description: "Use these cards to quickly check completed, in-progress, pending, and overdue items.",
+          selector: '[data-tour-id="dashboard-kpis"]',
+          selectorLabel: "Summary cards",
+        },
+        {
+          title: "Prioritize deadlines and progress",
+          description: "Use progress and upcoming-deadline panels to identify urgent requirements and focus what to upload next.",
+          selector: '[data-tour-id="dashboard-main-panels"]',
+          selectorLabel: "Progress and deadline panels",
+        },
+        {
+          title: "Continue from recent activity",
+          description: "Open recent checklist items to continue pending work without searching through all areas.",
+          selector: '[data-tour-id="dashboard-recent-items"]',
+          selectorLabel: "Recent checklist items",
+        },
+      ];
+    }
+
+    if (role === "STAFF") {
+      return [
+        {
+          title: "Welcome to the staff dashboard",
+          description: "This area summarizes submission trends and current review workload.",
+          selector: '[data-tour-id="dashboard-header"]',
+          selectorLabel: "Dashboard header",
+        },
+        {
+          title: "Pick your year and refresh",
+          description: "Before reviewing data, confirm the selected year and click refresh so your metrics match the latest submissions.",
+          selector: '[data-tour-id="dashboard-header"]',
+          selectorLabel: "Year and refresh controls",
+        },
+        {
+          title: "Switch between dashboard sections",
+          description: "Use these tabs to move between overview insights and submission-focused views.",
+          selector: '[data-tour-id="dashboard-tabs"]',
+          selectorLabel: "Dashboard tabs",
+          tabValue: "overview",
+        },
+        {
+          title: "Read status KPI cards",
+          description: "These cards show pending, approved, denied, and revision-requested counts so you can decide what to review first.",
+          selector: '[data-tour-id="dashboard-kpis"]',
+          selectorLabel: "Submission KPI cards",
+          tabValue: "overview",
+        },
+        {
+          title: "Use the overview panels",
+          description: "The snapshot and quick actions panel help you spot bottlenecks and jump directly to Submissions, Reports, or Notifications.",
+          selector: '[data-tour-id="dashboard-main-panels"]',
+          selectorLabel: "Overview and quick actions",
+          tabValue: "overview",
+        },
+      ];
+    }
+
+    return [
+      {
+        title: "Welcome to the admin dashboard",
+        description: "This page gives a full system snapshot for governance, compliance, and organizational activity.",
+        selector: '[data-tour-id="dashboard-header"]',
+        selectorLabel: "Dashboard header",
+      },
+      {
+        title: "Choose the right reporting year",
+        description: "Set the dashboard year first, then refresh to ensure all charts and counts align with the selected period.",
+        selector: '[data-tour-id="dashboard-header"]',
+        selectorLabel: "Year selector and refresh controls",
+      },
+      {
+        title: "Use tabs to explore modules",
+        description: "Navigate between Overview, Governance, Compliance, and Org to inspect detailed analytics.",
+        selector: '[data-tour-id="dashboard-tabs"]',
+        selectorLabel: "Dashboard tabs",
+        tabValue: "overview",
+      },
+      {
+        title: "Read overview KPI cards",
+        description: "Active areas, active offices, total users, and at-risk areas give you an immediate health check of the system.",
+        selector: '[data-tour-id="dashboard-kpis"]',
+        selectorLabel: "Overview KPI cards",
+        tabValue: "overview",
+      },
+      {
+        title: "Inspect trends using charts",
+        description: "Use the chart section to compare compliance by area, role distribution, and office submission patterns.",
+        selector: '[data-tour-id="dashboard-charts"]',
+        selectorLabel: "Charts and trend analysis",
+        tabValue: "overview",
+      },
+      {
+        title: "Admin action plan",
+        description: "Focus on at-risk areas first, verify compliance gaps in the matrix, then coordinate with offices and staff for follow-ups.",
+        selector: '[data-tour-id="dashboard-root"]',
+        selectorLabel: "Dashboard action workflow",
+      },
+    ];
+  }, [role]);
+
+  const tutorialButtonLabel = role === "OFFICE"
+    ? "Open office dashboard tutorial"
+    : role === "STAFF"
+      ? "Open staff dashboard tutorial"
+      : "Open admin dashboard tutorial";
+
+  return (
+    <>
+      {role === "OFFICE" && <OfficeDashboard user={user} />}
+      {role === "STAFF" && <StaffDashboard user={user} />}
+      {role !== "OFFICE" && role !== "STAFF" && <AdminDashboard user={user} />}
+      <HelpTourOverlay steps={tutorialSteps} buttonLabel={tutorialButtonLabel} />
+    </>
+  );
 }

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getAllTemplates, getTemplateItems, createChecklistItem, updateChecklistItem, deleteChecklistItem, importTemplateItems } from '../api/templates';
+import HelpTourOverlay from '../components/help-tour-overlay';
 
 const FREQ_STYLE = {
   ANNUAL:      'bg-blue-50 text-blue-700 border-blue-200',
@@ -557,10 +558,10 @@ export default function TemplatesCategoriesPage() {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour-id="templates-categories-root">
 
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start" data-tour-id="templates-categories-header">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Manage Categories</h1>
           <p className="text-muted-foreground">Manage checklist items for each compliance template</p>
@@ -581,7 +582,7 @@ export default function TemplatesCategoriesPage() {
       )}
 
       {/* Template selector */}
-      <Card>
+      <Card data-tour-id="templates-categories-selector">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Tag className="h-4 w-4" />Select Template
@@ -648,7 +649,7 @@ export default function TemplatesCategoriesPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card data-tour-id="templates-categories-items">
           <CardHeader>
             <div className="flex justify-between items-start">
               <div>
@@ -887,6 +888,42 @@ export default function TemplatesCategoriesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <HelpTourOverlay
+        buttonLabel="Template categories help"
+        steps={[
+          {
+            title: "Checklist category management",
+            description: "This page is where you build and maintain checklist items inside each template.",
+            selector: '[data-tour-id="templates-categories-header"]',
+            selectorLabel: "Manage Categories header",
+          },
+          {
+            title: "Select target template",
+            description: "Choose the template you want to edit, then review item counts and current template status.",
+            selector: '[data-tour-id="templates-categories-selector"]',
+            selectorLabel: "Template selector panel",
+          },
+          {
+            title: "Copy categories in bulk",
+            description: "Use the copy action to import all checklist categories from another template when starting a new year.",
+            selector: '[data-tour-id="templates-categories-selector"]',
+            selectorLabel: "Copy categories action",
+          },
+          {
+            title: "Manage checklist tree",
+            description: "Use Add Item to create document requirements or section headers, then edit hierarchy in the table.",
+            selector: '[data-tour-id="templates-categories-items"]',
+            selectorLabel: "Checklist items section",
+          },
+          {
+            title: "Filter and maintain items",
+            description: "Search by code/title, toggle inactive visibility, and use row actions for edit/delete operations.",
+            selector: '[data-tour-id="templates-categories-items"]',
+            selectorLabel: "Item filters and row actions",
+          },
+        ]}
+      />
 
     </div>
   );
