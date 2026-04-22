@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
-import { login } from "../api/auth";
+import { useNavigate, useSearchParams } from "react-router";
+import { login, resendVerification } from "../api/auth";
 import { LoginForm } from "../components/login-form";
+import { toast } from "react-hot-toast";
 import {
   Dialog,
   DialogContent,
@@ -17,9 +18,11 @@ const SESSION_EXPIRED_KEY = "sessionExpiredReason";
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [errorType, setErrorType] = useState("error"); // "error" | "warning"
+  const [errorType, setErrorType] = useState("error"); // "error" | "warning" | "verification"
   const [showSessionExpired, setShowSessionExpired] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     const reason = localStorage.getItem(SESSION_EXPIRED_KEY);
@@ -27,6 +30,29 @@ export default function LoginPage() {
       setShowSessionExpired(true);
     }
   }, []);
+
+  useEffect(() => {
+    const verified = searchParams.get("verified");
+    const verify = searchParams.get("verify");
+    if (!verified && !verify) return;
+
+    const next = new URLSearchParams(searchParams);
+    if (verified === "1") {
+      toast.success("Your email has been verified. You can sign in now.");
+      next.delete("verified");
+    }
+    if (verify === "invalid") {
+      toast.error("That verification link is invalid or has expired.");
+      next.delete("verify");
+    }
+    if (verify === "error") {
+      toast.error("Verification could not be completed. Try again or contact support.");
+      next.delete("verify");
+    }
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -47,8 +73,15 @@ export default function LoginPage() {
       const status = err?.response?.status;
       const message = err?.response?.data?.message;
 
-      if (status === 403) {
-        // Account is deactivated
+      const code = err?.response?.data?.code;
+
+      if (status === 403 && code === "EMAIL_NOT_VERIFIED") {
+        setErrorType("verification");
+        setError(
+          message ||
+            "Please verify your email before signing in. Check your inbox for the verification link."
+        );
+      } else if (status === 403) {
         setErrorType("warning");
         setError(message || "Your account has been deactivated. Please contact the administrator.");
       } else if (status === 401) {
@@ -61,6 +94,23 @@ export default function LoginPage() {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async (emailVal) => {
+    const trimmed = String(emailVal || "").trim();
+    if (!trimmed) {
+      toast.error("Enter your email address first.");
+      return;
+    }
+    setResendBusy(true);
+    try {
+      await resendVerification(trimmed);
+      toast.success("If that account is pending verification, we sent another email.");
+    } catch (e) {
+      toast.error(e?.response?.data?.message || "Could not send verification email. Try again later.");
+    } finally {
+      setResendBusy(false);
     }
   };
 
@@ -93,11 +143,13 @@ export default function LoginPage() {
         </DialogContent>
       </Dialog>
 
-      <LoginForm 
+      <LoginForm
         onSubmit={handleSubmit}
         error={error}
         errorType={errorType}
         isLoading={isLoading}
+        onResendVerification={handleResendVerification}
+        resendVerificationLoading={resendBusy}
         className="w-full max-w-4xl"
       />
     </div>

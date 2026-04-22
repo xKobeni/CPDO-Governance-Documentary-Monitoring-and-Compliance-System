@@ -12,6 +12,7 @@ import {
   updateUserHandler,
   deleteUserHandler,
   resetUserPasswordHandler,
+  resendUserVerificationHandler,
 } from "../controllers/users.controller.js";
 
 const r = Router();
@@ -44,6 +45,11 @@ r.post(
   "/:id/reset-password",
   audit("RESET_PASSWORD", "USER", (req) => req.params.id),
   asyncHandler(resetUserPasswordHandler)
+);
+r.post(
+  "/:id/resend-verification",
+  audit("RESEND_EMAIL_VERIFICATION", "USER", (req) => req.params.id),
+  asyncHandler(resendUserVerificationHandler)
 );
 r.delete(
   "/:id",

@@ -18,7 +18,13 @@ import {
   updateLastLogin,
   recordFailedLoginAttempt,
   resetFailedLoginAttempts,
+  setUserEmailVerified,
 } from "../models/users.model.js";
+import {
+  findValidEmailVerificationToken,
+  deleteEmailVerificationToken,
+} from "../models/email-verification.model.js";
+import { sendUserEmailVerification } from "../services/user-email-verification.service.js";
 import { createSession, findValidSessionByHash, revokeSession } from "../models/sessions.model.js";
 import { createPasswordResetToken, findValidResetToken, revokeResetTokens } from "../models/password-reset.model.js";
 
@@ -42,6 +48,7 @@ function formatUserProfile(user) {
     officeName: user.office_name ?? null,
     officeCode: user.office_code ?? null,
     isActive: user.is_active,
+    emailVerified: Boolean(user.email_verified),
     createdAt: user.created_at ?? null,
     lastLoginAt: user.last_login_at ?? null,
   };
@@ -82,7 +89,10 @@ export async function login(req, res) {
         metadata: { email, reason: "account_deactivated" }
       });
     } catch (e) { /* don't break login flow */ }
-    return res.status(403).json({ message: "Your account has been deactivated. Please contact the administrator." });
+    return res.status(403).json({
+      message: "Your account has been deactivated. Please contact the administrator.",
+      code: "ACCOUNT_DEACTIVATED",
+    });
   }
 
   if (!user) {
@@ -153,6 +163,24 @@ export async function login(req, res) {
       message: "Invalid credentials",
       attemptsRemaining,
       failedAttempts: updated?.failed_login_attempts || 0
+    });
+  }
+
+  if (!user.email_verified) {
+    try {
+      await writeAuditLog({
+        actorUserId: user.id,
+        action: "LOGIN_FAILED",
+        entityType: "USER",
+        entityId: user.id,
+        metadata: { email, reason: "email_not_verified" },
+      });
+    } catch (e) {
+      /* don't break login flow */
+    }
+    return res.status(403).json({
+      message: "Please verify your email before signing in. Check your inbox for the verification link.",
+      code: "EMAIL_NOT_VERIFIED",
     });
   }
 
@@ -405,4 +433,85 @@ export async function resetPassword(req, res) {
   }
 
   return res.json({ message: "Password has been reset successfully. You can now log in with your new password." });
+}
+
+function frontendLoginPath(query) {
+  const base = (env.frontendUrl || env.corsOrigin || "").replace(/\/$/, "");
+  const path = "/login";
+  if (!base) return `${path}${query}`;
+  return `${base}${path}${query}`;
+}
+
+export async function verifyEmail(req, res) {
+  const token = req.query?.token;
+  if (!token || typeof token !== "string") {
+    return res.redirect(302, frontendLoginPath("?verify=invalid"));
+  }
+
+  const valid = await findValidEmailVerificationToken(token);
+  if (!valid) {
+    return res.redirect(302, frontendLoginPath("?verify=invalid"));
+  }
+
+  const userId = valid.user_id;
+  try {
+    await setUserEmailVerified(userId, true);
+    await deleteEmailVerificationToken(userId, token);
+    try {
+      await writeAuditLog({
+        actorUserId: userId,
+        action: "EMAIL_VERIFIED",
+        entityType: "USER",
+        entityId: userId,
+        metadata: {},
+      });
+    } catch (e) {
+      /* ignore */
+    }
+  } catch (e) {
+    console.error("[auth] verifyEmail failed", e?.message || e);
+    return res.redirect(302, frontendLoginPath("?verify=error"));
+  }
+
+  return res.redirect(302, frontendLoginPath("?verified=1"));
+}
+
+const resendVerificationSchema = z.object({
+  email: z.string().email(),
+});
+
+export async function resendVerification(req, res) {
+  const parsed = resendVerificationSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: "Invalid email" });
+
+  const { email } = parsed.data;
+  const user = await findUserAuthByEmail(email);
+
+  const response = {
+    ok: true,
+    message: "If this account is eligible, we sent a verification email.",
+  };
+
+  if (!user || !user.is_active || user.email_verified) {
+    return res.json(response);
+  }
+
+  try {
+    await sendUserEmailVerification(user.id, user.email);
+    try {
+      await writeAuditLog({
+        actorUserId: user.id,
+        action: "EMAIL_VERIFICATION_SENT",
+        entityType: "USER",
+        entityId: user.id,
+        metadata: { email, source: "resend" },
+      });
+    } catch (e) {
+      /* ignore */
+    }
+  } catch (e) {
+    console.error("[auth] resendVerification send failed", e?.message || e);
+  }
+
+  return res.json(response);
 }

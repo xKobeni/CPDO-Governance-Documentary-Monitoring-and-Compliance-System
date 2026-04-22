@@ -238,6 +238,8 @@ export function LoginForm({
   error,
   errorType = "error",
   isLoading,
+  onResendVerification,
+  resendVerificationLoading = false,
   ...props
 }) {
   const [showPassword, setShowPassword] = useState(false);
@@ -315,6 +317,24 @@ export function LoginForm({
                 errorType === "warning" ? (
                   <Alert className="border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200">
                     {error}
+                  </Alert>
+                ) : errorType === "verification" ? (
+                  <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-100">
+                    <div className="space-y-3">
+                      <p>{error}</p>
+                      {onResendVerification && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="border-amber-400 bg-white hover:bg-amber-100"
+                          disabled={resendVerificationLoading}
+                          onClick={() => onResendVerification(email)}
+                        >
+                          {resendVerificationLoading ? "Sending…" : "Resend verification email"}
+                        </Button>
+                      )}
+                    </div>
                   </Alert>
                 ) : (
                   <Alert variant="destructive">

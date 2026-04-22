@@ -4,7 +4,7 @@ export async function findUserAuthByEmail(email) {
   const { rows } = await pool.query(
     `SELECT
         u.id, u.email, u.password_hash, u.full_name, u.is_active,
-        u.office_id, u.failed_login_attempts, u.account_locked_until,
+        u.email_verified, u.office_id, u.failed_login_attempts, u.account_locked_until,
         r.code as role_code, r.name as role_name
      FROM users u
      JOIN roles r ON r.id = u.role_id
@@ -17,7 +17,7 @@ export async function findUserAuthByEmail(email) {
 export async function findUserById(id) {
   const { rows } = await pool.query(
     `SELECT
-        u.id, u.email, u.full_name, u.is_active, u.office_id, u.created_at, u.updated_at, u.last_login_at,
+        u.id, u.email, u.full_name, u.is_active, u.email_verified, u.office_id, u.created_at, u.updated_at, u.last_login_at,
         r.code as role_code, r.name as role_name,
         o.name as office_name, o.code as office_code
      FROM users u
@@ -31,9 +31,9 @@ export async function findUserById(id) {
 
 export async function createUser({ email, passwordHash, fullName, roleId, officeId }) {
   const { rows } = await pool.query(
-    `INSERT INTO users (email, password_hash, full_name, role_id, office_id)
-     VALUES ($1,$2,$3,$4,$5)
-     RETURNING id, email, full_name, role_id, office_id, is_active, created_at`,
+    `INSERT INTO users (email, password_hash, full_name, role_id, office_id, email_verified)
+     VALUES ($1,$2,$3,$4,$5,false)
+     RETURNING id, email, full_name, role_id, office_id, is_active, email_verified, created_at`,
     [email.toLowerCase(), passwordHash, fullName, roleId, officeId ?? null]
   );
   return rows[0];
@@ -42,7 +42,7 @@ export async function createUser({ email, passwordHash, fullName, roleId, office
 export async function listUsers(limit = 20, offset = 0) {
   const { rows } = await pool.query(
     `SELECT
-        u.id, u.email, u.full_name, u.is_active, u.office_id, u.created_at, u.updated_at, u.last_login_at,
+        u.id, u.email, u.full_name, u.is_active, u.email_verified, u.office_id, u.created_at, u.updated_at, u.last_login_at,
         r.code as role_code, r.name as role_name,
         o.name as office_name, o.code as office_code
      FROM users u
@@ -143,6 +143,10 @@ export async function updateUser(userId, { email, fullName, roleId, officeId }) 
   const { rows } = await pool.query(
     `UPDATE users
      SET email = COALESCE($2, email),
+         email_verified = CASE
+           WHEN $2::text IS NOT NULL AND lower(btrim($2::text)) IS DISTINCT FROM lower(btrim(email::text)) THEN false
+           ELSE email_verified
+         END,
          full_name = COALESCE($3, full_name),
          role_id = COALESCE($4, role_id),
          office_id = COALESCE($5, office_id),
@@ -154,6 +158,14 @@ export async function updateUser(userId, { email, fullName, roleId, officeId }) 
 
   if (!rows[0]) return null;
   return findUserById(userId);
+}
+
+export async function setUserEmailVerified(userId, verified) {
+  const { rows } = await pool.query(
+    `UPDATE users SET email_verified = $2, updated_at = now() WHERE id = $1 RETURNING id`,
+    [userId, verified]
+  );
+  return rows[0] || null;
 }
 
 export async function deleteUser(userId) {

@@ -20,7 +20,7 @@ This file explains the security protections currently implemented in this system
 
 ## 5) Stricter Per-Route Rate Limits
 - **What it does:** Uses tighter limits for higher-risk actions.
-- **Where used:** login, forgot-password, reset-password, create submission, review submission, create/delete comment, file upload.
+- **Where used:** login, forgot-password, reset-password, resend-verification, verify-email (GET), create submission, review submission, create/delete comment, file upload.
 - **How it acts:** Stops endpoint spam even if global traffic is within limits.
 
 ## 6) JWT Authentication + Session Validation
@@ -63,6 +63,11 @@ This file explains the security protections currently implemented in this system
 ## 14) Safe Error Responses
 - **What it does:** In production, internal stack traces are hidden from API responses.
 - **How it acts:** Reduces accidental leakage of internal system details.
+
+## 15) Email verification (admin-provisioned accounts)
+- **What it does:** New users are created with `email_verified = false`. They receive a time-limited link (token stored hashed in `email_verification_tokens`). Login returns `403` with code `EMAIL_NOT_VERIFIED` until they open the link.
+- **How it acts:** Reduces use of mistyped or unowned inboxes for government accounts. Resend uses the same anti-enumeration pattern as forgot-password (`POST /auth/resend-verification`).
+- **Migration:** Existing rows are grandfathered to `email_verified = true` when the column is added. Set `PUBLIC_API_URL` in production so verification links point at your API host (scheme + host, no path).
 
 ---
 

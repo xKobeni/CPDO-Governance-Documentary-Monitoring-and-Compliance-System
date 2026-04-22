@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS users (
   failed_login_attempts INT NOT NULL DEFAULT 0,
   last_failed_attempt   TIMESTAMPTZ NULL,
   account_locked_until  TIMESTAMPTZ NULL,
+  email_verified        BOOLEAN NOT NULL DEFAULT FALSE,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -430,5 +431,26 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires ON password_reset_tokens(expires_at);
+
+-- =========================
+-- EMAIL VERIFICATION TOKENS
+-- =========================
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user ON email_verification_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_hash ON email_verification_tokens(token_hash);
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_expires ON email_verification_tokens(expires_at);
+
+-- Upgrade existing databases: add users.email_verified and grandfather current accounts
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN;
+UPDATE users SET email_verified = true WHERE email_verified IS NULL;
+ALTER TABLE users ALTER COLUMN email_verified SET DEFAULT false;
+ALTER TABLE users ALTER COLUMN email_verified SET NOT NULL;
 
 COMMIT;

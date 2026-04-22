@@ -43,3 +43,38 @@ export function buildPasswordResetEmail({ resetCode, expiresIn = "1 hour", reset
 
   return { subject, text, html };
 }
+
+export function buildEmailVerificationEmail({ verifyUrl, expiresIn = "48 hours" }) {
+  const appName = "CPDO Monitoring System";
+  const subject = `Verify your email for ${appName}`;
+  const text = [
+    `Please confirm your email address for ${appName}.`,
+    "",
+    verifyUrl ? `Open this link to verify your email: ${verifyUrl}` : "",
+    "",
+    `This link will expire in ${expiresIn}.`,
+    "",
+    "If you did not create this account, you can ignore this email.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const ctaBlock = verifyUrl
+    ? `<p style="margin: 0 0 16px;">
+        <a href="${verifyUrl}" style="display: inline-block; background: #111827; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600;">Verify email address</a>
+      </p>
+      <p style="margin: 0 0 12px; font-size: 13px; color: #6b7280;">Or copy this link: <a href="${verifyUrl}" style="color: #2563eb; word-break: break-all;">${verifyUrl}</a></p>`
+    : "";
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #1f2937;">
+      <h2 style="margin: 0 0 12px;">Verify your email</h2>
+      <p style="margin: 0 0 12px;">Please confirm your email address for <strong>${appName}</strong>.</p>
+      ${ctaBlock}
+      <p style="margin: 0 0 12px;">This link will expire in ${expiresIn}.</p>
+      <p style="margin: 0;">If you did not create this account, you can ignore this email.</p>
+    </div>
+  `;
+
+  return { subject, text, html };
+}

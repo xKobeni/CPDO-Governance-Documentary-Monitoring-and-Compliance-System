@@ -58,7 +58,7 @@ import {
 import { toast } from 'react-hot-toast';
 
 // Import API functions
-import { getUsers, createUser, updateUser, deleteUser, setUserActive, getOffices, resetUserPassword } from '../api/users';
+import { getUsers, createUser, updateUser, deleteUser, setUserActive, getOffices, resetUserPassword, resendUserVerification } from '../api/users';
 import HelpTourOverlay from '../components/help-tour-overlay';
 
 const roleOptions = [
@@ -172,6 +172,21 @@ export default function UsersPage() {
     try {
       setSubmitting(true);
       const result = await createUser(formData);
+      if (result.verificationEmailWarning) {
+        toast.error(result.verificationEmailWarning, { duration: 8000 });
+      }
+      if (result.verificationDevToken) {
+        toast(
+          (t) => (
+            <div className="flex flex-col gap-1 text-sm">
+              <span className="font-semibold">Local dev: email not sent</span>
+              <span>Use this verification link token (append to API verify URL) or check server logs:</span>
+              <code className="bg-gray-100 px-2 py-1 rounded text-xs font-mono break-all select-all">{result.verificationDevToken}</code>
+            </div>
+          ),
+          { duration: 20000 }
+        );
+      }
       if (result.generatedPassword) {
         toast(
           (t) => (
@@ -179,13 +194,13 @@ export default function UsersPage() {
               <span className="font-semibold">User created successfully</span>
               <span className="text-sm">Auto-generated password:</span>
               <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono select-all">{result.generatedPassword}</code>
-              <span className="text-xs text-gray-500">Copy and share this password with the user.</span>
+              <span className="text-xs text-gray-500">Copy and share this password with the user. They must verify email before first login.</span>
             </div>
           ),
           { duration: 15000 }
         );
       } else {
-        toast.success('User created successfully');
+        toast.success('User created successfully. A verification email was sent to their inbox.');
       }
       setIsCreateDialogOpen(false);
       resetForm();
@@ -217,6 +232,17 @@ export default function UsersPage() {
       toast.error(error.response?.data?.message || 'Failed to update user');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleResendUserVerification = async (userId) => {
+    try {
+      await resendUserVerification(userId);
+      toast.success("Verification email sent.");
+      loadData();
+    } catch (error) {
+      console.error("Error resending verification:", error);
+      toast.error(error.response?.data?.message || "Failed to resend verification email");
     }
   };
 
@@ -583,6 +609,7 @@ export default function UsersPage() {
                     <TableHead>Role</TableHead>
                     <TableHead>Office</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Email</TableHead>
                     <TableHead>Last Login</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -614,6 +641,16 @@ export default function UsersPage() {
                             : "bg-red-100 text-red-700 border-red-200"}
                         >
                           {user.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={user.email_verified
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                            : "bg-amber-100 text-amber-900 border-amber-200"}
+                        >
+                          {user.email_verified ? "Verified" : "Pending"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm">
@@ -652,6 +689,12 @@ export default function UsersPage() {
                               <KeyRound className="mr-2 h-4 w-4" />
                               Reset password
                             </DropdownMenuItem>
+                            {user.is_active && !user.email_verified && (
+                              <DropdownMenuItem onClick={() => handleResendUserVerification(user.id)}>
+                                <Mail className="mr-2 h-4 w-4" />
+                                Resend verification email
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem 
                               onClick={() => handleDeleteUser(user.id)}
                               className="text-red-600"

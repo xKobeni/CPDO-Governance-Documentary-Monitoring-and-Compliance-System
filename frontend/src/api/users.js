@@ -55,6 +55,11 @@ export async function resetUserPassword(userId) {
   return response.data;
 }
 
+export async function resendUserVerification(userId) {
+  const response = await api.post(`/users/${userId}/resend-verification`);
+  return response.data;
+}
+
 export async function getOffices() {
   const response = await api.get('/offices');
   return response.data;

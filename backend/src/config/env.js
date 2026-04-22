@@ -49,6 +49,8 @@ export const env = {
   mailRetryDelayMs: parseNumber(process.env.MAIL_RETRY_DELAY_MS, 1000),
   mailRetryBackoffMultiplier: parseNumber(process.env.MAIL_RETRY_BACKOFF_MULTIPLIER, 2),
   frontendUrl: process.env.FRONTEND_URL?.trim() || process.env.CORS_ORIGIN?.trim(),
+  /** Origin where this API is reachable (for email links). E.g. https://api.example.com — no path. */
+  publicApiUrl: process.env.PUBLIC_API_URL?.trim(),
 
   b2KeyId: process.env.B2_KEY_ID?.trim(),
   b2ApplicationKey: process.env.B2_APPLICATION_KEY?.trim(),

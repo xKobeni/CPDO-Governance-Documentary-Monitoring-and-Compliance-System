@@ -1,8 +1,19 @@
 import { z } from "zod";
 import { hashPassword } from "../utils/password.js";
 import { getRoleByCode } from "../models/roles.model.js";
-import { createUser, listUsers, setUserActive, findUserById, updateUser, deleteUser, updateUserPassword } from "../models/users.model.js";
+import {
+  createUser,
+  listUsers,
+  setUserActive,
+  findUserById,
+  updateUser,
+  deleteUser,
+  updateUserPassword,
+} from "../models/users.model.js";
+import { revokeEmailVerificationTokens } from "../models/email-verification.model.js";
+import { sendUserEmailVerification } from "../services/user-email-verification.service.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
+import { writeAuditLog } from "../models/audit.model.js";
 
 function generatePassword() {
   const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -54,7 +65,22 @@ export async function createUserHandler(req, res) {
     officeId: roleCode === "OFFICE" ? officeId : (officeId ?? null),
   });
 
-  return res.status(201).json({ user, generatedPassword: !parsed.data.password ? rawPassword : undefined });
+  const payload = {
+    user,
+    generatedPassword: !parsed.data.password ? rawPassword : undefined,
+  };
+
+  try {
+    const sendResult = await sendUserEmailVerification(user.id, user.email);
+    if (sendResult.skipped && process.env.NODE_ENV !== "production") {
+      payload.verificationDevToken = sendResult.rawToken;
+    }
+  } catch (e) {
+    console.error("[users] Failed to send verification email", e?.message || e);
+    payload.verificationEmailWarning = "Verification email could not be sent. Use resend from user management or ask the user to use Resend on the login page.";
+  }
+
+  return res.status(201).json(payload);
 }
 
 export async function listUsersHandler(req, res) {
@@ -93,7 +119,17 @@ export async function updateUserHandler(req, res) {
   if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: parsed.error.flatten() });
 
   const { email, fullName, roleCode, officeId } = parsed.data;
-  
+
+  const existing = await findUserById(userId);
+  if (!existing) return res.status(404).json({ message: "User not found" });
+
+  const emailChanged =
+    Boolean(email) && String(email).toLowerCase() !== String(existing.email).toLowerCase();
+
+  if (emailChanged) {
+    await revokeEmailVerificationTokens(userId);
+  }
+
   let roleId = undefined;
   if (roleCode) {
     const role = await getRoleByCode(roleCode);
@@ -113,6 +149,15 @@ export async function updateUserHandler(req, res) {
   });
 
   if (!updated) return res.status(404).json({ message: "User not found" });
+
+  if (emailChanged) {
+    try {
+      await sendUserEmailVerification(userId, updated.email);
+    } catch (e) {
+      console.error("[users] Failed to send verification after email change", e?.message || e);
+    }
+  }
+
   return res.json({ user: updated });
 }
 
@@ -122,6 +167,38 @@ export async function deleteUserHandler(req, res) {
   
   if (!deleted) return res.status(404).json({ message: "User not found" });
   return res.json({ message: "User deleted successfully" });
+}
+
+export async function resendUserVerificationHandler(req, res) {
+  const userId = req.params.id;
+  const user = await findUserById(userId);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  if (!user.is_active) {
+    return res.status(400).json({ message: "Cannot send verification to an inactive account." });
+  }
+  if (user.email_verified) {
+    return res.status(400).json({ message: "This user's email is already verified." });
+  }
+
+  try {
+    await sendUserEmailVerification(userId, user.email);
+    try {
+      await writeAuditLog({
+        actorUserId: req.user?.sub ?? null,
+        action: "EMAIL_VERIFICATION_SENT",
+        entityType: "USER",
+        entityId: userId,
+        metadata: { email: user.email, source: "admin_resend" },
+      });
+    } catch (e) {
+      /* ignore */
+    }
+  } catch (e) {
+    console.error("[users] Admin resend verification failed", e?.message || e);
+    return res.status(500).json({ message: "Failed to send verification email." });
+  }
+
+  return res.json({ ok: true, message: "Verification email sent." });
 }
 
 export async function resetUserPasswordHandler(req, res) {
