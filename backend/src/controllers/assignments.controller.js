@@ -42,7 +42,8 @@ export async function setOfficeAssignmentsHandler(req, res) {
     return res.status(400).json({ error: "Validation failed", issues: parsed.error.issues });
   }
 
-  const { year, governanceAreaIds } = parsed.data;
+  const { year } = parsed.data;
+  const governanceAreaIds = Array.from(new Set(parsed.data.governanceAreaIds));
 
   const office = await getOfficeById(officeId);
   if (!office) return res.status(404).json({ error: "Office not found" });

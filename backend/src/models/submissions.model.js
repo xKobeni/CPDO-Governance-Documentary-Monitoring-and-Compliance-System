@@ -21,11 +21,12 @@ export async function createSubmission(payload) {
        submitted_by = EXCLUDED.submitted_by,
        submitted_at = now(),
        office_remarks = EXCLUDED.office_remarks
+     WHERE submissions.status NOT IN ('PENDING', 'APPROVED')
      RETURNING *`,
     [year, officeId, governanceAreaId, templateId, checklistItemId, submittedBy, officeRemarks ?? null]
   );
 
-  return rows[0];
+  return rows[0] || null;
 }
 
 export async function getSubmissionById(id) {

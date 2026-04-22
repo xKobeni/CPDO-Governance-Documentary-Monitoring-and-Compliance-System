@@ -79,7 +79,9 @@ export async function assignGovernanceArea({ officeId, governanceAreaId, year, a
   const { rows } = await pool.query(
     `INSERT INTO office_governance_assignments (office_id, governance_area_id, year, assigned_by)
      VALUES ($1, $2, $3, $4)
-     ON CONFLICT (office_id, governance_area_id, year) DO UPDATE SET assigned_at = now()
+     ON CONFLICT (office_id, governance_area_id, year) DO UPDATE SET
+       assigned_at = now(),
+       assigned_by = EXCLUDED.assigned_by
      RETURNING *`,
     [officeId, governanceAreaId, year, assignedBy ?? null]
   );

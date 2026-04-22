@@ -81,6 +81,6 @@ r.put(
 );
 
 // READ - Get full checklist for an office (accessible by ADMIN and OFFICE role for their own office)
-r.get("/:id/checklist", shortCache, asyncHandler(getOfficeChecklistHandler));
+r.get("/:id/checklist", requireRole("ADMIN", "OFFICE"), shortCache, asyncHandler(getOfficeChecklistHandler));
 
 export default r;

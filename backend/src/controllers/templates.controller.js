@@ -8,8 +8,8 @@ import {
   deleteTemplate,
   createChecklistItem,
   listTemplateItems,
-  updateChecklistItem,
-  deleteChecklistItem,
+  updateChecklistItemInTemplate,
+  deleteChecklistItemInTemplate,
   getChecklistItemInTemplate,
   copyTemplateWithItems,
   importTemplateItems,
@@ -166,22 +166,32 @@ export async function createChecklistItemHandler(req, res) {
     }
   }
 
-  const item = await createChecklistItem({
-    templateId,
-    parentItemId,
-    itemCode: parsed.data.itemCode,
-    title: parsed.data.title,
-    description: parsed.data.description ?? null,
-    isRequired: parsed.data.isRequired ?? true,
-    frequency: parsed.data.frequency ?? "ANNUAL",
-    dueDate: parsed.data.dueDate ?? null,
-    allowedFileTypes: parsed.data.allowedFileTypes ?? null,
-    maxFiles: parsed.data.maxFiles ?? 1,
-    sortOrder: parsed.data.sortOrder ?? 0,
-    isActive: parsed.data.isActive ?? true,
-  });
+  try {
+    const item = await createChecklistItem({
+      templateId,
+      parentItemId,
+      itemCode: parsed.data.itemCode,
+      title: parsed.data.title,
+      description: parsed.data.description ?? null,
+      isRequired: parsed.data.isRequired ?? true,
+      frequency: parsed.data.frequency ?? "ANNUAL",
+      dueDate: parsed.data.dueDate ?? null,
+      allowedFileTypes: parsed.data.allowedFileTypes ?? null,
+      maxFiles: parsed.data.maxFiles ?? 1,
+      sortOrder: parsed.data.sortOrder ?? 0,
+      isActive: parsed.data.isActive ?? true,
+    });
 
-  return res.status(201).json({ item });
+    return res.status(201).json({ item });
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(409).json({ message: "Item code already exists in this template" });
+    }
+    if (err.code === "23503") {
+      return res.status(422).json({ message: "Template or parent item reference is invalid" });
+    }
+    throw err;
+  }
 }
 
 const updateItemSchema = itemSchema.partial().refine(
@@ -206,15 +216,33 @@ export async function updateChecklistItemHandler(req, res) {
     }
   }
 
-  const updated = await updateChecklistItem(itemId, parsed.data);
-  if (!updated) return res.status(404).json({ message: "Checklist item not found" });
-  return res.json({ item: updated });
+  try {
+    const updated = await updateChecklistItemInTemplate(templateId, itemId, parsed.data);
+    if (!updated) return res.status(404).json({ message: "Checklist item not found" });
+    return res.json({ item: updated });
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(409).json({ message: "Item code already exists in this template" });
+    }
+    if (err.code === "23503") {
+      return res.status(422).json({ message: "Template or parent item reference is invalid" });
+    }
+    throw err;
+  }
 }
 
 export async function deleteChecklistItemHandler(req, res) {
-  const { itemId } = req.params;
-  await deleteChecklistItem(itemId);
-  return res.status(204).end();
+  const { templateId, itemId } = req.params;
+  try {
+    const deleted = await deleteChecklistItemInTemplate(templateId, itemId);
+    if (!deleted) return res.status(404).json({ message: "Checklist item not found" });
+    return res.status(204).end();
+  } catch (err) {
+    if (err.code === "23503") {
+      return res.status(409).json({ message: "Cannot delete checklist item because it is referenced by submissions" });
+    }
+    throw err;
+  }
 }
 
 const importItemsSchema = z.object({

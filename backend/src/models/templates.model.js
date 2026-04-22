@@ -312,7 +312,7 @@ export async function listTemplateItems(templateId, includeInactive = false) {
   return rows;
 }
 
-export async function updateChecklistItem(id, payload) {
+export async function updateChecklistItemInTemplate(templateId, id, payload) {
   const {
     parentItemId, itemCode, title, description,
     isRequired, frequency, dueDate, allowedFileTypes, maxFiles,
@@ -338,14 +338,23 @@ export async function updateChecklistItem(id, payload) {
     return rows[0] || null;
   }
 
-  params.push(id);
+  params.push(id, templateId);
   const { rows } = await pool.query(
-    `UPDATE checklist_items SET ${sets.join(", ")} WHERE id = $${i} RETURNING *`,
+    `UPDATE checklist_items
+     SET ${sets.join(", ")}
+     WHERE id = $${i} AND template_id = $${i + 1}
+     RETURNING *`,
     params
   );
   return rows[0] || null;
 }
 
-export async function deleteChecklistItem(id) {
-  await pool.query(`DELETE FROM checklist_items WHERE id = $1`, [id]);
+export async function deleteChecklistItemInTemplate(templateId, id) {
+  const { rows } = await pool.query(
+    `DELETE FROM checklist_items
+     WHERE id = $1 AND template_id = $2
+     RETURNING id`,
+    [id, templateId]
+  );
+  return rows[0] || null;
 }

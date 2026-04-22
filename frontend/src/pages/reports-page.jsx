@@ -45,6 +45,7 @@ import {
 } from 'recharts';
 import { toast } from 'react-hot-toast';
 import { cn } from '../lib/utils';
+import { normalizeMatrixStatus } from '../lib/compliance-matrix-status';
 import { getReportSummary, getNoUploadReport, getReportOverview } from '../api/reports';
 import { getGovernanceAreasWithStats, getComplianceMatrix } from '../api/governance';
 import { getYears } from '../api/years';
@@ -320,7 +321,7 @@ export default function ReportsPage() {
     const m = {};
     for (const cell of matrixQuery.data?.cells || []) {
       if (!m[cell.governance_area_id]) m[cell.governance_area_id] = {};
-      m[cell.governance_area_id][cell.office_id] = cell.status;
+      m[cell.governance_area_id][cell.office_id] = normalizeMatrixStatus(cell.status);
     }
     return m;
   }, [matrixQuery.data]);

@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { pool } from "../config/db.js";
 import {
-  createSubmission, getSubmissionById, listSubmissions, setSubmissionStatus
+  createSubmission, getSubmissionById, listSubmissions
 } from "../models/submissions.model.js";
-import { createReview, addVerificationCheck, listReviews } from "../models/reviews.model.js";
+import { listReviews } from "../models/reviews.model.js";
 import { createNotification, createNotificationsBulk } from "../models/notifications.model.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
@@ -30,7 +30,13 @@ export async function createSubmissionHandler(req, res) {
   }
 
   const { rows } = await pool.query(
-    `SELECT ci.id as checklist_item_id, ci.template_id, t.governance_area_id, t.year
+    `SELECT
+       ci.id as checklist_item_id,
+       ci.template_id,
+       ci.is_active as item_is_active,
+       t.governance_area_id,
+       t.year,
+       t.status as template_status
      FROM checklist_items ci
      JOIN checklist_templates t ON t.id = ci.template_id
      WHERE ci.id = $1`,
@@ -39,6 +45,27 @@ export async function createSubmissionHandler(req, res) {
   const ref = rows[0];
   if (!ref) return res.status(404).json({ message: "Checklist item not found" });
   if (ref.year !== year) return res.status(400).json({ message: "Checklist item template year mismatch" });
+  if (!ref.item_is_active) {
+    return res.status(409).json({ message: "This checklist item is inactive and cannot accept submissions" });
+  }
+  if (ref.template_status !== "ACTIVE") {
+    return res.status(409).json({ message: "This checklist template is not active and cannot accept submissions" });
+  }
+
+  // Enforce governance assignment: office can only submit items
+  // under areas assigned to it for the given year.
+  const { rows: assignmentRows } = await pool.query(
+    `SELECT 1
+     FROM office_governance_assignments
+     WHERE office_id = $1
+       AND governance_area_id = $2
+       AND year = $3
+     LIMIT 1`,
+    [officeId, ref.governance_area_id, year]
+  );
+  if (assignmentRows.length === 0) {
+    return res.status(403).json({ message: "This governance area is not assigned to the office for the selected year" });
+  }
 
   // Block re-submission if a PENDING or APPROVED submission already exists
   const { rows: existing } = await pool.query(
@@ -66,6 +93,25 @@ export async function createSubmissionHandler(req, res) {
     submittedBy: req.user.sub,
     officeRemarks: officeRemarks ?? null,
   });
+  if (!submission) {
+    // Concurrency-safe guard: another request/process may have changed
+    // the submission status after our pre-check.
+    const { rows: latestRows } = await pool.query(
+      `SELECT status
+       FROM submissions
+       WHERE year = $1 AND office_id = $2 AND checklist_item_id = $3
+       LIMIT 1`,
+      [year, officeId, checklistItemId]
+    );
+    const latest = latestRows[0];
+    if (latest?.status === "PENDING") {
+      return res.status(409).json({ message: "A submission for this item is already pending review. Please wait for a decision before resubmitting." });
+    }
+    if (latest?.status === "APPROVED") {
+      return res.status(409).json({ message: "This submission has already been approved and cannot be replaced." });
+    }
+    return res.status(409).json({ message: "Submission could not be created due to a concurrent update. Please retry." });
+  }
   // For OFFICE users, notify all ADMIN/STAFF that a new submission was created,
   // so they see something even before any files are uploaded.
   if (req.user.role === "OFFICE") {
@@ -120,6 +166,9 @@ export async function listReviewsHandler(req, res) {
 
 export async function listSubmissionsHandler(req, res) {
   const year = req.query.year ? Number(req.query.year) : undefined;
+  if (req.query.year !== undefined && (!Number.isInteger(year) || year < 2000 || year > 2100)) {
+    return res.status(400).json({ message: "year must be a valid integer between 2000 and 2100" });
+  }
   const governanceAreaId = req.query.governanceAreaId || undefined;
   const status = req.query.status || undefined;
 
@@ -153,31 +202,67 @@ export async function reviewSubmissionHandler(req, res) {
     return res.status(400).json({ message: "This submission is already approved." });
   }
 
-  const review = await createReview({
-    submissionId,
-    reviewedBy: req.user.sub,
-    action: parsed.data.action,
-    decisionNotes: parsed.data.decisionNotes ?? null,
-  });
-
-  if (parsed.data.verificationChecks?.length) {
-    for (const c of parsed.data.verificationChecks) {
-      await addVerificationCheck({
-        reviewId: review.id,
-        checkKey: c.checkKey,
-        isPassed: c.isPassed,
-        notes: c.notes ?? null,
-      });
-    }
-  }
-
   // Update submission.status accordingly
   const newStatus =
     parsed.data.action === "APPROVE" ? "APPROVED" :
     parsed.data.action === "DENY" ? "DENIED" :
     "REVISION_REQUESTED";
+  let review;
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
 
-  await setSubmissionStatus({ submissionId, status: newStatus });
+    const { rows: lockedRows } = await client.query(
+      `SELECT id, status
+       FROM submissions
+       WHERE id = $1
+       FOR UPDATE`,
+      [submissionId]
+    );
+    const locked = lockedRows[0];
+    if (!locked) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Submission not found" });
+    }
+    if (locked.status === "APPROVED") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ message: "This submission is already approved." });
+    }
+
+    const { rows: reviewRows } = await client.query(
+      `INSERT INTO reviews (submission_id, reviewed_by, action, decision_notes)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [submissionId, req.user.sub, parsed.data.action, parsed.data.decisionNotes ?? null]
+    );
+    review = reviewRows[0];
+
+    if (parsed.data.verificationChecks?.length) {
+      for (const c of parsed.data.verificationChecks) {
+        await client.query(
+          `INSERT INTO verification_checks (review_id, check_key, is_passed, notes)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (review_id, check_key)
+           DO UPDATE SET is_passed = EXCLUDED.is_passed, notes = EXCLUDED.notes`,
+          [review.id, c.checkKey, c.isPassed, c.notes ?? null]
+        );
+      }
+    }
+
+    await client.query(
+      `UPDATE submissions
+       SET status = $2
+       WHERE id = $1`,
+      [submissionId, newStatus]
+    );
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 
   // Create notification for the office user(s) who submitted
   const notificationType = 

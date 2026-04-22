@@ -48,6 +48,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { normalizeMatrixStatus, MATRIX_STATUSES } from "../lib/compliance-matrix-status";
 import { getOfficeChecklist } from "../api/offices";
 import { getGovernanceAreasWithStats, getComplianceMatrix } from "../api/governance";
 import { getYears } from "../api/years";
@@ -433,9 +434,10 @@ function OfficeDashboard({ user }) {
 const COMPLIANCE_STATUS = {
   APPROVED:           { label: 'Approved',      color: 'text-green-700',  bg: 'bg-green-50',   bar: 'bg-green-500'  },
   PENDING:            { label: 'Pending',        color: 'text-blue-700',   bg: 'bg-blue-50',    bar: 'bg-blue-500'   },
+  IN_PROGRESS:        { label: 'In Progress',    color: 'text-sky-700',    bg: 'bg-sky-50',     bar: 'bg-sky-500'    },
   DENIED:             { label: 'Not approved',   color: 'text-red-700',    bg: 'bg-red-50',     bar: 'bg-red-500'    },
   REVISION_REQUESTED: { label: 'Not approved',   color: 'text-red-700',    bg: 'bg-red-50',     bar: 'bg-red-500'    },
-  NOT_SUBMITTED:      { label: 'No uploaded',    color: 'text-amber-700',  bg: 'bg-amber-50',   bar: 'bg-amber-400'  },
+  NOT_STARTED:        { label: 'Not started',    color: 'text-amber-700',  bg: 'bg-amber-50',   bar: 'bg-amber-400'  },
 };
 
 function AdminDashboard({ user }) {
@@ -502,7 +504,7 @@ function AdminDashboard({ user }) {
     const m = {};
     for (const cell of (matrixQuery.data?.cells || [])) {
       if (!m[cell.governance_area_id]) m[cell.governance_area_id] = {};
-      m[cell.governance_area_id][cell.office_id] = cell.status;
+      m[cell.governance_area_id][cell.office_id] = normalizeMatrixStatus(cell.status);
     }
     return m;
   }, [matrixQuery.data]);
@@ -583,10 +585,10 @@ function AdminDashboard({ user }) {
     return sos.map((o) => {
       let approved = 0, pending = 0, notApproved = 0, noUploaded = 0;
       for (const area of sas) {
-        const s = matrix[area.id]?.[o.id] || 'NOT_SUBMITTED';
-        if (s === 'APPROVED')                                  approved++;
-        else if (s === 'PENDING')                              pending++;
-        else if (s === 'DENIED' || s === 'REVISION_REQUESTED') notApproved++;
+        const s = normalizeMatrixStatus(matrix[area.id]?.[o.id]);
+        if (s === MATRIX_STATUSES.APPROVED)                                  approved++;
+        else if (s === MATRIX_STATUSES.PENDING || s === MATRIX_STATUSES.IN_PROGRESS) pending++;
+        else if (s === MATRIX_STATUSES.DENIED || s === MATRIX_STATUSES.REVISION_REQUESTED) notApproved++;
         else                                                   noUploaded++;
       }
       return {
@@ -1246,9 +1248,15 @@ function AdminDashboard({ user }) {
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {activeOffices.map((o) => {
                     const approved     = activeAreas.filter((a) => matrix[a.id]?.[o.id] === 'APPROVED').length;
-                    const pending      = activeAreas.filter((a) => matrix[a.id]?.[o.id] === 'PENDING').length;
+                    const pending      = activeAreas.filter((a) => {
+                      const s = normalizeMatrixStatus(matrix[a.id]?.[o.id]);
+                      return s === MATRIX_STATUSES.PENDING || s === MATRIX_STATUSES.IN_PROGRESS;
+                    }).length;
                     const notApproved  = activeAreas.filter((a) => matrix[a.id]?.[o.id] === 'DENIED' || matrix[a.id]?.[o.id] === 'REVISION_REQUESTED').length;
-                    const noUploaded   = activeAreas.filter((a) => !matrix[a.id]?.[o.id]).length;
+                    const noUploaded   = activeAreas.filter((a) => {
+                      const s = normalizeMatrixStatus(matrix[a.id]?.[o.id]);
+                      return s === MATRIX_STATUSES.NOT_STARTED;
+                    }).length;
                     const total        = activeAreas.length;
                     const pct          = total > 0 ? Math.round((approved / total) * 100) : 0;
                     return (

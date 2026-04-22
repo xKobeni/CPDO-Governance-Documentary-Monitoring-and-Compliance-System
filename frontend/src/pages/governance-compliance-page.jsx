@@ -18,6 +18,7 @@ import {
 } from '../components/ui/tooltip';
 import { RefreshCw, CheckCircle2, Clock, XCircle, AlertCircle, MinusCircle, Download } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { normalizeMatrixStatus, MATRIX_STATUSES } from '../lib/compliance-matrix-status';
 import { getGovernanceAreas } from '../api/governance';
 import { getOffices } from '../api/offices';
 import { getComplianceMatrix } from '../api/governance';
@@ -31,11 +32,12 @@ const STATUS_CONFIG = {
   PENDING:             { label: 'Pending',            icon: Clock,         cell: 'bg-amber-50 text-amber-700',    badge: 'bg-amber-50 text-amber-700 border-amber-200'  },
   DENIED:              { label: 'Denied',             icon: XCircle,       cell: 'bg-red-100 text-red-700',       badge: 'bg-red-100 text-red-700 border-red-200'       },
   REVISION_REQUESTED:  { label: 'Needs Revision',     icon: AlertCircle,   cell: 'bg-orange-100 text-orange-700', badge: 'bg-orange-100 text-orange-700 border-orange-200' },
-  NOT_SUBMITTED:       { label: 'Not Submitted',      icon: MinusCircle,   cell: 'bg-muted/30 text-muted-foreground', badge: 'bg-muted text-muted-foreground border-border' },
+  IN_PROGRESS:         { label: 'In Progress',        icon: Clock,         cell: 'bg-sky-50 text-sky-700',        badge: 'bg-sky-50 text-sky-700 border-sky-200'        },
+  NOT_STARTED:         { label: 'Not Started',        icon: MinusCircle,   cell: 'bg-muted/30 text-muted-foreground', badge: 'bg-muted text-muted-foreground border-border' },
 };
 
 function StatusCell({ status }) {
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.NOT_SUBMITTED;
+  const cfg = STATUS_CONFIG[normalizeMatrixStatus(status)] ?? STATUS_CONFIG.NOT_STARTED;
   const Icon = cfg.icon;
   return (
     <Tooltip>
@@ -50,21 +52,21 @@ function StatusCell({ status }) {
 }
 
 function getOfficeStats(officeId, areas, matrixData) {
-  const statuses = areas.map((a) => matrixData[a.id]?.[officeId] ?? 'NOT_SUBMITTED');
+  const statuses = areas.map((a) => normalizeMatrixStatus(matrixData[a.id]?.[officeId]));
   return {
-    approved:     statuses.filter((s) => s === 'APPROVED').length,
-    pending:      statuses.filter((s) => s === 'PENDING').length,
-    denied:       statuses.filter((s) => s === 'DENIED').length,
-    revision:     statuses.filter((s) => s === 'REVISION_REQUESTED').length,
-    notSubmitted: statuses.filter((s) => s === 'NOT_SUBMITTED').length,
+    approved:     statuses.filter((s) => s === MATRIX_STATUSES.APPROVED).length,
+    pending:      statuses.filter((s) => s === MATRIX_STATUSES.PENDING || s === MATRIX_STATUSES.IN_PROGRESS).length,
+    denied:       statuses.filter((s) => s === MATRIX_STATUSES.DENIED).length,
+    revision:     statuses.filter((s) => s === MATRIX_STATUSES.REVISION_REQUESTED).length,
+    notSubmitted: statuses.filter((s) => s === MATRIX_STATUSES.NOT_STARTED).length,
     total: statuses.length,
   };
 }
 
 function getAreaStats(areaId, offices, matrixData) {
-  const statuses = offices.map((o) => matrixData[areaId]?.[o.id] ?? 'NOT_SUBMITTED');
+  const statuses = offices.map((o) => normalizeMatrixStatus(matrixData[areaId]?.[o.id]));
   return {
-    approved: statuses.filter((s) => s === 'APPROVED').length,
+    approved: statuses.filter((s) => s === MATRIX_STATUSES.APPROVED).length,
     total: statuses.length,
   };
 }
@@ -106,7 +108,7 @@ export default function GovernanceCompliancePage() {
       const matrix = {};
       for (const cell of (matrixRes.cells || [])) {
         if (!matrix[cell.governance_area_id]) matrix[cell.governance_area_id] = {};
-        matrix[cell.governance_area_id][cell.office_id] = cell.status;
+        matrix[cell.governance_area_id][cell.office_id] = normalizeMatrixStatus(cell.status);
       }
 
       setAreas(activeAreas);
@@ -136,7 +138,7 @@ export default function GovernanceCompliancePage() {
       .catch(() => {
         setYearOptions([currentYear, currentYear - 1, currentYear - 2]);
       });
-  }, [currentYear]);
+  }, [currentYear, year]);
 
   const handleExport = () => {
     const activeAreas = areas;
@@ -144,7 +146,7 @@ export default function GovernanceCompliancePage() {
     const rows = [];
     rows.push(["Governance Area", ...activeOffices.map((o) => o.code)].join(","));
     for (const a of activeAreas) {
-      const line = [a.code, ...activeOffices.map((o) => (matrixData[a.id]?.[o.id] ?? "NOT_SUBMITTED"))];
+      const line = [a.code, ...activeOffices.map((o) => normalizeMatrixStatus(matrixData[a.id]?.[o.id]))];
       rows.push(line.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(","));
     }
     const csv = rows.join("\n");
@@ -163,9 +165,24 @@ export default function GovernanceCompliancePage() {
 
   const totalCells = areas.length * offices.length;
   // Flatten all matrix statuses for summary counters
-  const allCellStatuses = Object.values(matrixData).flatMap((row) => Object.values(row || {}));
-  const approvedCells = allCellStatuses.filter((s) => s === 'APPROVED').length;
+  const allCellStatuses = Object.values(matrixData).flatMap((row) =>
+    Object.values(row || {}).map((s) => normalizeMatrixStatus(s))
+  );
+  const approvedCells = allCellStatuses.filter((s) => s === MATRIX_STATUSES.APPROVED).length;
   const overallPct = totalCells > 0 ? Math.round((approvedCells / totalCells) * 100) : 0;
+  const statusKpis = [
+    { status: 'APPROVED',           count: approvedCells },
+    { status: 'PENDING',            count: allCellStatuses.filter((s) => s === MATRIX_STATUSES.PENDING).length },
+    { status: 'IN_PROGRESS',        count: allCellStatuses.filter((s) => s === MATRIX_STATUSES.IN_PROGRESS).length },
+    { status: 'REVISION_REQUESTED', count: allCellStatuses.filter((s) => s === MATRIX_STATUSES.REVISION_REQUESTED).length },
+    { status: 'DENIED',             count: allCellStatuses.filter((s) => s === MATRIX_STATUSES.DENIED).length },
+    {
+      status: 'NOT_STARTED',
+      count:
+        Math.max(totalCells - allCellStatuses.length, 0) +
+        allCellStatuses.filter((s) => s === MATRIX_STATUSES.NOT_STARTED).length,
+    },
+  ];
 
   const visibleAreas = showAtRiskOnly
     ? areas.filter((a) => { const s = getAreaStats(a.id, offices, matrixData); return Math.round((s.approved / (s.total || 1)) * 100) < 80; })
@@ -203,7 +220,7 @@ export default function GovernanceCompliancePage() {
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
             <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />Refresh
           </Button>
-          <Button variant="outline" size="sm"><Download className="mr-2 h-4 w-4" />Export</Button>
+          <Button variant="outline" size="sm" onClick={handleExport}><Download className="mr-2 h-4 w-4" />Export</Button>
         </div>
       </div>
 
@@ -227,23 +244,6 @@ export default function GovernanceCompliancePage() {
                   style={{ width: `${overallPct}%` }}
                 />
               </div>
-            </div>
-            <div className="flex gap-3 shrink-0 flex-wrap text-xs">
-              {[
-                { status: 'APPROVED',           count: approvedCells },
-                { status: 'PENDING',            count: allCellStatuses.filter((s) => s === 'PENDING').length },
-                { status: 'REVISION_REQUESTED', count: allCellStatuses.filter((s) => s === 'REVISION_REQUESTED').length },
-                { status: 'DENIED',             count: allCellStatuses.filter((s) => s === 'DENIED').length },
-                { status: 'NOT_SUBMITTED',      count: Math.max(totalCells - allCellStatuses.length, 0) },
-              ].map(({ status, count }) => {
-                const cfg = STATUS_CONFIG[status];
-                const Icon = cfg.icon;
-                return (
-                  <div key={status} className={cn('flex items-center gap-1 px-2 py-1 rounded border', cfg.badge)}>
-                    <Icon className="h-3 w-3" />{count} {cfg.label}
-                  </div>
-                );
-              })}
             </div>
           </div>
         </CardContent>
@@ -281,16 +281,16 @@ export default function GovernanceCompliancePage() {
 
       {/* ── Legend ──────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2">
-        {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
+        {statusKpis.map(({ status, count }) => {
+          const cfg = STATUS_CONFIG[status];
           const Icon = cfg.icon;
           return (
-            <div key={key} className={cn('flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border', cfg.badge)}>
+            <div key={status} className={cn('flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border', cfg.badge)}>
               <Icon className="h-3.5 w-3.5" />
-              <span>{cfg.label}</span>
+              <span>{count} {cfg.label}</span>
             </div>
           );
         })}
-        <span className="text-xs text-muted-foreground self-center ml-1">← hover any cell for the label</span>
       </div>
 
       {/* ── Matrix Table ────────────────────────────────────────────────────── */}
@@ -357,7 +357,7 @@ export default function GovernanceCompliancePage() {
                       const isDimmed  = focusOffice !== 'all' && !isFocused;
                       return (
                         <td key={o.id} className={cn('px-2 py-2 transition-opacity', isDimmed && 'opacity-20')}>
-                          <StatusCell status={matrixData[area.id]?.[o.id] ?? 'NOT_SUBMITTED'} />
+                          <StatusCell status={matrixData[area.id]?.[o.id]} />
                         </td>
                       );
                     })}
