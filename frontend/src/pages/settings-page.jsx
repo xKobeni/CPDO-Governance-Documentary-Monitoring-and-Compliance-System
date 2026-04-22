@@ -125,14 +125,15 @@ export default function SettingsPage() {
       setForgotError("Password must be at least 8 characters");
       return;
     }
-    if (!forgotResetToken.trim()) {
-      setForgotError("Please enter the reset code");
+    const codeDigits = forgotResetToken.replace(/\D/g, "");
+    if (codeDigits.length !== 6) {
+      setForgotError("Please enter the 6-digit code from your email");
       return;
     }
     setForgotLoading(true);
     setForgotError("");
     try {
-      await resetPassword(forgotResetToken.trim(), forgotNewPassword);
+      await resetPassword(codeDigits, forgotNewPassword);
       setForgotSuccess("Password reset successfully! Logging you out...");
       setTimeout(async () => {
         await logout();
@@ -377,7 +378,7 @@ export default function SettingsPage() {
             <DialogDescription>
               {forgotStep === "request"
                 ? "Enter your email to get a reset code"
-                : "Enter the reset code and your new password"}
+                : "Enter the 6-digit code from your email and your new password"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -408,10 +409,13 @@ export default function SettingsPage() {
                   <Input
                     id="forgot-token"
                     type="text"
+                    inputMode="numeric"
+                    maxLength={6}
                     value={forgotResetToken}
-                    onChange={(e) => setForgotResetToken(e.target.value)}
-                    placeholder="XXXXXX-XXXXXX"
+                    onChange={(e) => setForgotResetToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
                     required
+                    className="font-mono tracking-widest text-center"
                   />
                 </div>
                 <div className="space-y-2">

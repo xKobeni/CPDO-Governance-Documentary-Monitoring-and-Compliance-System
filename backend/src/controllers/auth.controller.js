@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { env } from "../config/env.js";
@@ -306,7 +307,8 @@ export async function forgotPassword(req, res) {
 
   // Always return success to avoid email enumeration
   const response = {
-    message: "If an account exists with this email, password reset instructions have been sent.",
+    message:
+      "If an account exists with this email, we sent a 6-digit code. Use it on the reset page to choose a new password.",
   };
 
   if (!user || !user.is_active) {
@@ -316,16 +318,21 @@ export async function forgotPassword(req, res) {
   // Revoke any existing tokens for this user
   await revokeResetTokens(user.id);
 
-  const rawToken = nanoid(12);
-  const resetToken = `${rawToken.slice(0, 6)}-${rawToken.slice(6)}`;
+  const resetCode = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
-  await createPasswordResetToken(user.id, resetToken.replace(/-/g, ""), expiresAt);
+  await createPasswordResetToken(user.id, resetCode, expiresAt);
+
+  const baseUrl = (env.frontendUrl || "").replace(/\/$/, "");
+  const resetUrl = baseUrl
+    ? `${baseUrl}/forgot-password?step=reset&email=${encodeURIComponent(user.email)}`
+    : "";
 
   try {
     const emailContent = buildPasswordResetEmail({
-      resetCode: resetToken,
+      resetCode,
       expiresIn: "1 hour",
+      resetUrl,
     });
 
     const emailResult = await sendMail({
@@ -336,8 +343,9 @@ export async function forgotPassword(req, res) {
     });
 
     if (emailResult.skipped && env.nodeEnv !== "production") {
-      response.resetToken = resetToken;
-      response.message = "Email delivery is disabled in this environment. Use the reset code returned for local testing.";
+      response.resetToken = resetCode;
+      response.message =
+        "Email delivery is disabled in this environment. Use the 6-digit code below for local testing.";
     }
   } catch (e) {
     console.error("[auth] Failed to send password reset email", e?.message || e);
@@ -366,7 +374,10 @@ export async function resetPassword(req, res) {
   }
 
   const { token, newPassword } = parsed.data;
-  const normalizedToken = token.replace(/-/g, "");
+  const normalizedToken = token.replace(/\D/g, "");
+  if (normalizedToken.length !== 6) {
+    return res.status(400).json({ message: "Enter the 6-digit code from your email." });
+  }
 
   const valid = await findValidResetToken(normalizedToken);
   if (!valid) {
