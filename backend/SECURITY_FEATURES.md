@@ -48,6 +48,8 @@ This file explains the security protections currently implemented in this system
 ## 11) Password Reset Hardening
 - **What it does:** Forgot-password response is generic and does not expose reset token.
 - **How it acts:** Prevents account enumeration and prevents token leakage through API responses.
+- **Email delivery:** Reset codes are sent via SMTP email (Nodemailer) instead of being returned by API in normal environments.
+- **Dev fallback:** If SMTP is disabled in non-production, the reset code can be returned only for local testing.
 
 ## 12) SQL Injection Protection
 - **What it does:** Uses parameterized SQL queries (`$1`, `$2`, etc.).

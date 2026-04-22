@@ -6,6 +6,8 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/
 import { sha256 } from "../utils/tokenHash.js";
 import { setCsrfCookie } from "../utils/csrf.js";
 import { writeAuditLog } from "../models/audit.model.js";
+import { sendMail } from "../services/maileroo.service.js";
+import { buildPasswordResetEmail } from "../services/email-templates.service.js";
 
 import {
   findUserAuthByEmail,
@@ -319,6 +321,27 @@ export async function forgotPassword(req, res) {
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
   await createPasswordResetToken(user.id, resetToken.replace(/-/g, ""), expiresAt);
+
+  try {
+    const emailContent = buildPasswordResetEmail({
+      resetCode: resetToken,
+      expiresIn: "1 hour",
+    });
+
+    const emailResult = await sendMail({
+      to: user.email,
+      subject: emailContent.subject,
+      text: emailContent.text,
+      html: emailContent.html,
+    });
+
+    if (emailResult.skipped && env.nodeEnv !== "production") {
+      response.resetToken = resetToken;
+      response.message = "Email delivery is disabled in this environment. Use the reset code returned for local testing.";
+    }
+  } catch (e) {
+    console.error("[auth] Failed to send password reset email", e?.message || e);
+  }
 
   try {
     await writeAuditLog({

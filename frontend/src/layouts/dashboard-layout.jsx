@@ -208,7 +208,7 @@ function DashboardLayout() {
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0 relative">
                   <Bell className="h-4 w-4" />
                   {topbarUnread > 0 && (
-                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 rounded-full text-[9px] text-white flex items-center justify-center font-bold leading-none">
+                    <span className="absolute top-0 right-0 -translate-y-1/3 translate-x-1/3 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
                       {topbarUnread > 9 ? '9+' : topbarUnread}
                     </span>
                   )}

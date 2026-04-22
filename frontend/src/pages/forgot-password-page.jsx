@@ -36,9 +36,11 @@ export default function ForgotPasswordPage() {
     setSuccess("");
     try {
       const data = await requestPasswordReset(email);
-      setSuccess(data.message || "Reset code generated. Check your email or use the code below.");
+      setSuccess(data.message || "If the account exists, a reset code has been sent to your email.");
       setResetToken(data.resetToken || "");
-      setStep("reset");
+      if (data.resetToken) {
+        setStep("reset");
+      }
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to request password reset. Please try again.");
     } finally {
@@ -106,6 +108,15 @@ export default function ForgotPasswordPage() {
                   </Field>
                   <Button type="submit" disabled={isLoading} className="w-full bg-black hover:bg-gray-800 text-white">
                     {isLoading ? "Sending..." : "Get reset code"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setStep("reset")}
+                    disabled={isLoading}
+                  >
+                    I already have a reset code
                   </Button>
                 </form>
               ) : (

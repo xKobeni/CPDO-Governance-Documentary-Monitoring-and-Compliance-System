@@ -2,6 +2,7 @@ import { createApp } from "./app.js";
 import { env } from "./config/env.js";
 import { pool, dbHealthcheck } from "./config/db.js";
 import { logger } from "./config/logger.js";
+import { verifyMailTransport } from "./services/maileroo.service.js";
 
 const app = createApp();
 
@@ -19,6 +20,23 @@ async function ensureRoles() {
     if (!ok) throw new Error("DB healthcheck failed");
 
     await ensureRoles();
+    try {
+      const mailStatus = await verifyMailTransport();
+      if (mailStatus.enabled) {
+        logger.info("SMTP transport verified");
+      } else {
+        logger.warn("SMTP transport disabled. Emails will not be sent.");
+      }
+    } catch (mailErr) {
+      logger.warn(
+        {
+          code: mailErr?.code,
+          responseCode: mailErr?.responseCode,
+          message: mailErr?.message,
+        },
+        "SMTP verification failed. Server will continue with email disabled.",
+      );
+    }
 
     app.listen(env.port, () => {
       logger.info({ port: env.port }, "API server running");

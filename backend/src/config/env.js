@@ -9,6 +9,17 @@ function parseDatabaseSsl(raw) {
   return undefined;
 }
 
+function parseBoolean(raw, fallback = false) {
+  if (raw == null || String(raw).trim() === "") return fallback;
+  return String(raw).trim().toLowerCase() === "true";
+}
+
+function parseNumber(raw, fallback) {
+  if (raw == null || String(raw).trim() === "") return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? 5000),
@@ -25,8 +36,19 @@ export const env = {
   inactivityTimeoutMinutes: Number(process.env.INACTIVITY_TIMEOUT_MINUTES ?? 30),
   uploadQuotaBytes: Number(process.env.UPLOAD_QUOTA_BYTES ?? 262144000),
 
-  cookieSecure: String(process.env.COOKIE_SECURE ?? "false") === "true",
+  cookieSecure: parseBoolean(process.env.COOKIE_SECURE, false),
   cookieDomain: process.env.COOKIE_DOMAIN || undefined,
+
+  smtpHost: process.env.SMTP_HOST?.trim(),
+  smtpPort: Number(process.env.SMTP_PORT ?? 587),
+  smtpSecure: parseBoolean(process.env.SMTP_SECURE, false),
+  smtpUser: process.env.SMTP_USER?.trim(),
+  smtpPass: process.env.SMTP_PASS,
+  mailFrom: process.env.MAIL_FROM?.trim(),
+  mailRetryAttempts: parseNumber(process.env.MAIL_RETRY_ATTEMPTS, 3),
+  mailRetryDelayMs: parseNumber(process.env.MAIL_RETRY_DELAY_MS, 1000),
+  mailRetryBackoffMultiplier: parseNumber(process.env.MAIL_RETRY_BACKOFF_MULTIPLIER, 2),
+  frontendUrl: process.env.FRONTEND_URL?.trim() || process.env.CORS_ORIGIN?.trim(),
 
   b2KeyId: process.env.B2_KEY_ID?.trim(),
   b2ApplicationKey: process.env.B2_APPLICATION_KEY?.trim(),
