@@ -1,22 +1,22 @@
 import { pool } from "../config/db.js";
 import { sha256 } from "../utils/tokenHash.js";
 
-export async function createEmailVerificationToken(userId, token, expiresAt) {
+export async function createEmailVerificationToken(userId, token, expiresAt, temporaryPassword = null) {
   const tokenHash = sha256(token);
   const result = await pool.query(
-    `INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
-     VALUES ($1, $2, $3)
+    `INSERT INTO email_verification_tokens (user_id, token_hash, temporary_password, expires_at)
+     VALUES ($1, $2, $3, $4)
      RETURNING id`,
-    [userId, tokenHash, expiresAt]
+    [userId, tokenHash, temporaryPassword, expiresAt]
   );
   return result.rows[0] ?? null;
 }
 
-/** @returns {Promise<{ userId: string } | null>} */
+/** @returns {Promise<{ user_id: string, temporary_password: string | null } | null>} */
 export async function findValidEmailVerificationToken(token) {
   const tokenHash = sha256(token);
   const result = await pool.query(
-    `SELECT user_id
+    `SELECT user_id, temporary_password
      FROM email_verification_tokens
      WHERE token_hash = $1 AND expires_at > now()`,
     [tokenHash]

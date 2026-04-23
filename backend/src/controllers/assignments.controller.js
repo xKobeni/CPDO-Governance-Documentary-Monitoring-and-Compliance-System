@@ -56,6 +56,21 @@ export async function setOfficeAssignmentsHandler(req, res) {
     }
   }
 
+  // Block assignment to areas that are not assignable for this year
+  const readiness = await AssignmentsModel.getGovernanceAssignmentReadinessByIds(year, governanceAreaIds);
+  const invalidSelections = readiness.filter((r) => !r.is_assignable);
+  if (invalidSelections.length > 0) {
+    return res.status(400).json({
+      error: "Some governance areas cannot be assigned for the selected year",
+      details: invalidSelections.map((r) => ({
+        governanceAreaId: r.id,
+        code: r.code,
+        name: r.name,
+        reason: r.unassignable_reason,
+      })),
+    });
+  }
+
   const assignments = await AssignmentsModel.setAssignmentsForOffice({
     officeId,
     year,
@@ -64,6 +79,15 @@ export async function setOfficeAssignmentsHandler(req, res) {
   });
 
   return res.json({ message: "Assignments updated", data: assignments });
+}
+
+/** GET /offices/assignment-options?year=YYYY — governance list with assignment readiness */
+export async function listAssignmentOptionsHandler(req, res) {
+  const yearParsed = yearSchema.safeParse(req.query.year ?? String(new Date().getFullYear()));
+  if (!yearParsed.success) return res.status(400).json({ error: yearParsed.error.issues[0].message });
+
+  const options = await AssignmentsModel.listGovernanceAssignmentOptions(yearParsed.data);
+  return res.json({ year: yearParsed.data, data: options });
 }
 
 /** GET /offices/:id/checklist?year=YYYY — used by Office Head */

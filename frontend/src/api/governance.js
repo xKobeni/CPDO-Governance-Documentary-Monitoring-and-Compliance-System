@@ -36,6 +36,7 @@ export async function getAssignedOffices(governanceAreaId, year) {
 }
 
 export async function getComplianceMatrix(year) {
-  const response = await api.get('/governance-areas/compliance-matrix', { params: { year } });
-  return response.data; // { year, cells: [{governance_area_id, office_id, status}] }
+  const response = await api.get("/governance-areas/compliance-matrix", { params: { year } });
+  return response.data; // { year, cells: [] }
 }
+

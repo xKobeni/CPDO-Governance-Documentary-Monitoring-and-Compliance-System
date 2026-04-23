@@ -193,7 +193,7 @@ export default function GovernanceAllPage() {
                   'border-l-4 transition-all hover:shadow-md cursor-pointer group',
                   area.is_active ? CARD_ACCENTS[area.sort_order - 1] : 'border-l-slate-300 opacity-55'
                 )}
-                onClick={() => navigate('/governance/compliance')}
+                onClick={() => navigate('/governance/manage')}
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">
@@ -245,7 +245,7 @@ export default function GovernanceAllPage() {
                           <p className="text-sm font-semibold">{area.submissions}</p>
                         </div>
                         <div className="ml-auto self-center">
-                          <span className="text-xs text-muted-foreground group-hover:text-primary transition-colors">View matrix →</span>
+                          <span className="text-xs text-muted-foreground group-hover:text-primary transition-colors">Manage area →</span>
                         </div>
                       </div>
                     </>

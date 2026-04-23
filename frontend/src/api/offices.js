@@ -50,6 +50,12 @@ export async function setOfficeAssignments(officeId, year, governanceAreaIds) {
   return response.data;
 }
 
+/** Get governance options with assignment readiness for a year */
+export async function getAssignmentOptions(year) {
+  const response = await api.get("/offices/assignment-options", { params: { year } });
+  return response.data;
+}
+
 /** Get full grouped checklist for an office (used by Office Head + admin) */
 export async function getOfficeChecklist(officeId, year) {
   const response = await api.get(`/offices/${officeId}/checklist`, { params: { year } });

@@ -490,7 +490,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
 
             {/* Review — Formal decision (changes status) */}
             {showFormalReview && (
-              <Card className="border-2 border-blue-300 bg-gradient-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/40 dark:to-indigo-950/30 dark:border-blue-700">
+              <Card className="border-2 border-blue-300 bg-linear-to-br from-blue-50/80 to-indigo-50/50 dark:from-blue-950/40 dark:to-indigo-950/30 dark:border-blue-700">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500 text-white">
@@ -661,7 +661,7 @@ export default function SubmissionsPage() {
 
   const canReview = ["ADMIN", "STAFF"].includes(String(user?.role || "").toUpperCase());
 
-  // Support deep-links from Compliance Matrix:
+  // Support deep-links from governance area context:
   // /submissions?governanceAreaId=...&year=YYYY
   React.useEffect(() => {
     if (!canReview) return;

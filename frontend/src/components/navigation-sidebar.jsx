@@ -59,7 +59,7 @@ const expandableSections = {
   ],
   "/governance": [
     { title: "Manage Areas", href: "/governance/manage" },
-    { title: "Compliance Matrix", href: "/governance/compliance" }
+    { title: "Compliance Matrix", href: "/governance/compliance" },
   ],
   "/files": [
     { title: "All Files", href: "/files" },

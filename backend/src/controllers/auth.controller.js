@@ -8,7 +8,10 @@ import { sha256 } from "../utils/tokenHash.js";
 import { setCsrfCookie } from "../utils/csrf.js";
 import { writeAuditLog } from "../models/audit.model.js";
 import { sendMail } from "../services/maileroo.service.js";
-import { buildPasswordResetEmail } from "../services/email-templates.service.js";
+import {
+  buildPasswordResetEmail,
+  buildVerificationSuccessWelcomeEmail,
+} from "../services/email-templates.service.js";
 
 import {
   findUserAuthByEmail,
@@ -457,6 +460,35 @@ export async function verifyEmail(req, res) {
   try {
     await setUserEmailVerified(userId, true);
     await deleteEmailVerificationToken(userId, token);
+    const user = await findUserById(userId);
+
+    if (user?.email) {
+      const base = (env.frontendUrl || env.corsOrigin || "").replace(/\/$/, "");
+      const loginUrl = base ? `${base}/login` : "";
+      const welcomeEmail = buildVerificationSuccessWelcomeEmail({
+        name: user.full_name || "Team Member",
+        email: user.email,
+        temporaryPassword: valid.temporary_password || "",
+        role: user.role_name || user.role_code || "",
+        department: user.office_name || "",
+        loginUrl,
+      });
+
+      try {
+        await sendMail({
+          to: user.email,
+          subject: welcomeEmail.subject,
+          text: welcomeEmail.text,
+          html: welcomeEmail.html,
+        });
+      } catch (mailError) {
+        console.error(
+          "[auth] verifyEmail welcome email send failed",
+          mailError?.message || mailError,
+        );
+      }
+    }
+
     try {
       await writeAuditLog({
         actorUserId: userId,

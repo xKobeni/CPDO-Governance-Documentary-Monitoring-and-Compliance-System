@@ -56,8 +56,7 @@ import {
 import { toast } from 'react-hot-toast';
 
 import { useAuth } from '../hooks/use-auth';
-import { getOffices, createOffice, updateOffice, deleteOffice, toggleOfficeStatus, getOfficeAssignments, setOfficeAssignments } from '../api/offices';
-import { getGovernanceAreas } from '../api/governance';
+import { getOffices, createOffice, updateOffice, deleteOffice, toggleOfficeStatus, getOfficeAssignments, setOfficeAssignments, getAssignmentOptions } from '../api/offices';
 import { getYears } from '../api/years';
 import HelpTourOverlay from '../components/help-tour-overlay';
 
@@ -91,6 +90,12 @@ export default function OfficesPage() {
   const [assignYearOptions, setAssignYearOptions] = useState([]);
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignSubmitting, setAssignSubmitting] = useState(false);
+
+  const assignabilityMeta = React.useMemo(() => {
+    const map = {};
+    for (const area of allGovernanceAreas) map[area.id] = area;
+    return map;
+  }, [allGovernanceAreas]);
 
   // Load data on component mount
   useEffect(() => {
@@ -247,10 +252,10 @@ export default function OfficesPage() {
     setAssignLoading(true);
     try {
       const [areasRes, assignRes] = await Promise.all([
-        getGovernanceAreas(),
+        getAssignmentOptions(new Date().getFullYear()),
         getOfficeAssignments(office.id, new Date().getFullYear()),
       ]);
-      const areas = (areasRes.governanceAreas || areasRes.data || areasRes).filter(a => a.is_active !== false);
+      const areas = (areasRes.data || []).filter(a => a.is_active !== false);
       setAllGovernanceAreas(areas);
       const currentIds = (assignRes.data || []).map(a => a.governance_area_id);
       setSelectedAreaIds(currentIds);
@@ -267,7 +272,11 @@ export default function OfficesPage() {
     if (!assigningOffice) return;
     setAssignLoading(true);
     try {
-      const assignRes = await getOfficeAssignments(assigningOffice.id, year);
+      const [areasRes, assignRes] = await Promise.all([
+        getAssignmentOptions(year),
+        getOfficeAssignments(assigningOffice.id, year),
+      ]);
+      setAllGovernanceAreas((areasRes.data || []).filter(a => a.is_active !== false));
       const currentIds = (assignRes.data || []).map(a => a.governance_area_id);
       setSelectedAreaIds(currentIds);
     } catch {
@@ -278,6 +287,8 @@ export default function OfficesPage() {
   };
 
   const toggleAreaSelection = (areaId) => {
+    const area = assignabilityMeta[areaId];
+    if (area && !area.is_assignable) return;
     setSelectedAreaIds(prev =>
       prev.includes(areaId) ? prev.filter(id => id !== areaId) : [...prev, areaId]
     );
@@ -290,8 +301,13 @@ export default function OfficesPage() {
       await setOfficeAssignments(assigningOffice.id, assignYear, selectedAreaIds);
       toast.success(`Assignments updated for ${assigningOffice.name} (${assignYear})`);
       setIsAssignDialogOpen(false);
-    } catch {
-      toast.error('Failed to save assignments');
+    } catch (error) {
+      const details = error?.response?.data?.details;
+      if (Array.isArray(details) && details.length > 0) {
+        toast.error(details.map((d) => `${d.code}: ${d.reason}`).join(' | '));
+      } else {
+        toast.error('Failed to save assignments');
+      }
     } finally {
       setAssignSubmitting(false);
     }
@@ -763,15 +779,35 @@ export default function OfficesPage() {
                 {allGovernanceAreas.map(area => (
                   <label
                     key={area.id}
-                    className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                    className={`flex items-start gap-3 px-4 py-3 transition-colors ${
+                      area.is_assignable ? 'cursor-pointer hover:bg-muted/50' : 'opacity-70 bg-muted/20 cursor-not-allowed'
+                    }`}
                   >
                     <Checkbox
                       checked={selectedAreaIds.includes(area.id)}
                       onCheckedChange={() => toggleAreaSelection(area.id)}
+                      disabled={!area.is_assignable}
                       className="mt-0.5"
                     />
                     <div>
-                      <div className="text-sm font-medium leading-tight">{area.name}</div>
+                      <div className="text-sm font-medium leading-tight flex items-center gap-2">
+                        <span>{area.name}</span>
+                        {area.is_assignable ? (
+                          <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">
+                            Ready
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                            Not Ready
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        {area.active_template_count || 0} active template(s) • {area.root_category_count || 0} root categorie(s)
+                      </div>
+                      {!area.is_assignable && (
+                        <div className="text-[11px] text-amber-700 mt-0.5">{area.unassignable_reason}</div>
+                      )}
                       {area.description && (
                         <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{area.description}</div>
                       )}

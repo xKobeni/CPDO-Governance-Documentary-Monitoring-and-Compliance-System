@@ -17,6 +17,7 @@ import {
   setOfficeAssignmentsHandler,
   getOfficeChecklistHandler,
   listAllAssignmentsHandler,
+  listAssignmentOptionsHandler,
 } from "../controllers/assignments.controller.js";
 
 const r = Router();
@@ -39,6 +40,8 @@ r.get("/", requireRole("ADMIN", "STAFF"), mediumCache, asyncHandler(listOfficesH
 
 // READ - Admin overview of all assignments for a year
 r.get("/all-assignments", requireRole("ADMIN"), shortCache, asyncHandler(listAllAssignmentsHandler));
+// READ - Governance options with readiness indicators for assignment
+r.get("/assignment-options", requireRole("ADMIN"), shortCache, asyncHandler(listAssignmentOptionsHandler));
 
 // READ - Get single office by ID (staff can view)
 r.get("/:id", requireRole("ADMIN", "STAFF"), mediumCache, asyncHandler(getOfficeHandler));

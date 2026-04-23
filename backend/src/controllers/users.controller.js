@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { env } from "../config/env.js";
 import { hashPassword } from "../utils/password.js";
 import { getRoleByCode } from "../models/roles.model.js";
 import {
@@ -12,6 +13,8 @@ import {
 } from "../models/users.model.js";
 import { revokeEmailVerificationTokens } from "../models/email-verification.model.js";
 import { sendUserEmailVerification } from "../services/user-email-verification.service.js";
+import { sendMail } from "../services/maileroo.service.js";
+import { buildVerificationSuccessWelcomeEmail } from "../services/email-templates.service.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 import { writeAuditLog } from "../models/audit.model.js";
 
@@ -71,7 +74,9 @@ export async function createUserHandler(req, res) {
   };
 
   try {
-    const sendResult = await sendUserEmailVerification(user.id, user.email);
+    const sendResult = await sendUserEmailVerification(user.id, user.email, {
+      temporaryPassword: rawPassword,
+    });
     if (sendResult.skipped && process.env.NODE_ENV !== "production") {
       payload.verificationDevToken = sendResult.rawToken;
     }
@@ -163,8 +168,16 @@ export async function updateUserHandler(req, res) {
 
 export async function deleteUserHandler(req, res) {
   const userId = req.params.id;
+  const user = await findUserById(userId);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  if (user.is_active) {
+    return res.status(400).json({
+      message: "Only inactive users can be deleted. Deactivate this user first.",
+    });
+  }
+
   const deleted = await deleteUser(userId);
-  
+
   if (!deleted) return res.status(404).json({ message: "User not found" });
   return res.json({ message: "User deleted successfully" });
 }
@@ -217,8 +230,42 @@ export async function resetUserPasswordHandler(req, res) {
     return res.status(500).json({ message: "Failed to reset password" });
   }
 
-  // Return the new temporary password so admin can share it with the user
+  let credentialEmailSent = false;
+  let credentialEmailWarning;
+
+  try {
+    const base = (env.frontendUrl || env.corsOrigin || "").replace(/\/$/, "");
+    const loginUrl = base ? `${base}/login` : "";
+    const credentialEmail = buildVerificationSuccessWelcomeEmail({
+      name: user.full_name || "Team Member",
+      email: user.email,
+      temporaryPassword: rawPassword,
+      role: user.role_name || user.role_code || "",
+      department: user.office_name || "",
+      loginUrl,
+    });
+
+    const sendResult = await sendMail({
+      to: user.email,
+      subject: credentialEmail.subject,
+      text: credentialEmail.text,
+      html: credentialEmail.html,
+    });
+
+    credentialEmailSent = Boolean(sendResult?.sent);
+    if (sendResult?.skipped) {
+      credentialEmailWarning =
+        "Credential email was not sent because SMTP is not configured in this environment.";
+    }
+  } catch (e) {
+    console.error("[users] Failed to send reset credential email", e?.message || e);
+    credentialEmailWarning =
+      "Password was reset, but sending credential email failed. Please share the password manually.";
+  }
+
   return res.json({
     generatedPassword: rawPassword,
+    credentialEmailSent,
+    ...(credentialEmailWarning ? { credentialEmailWarning } : {}),
   });
 }

@@ -13,11 +13,12 @@ const VERIFICATION_TTL_MS = 48 * 60 * 60 * 1000;
  * Revoke old tokens, create a new one, and send the verification email.
  * @returns {Promise<{ sent: boolean, skipped?: boolean, rawToken?: string }>}
  */
-export async function sendUserEmailVerification(userId, email) {
+export async function sendUserEmailVerification(userId, email, options = {}) {
+  const temporaryPassword = options.temporaryPassword ?? null;
   await revokeEmailVerificationTokens(userId);
   const rawToken = nanoid(40);
   const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
-  await createEmailVerificationToken(userId, rawToken, expiresAt);
+  await createEmailVerificationToken(userId, rawToken, expiresAt, temporaryPassword);
 
   const apiOrigin = (env.publicApiUrl || `http://localhost:${env.port}`).replace(/\/$/, "");
   const verifyUrl = `${apiOrigin}/api/auth/verify-email?token=${encodeURIComponent(rawToken)}`;

@@ -97,6 +97,7 @@ export async function complianceMatrixHandler(req, res) {
   if (!year || year < 2000 || year > 2100) {
     return res.status(400).json({ message: "Valid year is required (e.g. ?year=2026)" });
   }
-  const cells = await getComplianceMatrix(year);
-  return res.json({ year, cells });
+  const matrix = await getComplianceMatrix(year);
+  return res.json(matrix);
 }
+

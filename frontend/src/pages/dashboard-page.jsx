@@ -48,9 +48,8 @@ import {
   Calendar,
 } from "lucide-react";
 import { cn } from "../lib/utils";
-import { normalizeMatrixStatus, MATRIX_STATUSES } from "../lib/compliance-matrix-status";
 import { getOfficeChecklist } from "../api/offices";
-import { getGovernanceAreasWithStats, getComplianceMatrix } from "../api/governance";
+import { getGovernanceAreasWithStats } from "../api/governance";
 import { getYears } from "../api/years";
 import { getOffices } from "../api/offices";
 import { getUsers } from "../api/users";
@@ -468,27 +467,21 @@ function AdminDashboard({ user }) {
     queryFn:  getUsers,
     staleTime: 5 * 60 * 1000,
   });
-  const matrixQuery = useQuery({
-    queryKey: ['compliance-matrix', year],
-    queryFn:  () => getComplianceMatrix(year),
-    staleTime: 2 * 60 * 1000,
-  });
   const yearsQuery = useQuery({
     queryKey: ['years', 'active'],
     queryFn:  () => getYears({ includeInactive: false }),
     staleTime: 10 * 60 * 1000,
   });
 
-  const loading = areasQuery.isFetching || officesQuery.isFetching || usersQuery.isFetching || matrixQuery.isFetching;
-  const anyErr  = areasQuery.error || officesQuery.error || usersQuery.error || matrixQuery.error;
+  const loading = areasQuery.isFetching || officesQuery.isFetching || usersQuery.isFetching;
+  const anyErr  = areasQuery.error || officesQuery.error || usersQuery.error;
   const error   = anyErr?.response?.data?.message || (anyErr ? 'Failed to load dashboard data.' : null);
 
   const loadAll = useCallback(() => {
     areasQuery.refetch();
     officesQuery.refetch();
     usersQuery.refetch();
-    matrixQuery.refetch();
-  }, [areasQuery, officesQuery, usersQuery, matrixQuery]);
+  }, [areasQuery, officesQuery, usersQuery]);
 
   // ── Derived data ─────────────────────────────────────────────────────────────
   const areas = useMemo(() => areasQuery.data?.governanceAreas ?? [], [areasQuery.data]);
@@ -500,15 +493,6 @@ function AdminDashboard({ user }) {
     const p = usersQuery.data;
     return Array.isArray(p?.data) ? p.data : Array.isArray(p?.users) ? p.users : [];
   }, [usersQuery.data]);
-  const matrix = useMemo(() => {
-    const m = {};
-    for (const cell of (matrixQuery.data?.cells || [])) {
-      if (!m[cell.governance_area_id]) m[cell.governance_area_id] = {};
-      m[cell.governance_area_id][cell.office_id] = normalizeMatrixStatus(cell.status);
-    }
-    return m;
-  }, [matrixQuery.data]);
-
   const yearOptions = useMemo(() => {
     const yrs = (yearsQuery.data?.years || []).map((y) => y.year).sort((a, b) => b - a);
     return yrs.length > 0 ? yrs : Array.from({ length: 5 }, (_, i) => currentYear - i);
@@ -519,9 +503,9 @@ function AdminDashboard({ user }) {
   }, [yearOptions]);
 
   const lastRefreshedText = useMemo(() => {
-    const ts = matrixQuery.dataUpdatedAt || areasQuery.dataUpdatedAt;
+    const ts = areasQuery.dataUpdatedAt;
     return ts ? new Date(ts).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : null;
-  }, [matrixQuery.dataUpdatedAt, areasQuery.dataUpdatedAt]);
+  }, [areasQuery.dataUpdatedAt]);
 
   // ── Computed values (memoized to prevent recalc on filter/search changes) ────
   const activeAreas   = useMemo(() => areas.filter((a) => a.is_active), [areas]);
@@ -530,8 +514,8 @@ function AdminDashboard({ user }) {
   const totalTemplates   = useMemo(() => areas.reduce((s, a) => s + (a.templates   || 0), 0), [areas]);
   const atRiskCount      = useMemo(() => activeAreas.filter((a) => a.offices_total > 0 && (a.offices_compliant / a.offices_total) < 0.5).length, [activeAreas]);
 
-  const totalCells    = activeAreas.length * activeOffices.length;
-  const approvedCells = useMemo(() => activeAreas.reduce((s, a) => s + activeOffices.filter((o) => matrix[a.id]?.[o.id] === 'APPROVED').length, 0), [activeAreas, activeOffices, matrix]);
+  const totalCells    = useMemo(() => activeAreas.reduce((sum, area) => sum + (area.offices_total || 0), 0), [activeAreas]);
+  const approvedCells = useMemo(() => activeAreas.reduce((sum, area) => sum + (area.offices_compliant || 0), 0), [activeAreas]);
   const overallPct    = totalCells > 0 ? Math.round((approvedCells / totalCells) * 100) : 0;
 
   const getRoleCode = useCallback((u) => {
@@ -562,44 +546,7 @@ function AdminDashboard({ user }) {
     { name: 'No Data',         value: activeAreas.filter((a) => !a.offices_total).length,                                                                                                               fill: '#d1d5db' },
   ].filter((d) => d.value > 0), [activeAreas, atRiskCount]);
 
-  const officeLeaderboard = useMemo(() => {
-    const areasToCheck = activeAreas.length > 0 ? activeAreas : areas;
-    return (activeOffices.length > 0 ? activeOffices : offices)
-      .map((o) => {
-        const total    = areasToCheck.length;
-        const approved = areasToCheck.filter((a) => matrix[a.id]?.[o.id] === 'APPROVED').length;
-        const pct      = total > 0 ? Math.round((approved / total) * 100) : 0;
-        return { id: o.id, name: o.name, approved, total, pct };
-      })
-      .sort((a, b) => b.pct - a.pct);
-  }, [activeAreas, areas, activeOffices, offices, matrix]);
-
-  const top5    = useMemo(() => officeLeaderboard.slice(0, 5),            [officeLeaderboard]);
-  const bottom5 = useMemo(() => officeLeaderboard.slice(-5).reverse(),    [officeLeaderboard]);
-
   const zeroSubmissionAreas = useMemo(() => areas.filter((a) => !a.submissions || a.submissions === 0), [areas]);
-
-  const officeStatusData = useMemo(() => {
-    const sos = activeOffices.length > 0 ? activeOffices : offices;
-    const sas = activeAreas.length   > 0 ? activeAreas   : areas;
-    return sos.map((o) => {
-      let approved = 0, pending = 0, notApproved = 0, noUploaded = 0;
-      for (const area of sas) {
-        const s = normalizeMatrixStatus(matrix[area.id]?.[o.id]);
-        if (s === MATRIX_STATUSES.APPROVED)                                  approved++;
-        else if (s === MATRIX_STATUSES.PENDING || s === MATRIX_STATUSES.IN_PROGRESS) pending++;
-        else if (s === MATRIX_STATUSES.DENIED || s === MATRIX_STATUSES.REVISION_REQUESTED) notApproved++;
-        else                                                   noUploaded++;
-      }
-      return {
-        name: o.name.length > 20 ? o.name.slice(0, 18) + '…' : o.name,
-        Approved: approved,
-        Pending: pending,
-        'Not approved': notApproved,
-        'No uploaded': noUploaded,
-      };
-    });
-  }, [activeOffices, offices, activeAreas, areas, matrix]);
 
   const filteredAreas = useMemo(() => areas.filter((a) => {
     const q = searchQuery.toLowerCase();
@@ -623,7 +570,6 @@ function AdminDashboard({ user }) {
   // ── Quick action tiles ─────────────────────────────────────────────────────
   const quickActions = [
     { label: 'Manage Areas',       icon: ShieldCheck,   path: '/governance/manage',    color: 'text-blue-600',    bg: 'bg-blue-50'    },
-    { label: 'Compliance Matrix',  icon: BarChart3,     path: '/governance/compliance',color: 'text-violet-600',  bg: 'bg-violet-50'  },
     { label: 'Manage Offices',     icon: Building2,     path: '/offices',              color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Manage Users',       icon: Users,         path: '/users',                color: 'text-amber-600',   bg: 'bg-amber-50'   },
     { label: 'All Templates',      icon: FileText,      path: '/templates',            color: 'text-indigo-600',  bg: 'bg-indigo-50'  },
@@ -674,10 +620,9 @@ function AdminDashboard({ user }) {
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
       <Tabs defaultValue="overview" className="space-y-4" data-tour-id="dashboard-tabs">
-        <TabsList className="grid w-full grid-cols-4 max-w-xl">
+        <TabsList className="grid w-full grid-cols-3 max-w-xl">
           <TabsTrigger value="overview" data-tour-tab="overview" className="flex items-center gap-1.5"><LayoutGrid className="h-3.5 w-3.5" />Overview</TabsTrigger>
           <TabsTrigger value="governance" data-tour-tab="governance" className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" />Governance</TabsTrigger>
-          <TabsTrigger value="compliance" data-tour-tab="compliance" className="flex items-center gap-1.5"><BarChart3 className="h-3.5 w-3.5" />Compliance</TabsTrigger>
           <TabsTrigger value="org" data-tour-tab="org" className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />Org</TabsTrigger>
         </TabsList>
 
@@ -776,8 +721,8 @@ function AdminDashboard({ user }) {
                       ))}
                     </div>
 
-                    <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/governance/compliance')}>
-                      View Full Compliance Matrix <ArrowRight className="ml-2 h-3 w-3" />
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/governance/manage')}>
+                      Manage Governance Areas <ArrowRight className="ml-2 h-3 w-3" />
                     </Button>
                   </CardContent>
                 </Card>
@@ -887,39 +832,6 @@ function AdminDashboard({ user }) {
                 </Card>
               </div>
 
-              {/* Submission Status per Office */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <ClipboardList className="h-5 w-5 text-muted-foreground" />
-                    Submission Status per Office
-                  </CardTitle>
-                  <CardDescription>Breakdown of submission statuses across all governance areas for each office</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {officeStatusData.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">No active offices or governance areas found</p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={Math.max(220, officeStatusData.length * 40)}>
-                      <BarChart
-                        layout="vertical"
-                        data={officeStatusData}
-                        margin={{ top: 4, right: 16, left: 8, bottom: 0 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
-                        <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                        <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 11 }} />
-                        <RechartsTooltip contentStyle={{ borderRadius: '8px', fontSize: '12px' }} />
-                        <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
-                        <Bar dataKey="Approved"     stackId="a" fill="#22c55e" radius={[0,0,0,0]} maxBarSize={22} />
-                        <Bar dataKey="Pending"      stackId="a" fill="#3b82f6" maxBarSize={22} />
-                        <Bar dataKey="Not approved" stackId="a" fill="#ef4444" maxBarSize={22} />
-                        <Bar dataKey="No uploaded"  stackId="a" fill="#f59e0b" radius={[0,4,4,0]} maxBarSize={22} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
 
               {/* At-Risk Areas Table */}
               {atRiskCount > 0 && (
@@ -965,8 +877,8 @@ function AdminDashboard({ user }) {
                 </Card>
               )}
 
-              {/* Health Distribution + Office Leaderboard */}
-              <div className="grid gap-4 lg:grid-cols-2">
+              {/* Health Distribution */}
+              <div className="grid gap-4 lg:grid-cols-1">
                 {/* #4 Compliance Health Distribution */}
                 <Card>
                   <CardHeader>
@@ -995,54 +907,6 @@ function AdminDashboard({ user }) {
                   </CardContent>
                 </Card>
 
-                {/* #5 Office Leaderboard */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-muted-foreground" />
-                      Office Compliance Leaderboard
-                    </CardTitle>
-                    <CardDescription>Top 5 and bottom 5 offices by approval rate</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {officeLeaderboard.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-6">No office data available</p>
-                    ) : (
-                      <>
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">🏆 Top 5</p>
-                        <div className="space-y-1.5">
-                          {top5.map((o, i) => (
-                            <div key={o.id} className="flex items-center gap-2">
-                              <span className="w-5 text-xs text-center font-bold text-muted-foreground">{i + 1}</span>
-                              <span className="flex-1 text-xs truncate" title={o.name}>{o.name}</span>
-                              <div className="w-24 bg-muted rounded-full h-1.5">
-                                <div className="h-1.5 rounded-full bg-green-500" style={{ width: `${o.pct}%` }} />
-                              </div>
-                              <span className="text-xs font-semibold w-9 text-right text-green-700">{o.pct}%</span>
-                            </div>
-                          ))}
-                        </div>
-                        {bottom5.length > 0 && bottom5[0].id !== top5[top5.length - 1]?.id && (
-                          <>
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-1">⚠ Bottom 5</p>
-                            <div className="space-y-1.5">
-                              {bottom5.map((o, i) => (
-                                <div key={o.id} className="flex items-center gap-2">
-                                  <span className="w-5 text-xs text-center font-bold text-muted-foreground">{officeLeaderboard.length - i}</span>
-                                  <span className="flex-1 text-xs truncate" title={o.name}>{o.name}</span>
-                                  <div className="w-24 bg-muted rounded-full h-1.5">
-                                    <div className={cn('h-1.5 rounded-full', o.pct >= 50 ? 'bg-amber-400' : 'bg-red-500')} style={{ width: `${o.pct}%` }} />
-                                  </div>
-                                  <span className={cn('text-xs font-semibold w-9 text-right', o.pct >= 50 ? 'text-amber-700' : 'text-red-700')}>{o.pct}%</span>
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
               </div>
 
               {/* #6 Areas with Zero Submissions */}
@@ -1136,7 +1000,7 @@ function AdminDashboard({ user }) {
                   <Card
                     key={area.id}
                     className={cn('border-l-4 transition-all hover:shadow-md cursor-pointer group', area.is_active ? CARD_ACCENTS[(area.sort_order - 1) % CARD_ACCENTS.length] : 'border-l-slate-300 opacity-55')}
-                    onClick={() => navigate('/governance/compliance')}
+                    onClick={() => navigate('/governance/manage')}
                   >
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between gap-2">
@@ -1169,7 +1033,7 @@ function AdminDashboard({ user }) {
                           <div className="flex gap-4 pt-1 border-t text-center">
                             <div><p className="text-xs text-muted-foreground">Templates</p><p className="text-sm font-semibold">{area.templates}</p></div>
                             <div><p className="text-xs text-muted-foreground">Submissions</p><p className="text-sm font-semibold">{area.submissions}</p></div>
-                            <div className="ml-auto self-center"><span className="text-xs text-muted-foreground group-hover:text-primary transition-colors">View matrix →</span></div>
+                            <div className="ml-auto self-center"><span className="text-xs text-muted-foreground group-hover:text-primary transition-colors">Manage area →</span></div>
                           </div>
                         </>
                       ) : (
@@ -1180,112 +1044,6 @@ function AdminDashboard({ user }) {
                 );
               })}
             </div>
-          )}
-        </TabsContent>
-
-        {/* ═══════════════════════════ COMPLIANCE TAB ══════════════════════ */}
-        <TabsContent value="compliance" className="space-y-5">
-          {loading ? (
-            <div className="flex items-center justify-center py-16 text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin mr-3" />Loading compliance data…
-            </div>
-          ) : (
-            <>
-              {/* Overall bar */}
-              <Card className={cn('border-l-4', overallPct >= 80 ? 'border-l-green-500' : overallPct >= 50 ? 'border-l-amber-400' : 'border-l-red-500')}>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <span className="text-sm font-semibold">Overall Compliance — {year}</span>
-                      <p className="text-xs text-muted-foreground">{approvedCells} of {totalCells} area-office combinations approved</p>
-                    </div>
-                    <span className={cn('text-3xl font-bold', overallPct >= 80 ? 'text-green-600' : overallPct >= 50 ? 'text-amber-600' : 'text-red-600')}>{overallPct}%</span>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-3">
-                    <div className={cn('h-3 rounded-full transition-all', overallPct >= 80 ? 'bg-green-500' : overallPct >= 50 ? 'bg-amber-400' : 'bg-red-500')} style={{ width: `${overallPct}%` }} />
-                  </div>
-                  <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/governance/compliance')}>
-                    Open Full Compliance Matrix <ArrowRight className="ml-2 h-3 w-3" />
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Per-area compliance */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Governance Area Progress</CardTitle>
-                  <CardDescription>Approved offices per area</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {activeAreas.map((area) => {
-                    const approved = activeOffices.filter((o) => matrix[area.id]?.[o.id] === 'APPROVED').length;
-                    const total    = activeOffices.length;
-                    const pct      = total > 0 ? Math.round((approved / total) * 100) : 0;
-                    const color    = pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-amber-700' : 'text-red-700';
-                    const bar      = pct >= 80 ? 'bg-green-500'  : pct >= 50 ? 'bg-amber-400'   : 'bg-red-500';
-                    return (
-                      <div key={area.id} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Badge variant="outline" className="font-mono text-xs shrink-0">{area.code}</Badge>
-                            <span className="truncate text-sm">{area.name}</span>
-                          </div>
-                          <span className={cn('font-semibold shrink-0 ml-2', color)}>{approved}/{total} ({pct}%)</span>
-                        </div>
-                        <div className="w-full bg-muted rounded-full h-2">
-                          <div className={cn('h-2 rounded-full transition-all', bar)} style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {activeAreas.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No active governance areas.</p>}
-                </CardContent>
-              </Card>
-
-              {/* Per-office compliance summary cards */}
-              <div>
-                <h2 className="text-base font-semibold mb-3">Office-by-Office Summary</h2>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {activeOffices.map((o) => {
-                    const approved     = activeAreas.filter((a) => matrix[a.id]?.[o.id] === 'APPROVED').length;
-                    const pending      = activeAreas.filter((a) => {
-                      const s = normalizeMatrixStatus(matrix[a.id]?.[o.id]);
-                      return s === MATRIX_STATUSES.PENDING || s === MATRIX_STATUSES.IN_PROGRESS;
-                    }).length;
-                    const notApproved  = activeAreas.filter((a) => matrix[a.id]?.[o.id] === 'DENIED' || matrix[a.id]?.[o.id] === 'REVISION_REQUESTED').length;
-                    const noUploaded   = activeAreas.filter((a) => {
-                      const s = normalizeMatrixStatus(matrix[a.id]?.[o.id]);
-                      return s === MATRIX_STATUSES.NOT_STARTED;
-                    }).length;
-                    const total        = activeAreas.length;
-                    const pct          = total > 0 ? Math.round((approved / total) * 100) : 0;
-                    return (
-                      <Card key={o.id}>
-                        <CardContent className="pt-4 pb-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <Badge variant="outline" className="font-mono text-xs mb-1">{o.code}</Badge>
-                              <p className="text-sm font-medium">{o.name}</p>
-                            </div>
-                            <span className={cn('text-lg font-bold', pct >= 80 ? 'text-green-600' : pct >= 50 ? 'text-amber-600' : 'text-red-600')}>{pct}%</span>
-                          </div>
-                          <div className="w-full bg-muted rounded-full h-2 mb-2">
-                            <div className={cn('h-2 rounded-full', pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-amber-400' : 'bg-red-500')} style={{ width: `${pct}%` }} />
-                          </div>
-                          <div className="flex flex-wrap gap-1 text-xs">
-                            <span className="text-green-700 bg-green-50 rounded px-1.5 py-0.5 border border-green-200">{approved} approved</span>
-                            {pending > 0     && <span className="text-blue-700 bg-blue-50 rounded px-1.5 py-0.5 border border-blue-200">{pending} pending</span>}
-                            {notApproved > 0 && <span className="text-red-700 bg-red-50 rounded px-1.5 py-0.5 border border-red-200">{notApproved} not approved</span>}
-                            {noUploaded > 0  && <span className="text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 border border-amber-200">{noUploaded} no uploaded</span>}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                  {activeOffices.length === 0 && <p className="text-sm text-muted-foreground col-span-3 text-center py-8">No active offices found.</p>}
-                </div>
-              </div>
-            </>
           )}
         </TabsContent>
 

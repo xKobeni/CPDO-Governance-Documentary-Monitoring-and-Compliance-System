@@ -101,6 +101,8 @@ export default function UsersPage() {
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetTargetUser, setResetTargetUser] = useState(null);
   const [resetGeneratedPassword, setResetGeneratedPassword] = useState('');
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteTargetUser, setDeleteTargetUser] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [copiedPassword, setCopiedPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -163,8 +165,15 @@ export default function UsersPage() {
   const handleStatusFilterChange = (val) => { setStatusFilter(val); setCurrentPage(1); };
   const handlePageSizeChange = (val) => { setPageSize(Number(val)); setCurrentPage(1); };
 
+  const isCreateFormValid = Boolean(
+    formData.fullName.trim() &&
+    formData.email.trim() &&
+    formData.role &&
+    (formData.role !== 'OFFICE' || formData.officeId)
+  );
+
   const handleCreateUser = async () => {
-    if (!formData.fullName || !formData.email || !formData.role) {
+    if (!isCreateFormValid) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -177,7 +186,7 @@ export default function UsersPage() {
       }
       if (result.verificationDevToken) {
         toast(
-          (t) => (
+          () => (
             <div className="flex flex-col gap-1 text-sm">
               <span className="font-semibold">Local dev: email not sent</span>
               <span>Use this verification link token (append to API verify URL) or check server logs:</span>
@@ -189,7 +198,7 @@ export default function UsersPage() {
       }
       if (result.generatedPassword) {
         toast(
-          (t) => (
+          () => (
             <div className="flex flex-col gap-1">
               <span className="font-semibold">User created successfully</span>
               <span className="text-sm">Auto-generated password:</span>
@@ -260,18 +269,31 @@ export default function UsersPage() {
     }
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+  const handleDeleteUser = async (user) => {
+    if (user.is_active) {
+      toast.error('Deactivate the user first before deleting.');
       return;
     }
 
+    setDeleteTargetUser(user);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!deleteTargetUser) return;
+
     try {
-      await deleteUser(userId);
+      setSubmitting(true);
+      await deleteUser(deleteTargetUser.id);
       toast.success('User deleted successfully');
+      setIsDeleteDialogOpen(false);
+      setDeleteTargetUser(null);
       loadData(); // Reload users list
     } catch (error) {
       console.error('Error deleting user:', error);
       toast.error(error.response?.data?.message || 'Failed to delete user');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -289,7 +311,13 @@ export default function UsersPage() {
       const result = await resetUserPassword(resetTargetUser.id);
       const newPassword = result.generatedPassword;
       setResetGeneratedPassword(newPassword);
-      toast.success('Password reset successfully');
+      if (result.credentialEmailSent) {
+        toast.success('Password reset successfully. Credentials email sent to the user.');
+      } else if (result.credentialEmailWarning) {
+        toast.error(result.credentialEmailWarning, { duration: 7000 });
+      } else {
+        toast.success('Password reset successfully');
+      }
     } catch (error) {
       console.error('Error resetting password:', error);
       toast.error(error.response?.data?.message || 'Failed to reset password');
@@ -360,7 +388,13 @@ export default function UsersPage() {
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog
+            open={isCreateDialogOpen}
+            onOpenChange={(open) => {
+              setIsCreateDialogOpen(open);
+              if (open) resetForm();
+            }}
+          >
             <DialogTrigger asChild>
               <Button disabled={loading}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -379,6 +413,8 @@ export default function UsersPage() {
                 <Label htmlFor="fullName">Full Name *</Label>
                 <Input
                   id="fullName"
+                  name="create-user-full-name"
+                  autoComplete="off"
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                   placeholder="Enter full name"
@@ -390,6 +426,8 @@ export default function UsersPage() {
                 <Input
                   id="email"
                   type="email"
+                  name="create-user-email"
+                  autoComplete="off"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="user@cpdo.gov.ph"
@@ -403,6 +441,8 @@ export default function UsersPage() {
                     <Input
                       id="password"
                       type={showPassword ? 'text' : 'password'}
+                      name="create-user-temp-password"
+                      autoComplete="new-password"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       placeholder="Leave blank to auto-generate"
@@ -485,7 +525,7 @@ export default function UsersPage() {
               <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} disabled={submitting}>
                 Cancel
               </Button>
-              <Button onClick={handleCreateUser} disabled={submitting}>
+              <Button onClick={handleCreateUser} disabled={submitting || !isCreateFormValid}>
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create User
               </Button>
@@ -696,11 +736,12 @@ export default function UsersPage() {
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem 
-                              onClick={() => handleDeleteUser(user.id)}
+                              onClick={() => handleDeleteUser(user)}
+                              disabled={user.is_active}
                               className="text-red-600"
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
-                              Delete User
+                              {user.is_active ? 'Delete User (deactivate first)' : 'Delete User'}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -943,6 +984,46 @@ export default function UsersPage() {
                 Reset password
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Confirm Dialog */}
+      <Dialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          setIsDeleteDialogOpen(open);
+          if (!open) setDeleteTargetUser(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete User</DialogTitle>
+            <DialogDescription>
+              {deleteTargetUser
+                ? `Are you sure you want to delete ${deleteTargetUser.full_name} (${deleteTargetUser.email})? This action cannot be undone.`
+                : 'Are you sure you want to delete this user? This action cannot be undone.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setDeleteTargetUser(null);
+              }}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDeleteUser}
+              disabled={submitting || !deleteTargetUser}
+            >
+              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete User
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

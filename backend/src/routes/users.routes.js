@@ -2,7 +2,6 @@ import { Router } from "express";
 import { requireAuth, checkSessionInactivity } from "../middlewares/auth.js";
 import { requireRole } from "../middlewares/rbac.js";
 import { audit } from "../middlewares/audit.js";
-import { mediumCache } from "../middlewares/caching.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import {
   createUserHandler,
@@ -29,8 +28,8 @@ r.post(
   ),
   asyncHandler(createUserHandler)
 );
-r.get("/", mediumCache, asyncHandler(listUsersHandler));
-r.get("/:id", mediumCache, asyncHandler(getUserHandler));
+r.get("/", asyncHandler(listUsersHandler));
+r.get("/:id", asyncHandler(getUserHandler));
 r.patch(
   "/:id",
   audit("UPDATE_USER", "USER", (req) => req.params.id, (req) => req.body),

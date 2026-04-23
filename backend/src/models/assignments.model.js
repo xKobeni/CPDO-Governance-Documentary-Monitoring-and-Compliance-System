@@ -170,3 +170,76 @@ export async function getChecklistItemsForOffice(officeId, year) {
   );
   return rows;
 }
+
+/** List governance assignment readiness for a specific year */
+export async function listGovernanceAssignmentOptions(year) {
+  const { rows } = await pool.query(
+    `SELECT
+       ga.id,
+       ga.code,
+       ga.name,
+       ga.description,
+       ga.sort_order,
+       ga.is_active,
+       COUNT(DISTINCT ct.id)::int AS active_template_count,
+       COUNT(DISTINCT ci.id) FILTER (WHERE ci.parent_item_id IS NULL)::int AS root_category_count
+     FROM governance_areas ga
+     LEFT JOIN checklist_templates ct
+       ON ct.governance_area_id = ga.id
+      AND ct.year = $1
+      AND ct.status = 'ACTIVE'
+     LEFT JOIN checklist_items ci
+       ON ci.template_id = ct.id
+      AND ci.is_active = TRUE
+     GROUP BY ga.id, ga.code, ga.name, ga.description, ga.sort_order, ga.is_active
+     ORDER BY ga.sort_order, ga.code`,
+    [year]
+  );
+  return rows.map((row) => {
+    let unassignableReason = null;
+    if (!row.is_active) unassignableReason = "Governance area is inactive";
+    else if (row.active_template_count === 0) unassignableReason = `No active template for ${year}`;
+    else if (row.root_category_count === 0) unassignableReason = "No active root categories in template";
+    return {
+      ...row,
+      is_assignable: !unassignableReason,
+      unassignable_reason: unassignableReason,
+    };
+  });
+}
+
+/** Get readiness details for specific governance IDs in a year */
+export async function getGovernanceAssignmentReadinessByIds(year, governanceAreaIds) {
+  if (!Array.isArray(governanceAreaIds) || governanceAreaIds.length === 0) return [];
+  const { rows } = await pool.query(
+    `SELECT
+       ga.id,
+       ga.code,
+       ga.name,
+       ga.is_active,
+       COUNT(DISTINCT ct.id)::int AS active_template_count,
+       COUNT(DISTINCT ci.id) FILTER (WHERE ci.parent_item_id IS NULL)::int AS root_category_count
+     FROM governance_areas ga
+     LEFT JOIN checklist_templates ct
+       ON ct.governance_area_id = ga.id
+      AND ct.year = $1
+      AND ct.status = 'ACTIVE'
+     LEFT JOIN checklist_items ci
+       ON ci.template_id = ct.id
+      AND ci.is_active = TRUE
+     WHERE ga.id = ANY($2::uuid[])
+     GROUP BY ga.id, ga.code, ga.name, ga.is_active`,
+    [year, governanceAreaIds]
+  );
+  return rows.map((row) => {
+    let unassignableReason = null;
+    if (!row.is_active) unassignableReason = "Governance area is inactive";
+    else if (row.active_template_count === 0) unassignableReason = `No active template for ${year}`;
+    else if (row.root_category_count === 0) unassignableReason = "No active root categories in template";
+    return {
+      ...row,
+      is_assignable: !unassignableReason,
+      unassignable_reason: unassignableReason,
+    };
+  });
+}

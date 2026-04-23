@@ -1,454 +1,486 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Badge } from "../components/ui/badge";
+import { Input } from "../components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '../components/ui/tooltip';
-import { RefreshCw, CheckCircle2, Clock, XCircle, AlertCircle, MinusCircle, Download } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { normalizeMatrixStatus, MATRIX_STATUSES } from '../lib/compliance-matrix-status';
-import { getGovernanceAreas } from '../api/governance';
-import { getOffices } from '../api/offices';
-import { getComplianceMatrix } from '../api/governance';
-import { getYears } from '../api/years';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
+import { ChevronDown, ChevronRight, Loader2, RefreshCw, Search } from "lucide-react";
+import { getYears } from "../api/years";
+import { getComplianceMatrix } from "../api/governance";
+import { cn } from "../lib/utils";
 
-// ─── Mock Data (removed — loaded from API) ───────────────────────────────────
-
-// ─── Status Config ────────────────────────────────────────────────────────────
-const STATUS_CONFIG = {
-  APPROVED:            { label: 'Approved',          icon: CheckCircle2,  cell: 'bg-green-100 text-green-700',   badge: 'bg-green-100 text-green-700 border-green-200' },
-  PENDING:             { label: 'Pending',            icon: Clock,         cell: 'bg-amber-50 text-amber-700',    badge: 'bg-amber-50 text-amber-700 border-amber-200'  },
-  DENIED:              { label: 'Denied',             icon: XCircle,       cell: 'bg-red-100 text-red-700',       badge: 'bg-red-100 text-red-700 border-red-200'       },
-  REVISION_REQUESTED:  { label: 'Needs Revision',     icon: AlertCircle,   cell: 'bg-orange-100 text-orange-700', badge: 'bg-orange-100 text-orange-700 border-orange-200' },
-  IN_PROGRESS:         { label: 'In Progress',        icon: Clock,         cell: 'bg-sky-50 text-sky-700',        badge: 'bg-sky-50 text-sky-700 border-sky-200'        },
-  NOT_STARTED:         { label: 'Not Started',        icon: MinusCircle,   cell: 'bg-muted/30 text-muted-foreground', badge: 'bg-muted text-muted-foreground border-border' },
+const STATUS_META = {
+  NOT_SUBMITTED: { label: "Not Submitted", badge: "bg-muted text-muted-foreground border-border" },
+  PENDING: { label: "Pending", badge: "bg-amber-50 text-amber-700 border-amber-200" },
+  REVISION_REQUESTED: { label: "Needs Revision", badge: "bg-orange-50 text-orange-700 border-orange-200" },
+  APPROVED: { label: "Approved", badge: "bg-green-100 text-green-700 border-green-200" },
 };
 
-function StatusCell({ status }) {
-  const cfg = STATUS_CONFIG[normalizeMatrixStatus(status)] ?? STATUS_CONFIG.NOT_STARTED;
-  const Icon = cfg.icon;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className={cn('flex items-center justify-center rounded-md h-9 w-full cursor-default', cfg.cell)}>
-          <Icon className="h-4 w-4" />
-        </div>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">{cfg.label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function getOfficeStats(officeId, areas, matrixData) {
-  const statuses = areas.map((a) => normalizeMatrixStatus(matrixData[a.id]?.[officeId]));
-  return {
-    approved:     statuses.filter((s) => s === MATRIX_STATUSES.APPROVED).length,
-    pending:      statuses.filter((s) => s === MATRIX_STATUSES.PENDING || s === MATRIX_STATUSES.IN_PROGRESS).length,
-    denied:       statuses.filter((s) => s === MATRIX_STATUSES.DENIED).length,
-    revision:     statuses.filter((s) => s === MATRIX_STATUSES.REVISION_REQUESTED).length,
-    notSubmitted: statuses.filter((s) => s === MATRIX_STATUSES.NOT_STARTED).length,
-    total: statuses.length,
-  };
-}
-
-function getAreaStats(areaId, offices, matrixData) {
-  const statuses = offices.map((o) => normalizeMatrixStatus(matrixData[areaId]?.[o.id]));
-  return {
-    approved: statuses.filter((s) => s === MATRIX_STATUSES.APPROVED).length,
-    total: statuses.length,
-  };
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
 export default function GovernanceCompliancePage() {
-  const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(String(currentYear));
-  const [yearOptions, setYearOptions] = useState([]);
-  const [focusOffice, setFocusOffice] = useState('all');
-  const [showAtRiskOnly, setShowAtRiskOnly] = useState(false);
-  const [areas, setAreas] = useState([]);
-  const [offices, setOffices] = useState([]);
-  const [matrixData, setMatrixData] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [governanceFilter, setGovernanceFilter] = useState("all");
+  const [focusOffice, setFocusOffice] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCellKey, setSelectedCellKey] = useState(null);
+  const [collapsedGovernance, setCollapsedGovernance] = useState(new Set());
+  const [showUnconfiguredDetails, setShowUnconfiguredDetails] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [areasRes, officesRes, matrixRes] = await Promise.all([
-        getGovernanceAreas(),
-        getOffices(),
-        getComplianceMatrix(Number(year)),
-      ]);
+  const yearsQuery = useQuery({
+    queryKey: ["years", "active"],
+    queryFn: () => getYears({ includeInactive: false }),
+    staleTime: 10 * 60 * 1000,
+  });
 
-      const activeAreas   = (areasRes.governanceAreas || []).filter((a) => a.is_active);
-      const officePayload = officesRes;
-      const allOffices = Array.isArray(officePayload?.data)
-        ? officePayload.data
-        : Array.isArray(officePayload?.offices)
-        ? officePayload.offices
-        : [];
-      const activeOffices = allOffices.filter((o) => o.is_active);
+  const matrixQuery = useQuery({
+    queryKey: ["compliance-matrix", Number(year)],
+    queryFn: () => getComplianceMatrix(Number(year)),
+    staleTime: 2 * 60 * 1000,
+  });
 
-      // Build nested lookup: { areaId: { officeId: status } }
-      const matrix = {};
-      for (const cell of (matrixRes.cells || [])) {
-        if (!matrix[cell.governance_area_id]) matrix[cell.governance_area_id] = {};
-        matrix[cell.governance_area_id][cell.office_id] = normalizeMatrixStatus(cell.status);
+  const yearOptions = useMemo(() => {
+    const yrs = (yearsQuery.data?.years || []).map((y) => y.year).sort((a, b) => b - a);
+    return yrs.length > 0 ? yrs : [currentYear, currentYear - 1, currentYear - 2];
+  }, [yearsQuery.data, currentYear]);
+
+  const offices = useMemo(() => matrixQuery.data?.offices || [], [matrixQuery.data]);
+  const categories = useMemo(() => matrixQuery.data?.categories || [], [matrixQuery.data]);
+  const cells = useMemo(() => matrixQuery.data?.cells || [], [matrixQuery.data]);
+  const detailsByCell = useMemo(() => matrixQuery.data?.detailsByCell || [], [matrixQuery.data]);
+  const unconfiguredAssignments = useMemo(
+    () => matrixQuery.data?.unconfiguredAssignments || [],
+    [matrixQuery.data]
+  );
+
+  const cellMap = useMemo(() => {
+    const map = {};
+    for (const cell of cells) map[`${cell.officeId}:${cell.categoryId}`] = cell;
+    return map;
+  }, [cells]);
+
+  const detailsMap = useMemo(() => {
+    const map = {};
+    for (const detail of detailsByCell) map[`${detail.officeId}:${detail.categoryId}`] = detail;
+    return map;
+  }, [detailsByCell]);
+
+  const governanceOptions = useMemo(() => {
+    const map = new Map();
+    for (const cat of categories) {
+      if (!map.has(cat.governanceAreaId)) {
+        map.set(cat.governanceAreaId, {
+          id: cat.governanceAreaId,
+          code: cat.governanceCode,
+          name: cat.governanceName,
+        });
       }
-
-      setAreas(activeAreas);
-      setOffices(activeOffices);
-      setMatrixData(matrix);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load compliance data.');
-    } finally {
-      setLoading(false);
     }
-  }, [year]);
+    return Array.from(map.values()).sort(
+      (a, b) => a.code.localeCompare(b.code) || a.name.localeCompare(b.name)
+    );
+  }, [categories]);
 
-  // Load managed years for dropdown (with fallback)
-  useEffect(() => {
-    getYears({ includeInactive: false })
-      .then((res) => {
-        const yrs = (res.years || []).map((y) => y.year).sort((a, b) => b - a);
-        if (yrs.length > 0) {
-          setYearOptions(yrs);
-          if (!yrs.includes(Number(year))) {
-            setYear(String(yrs[0]));
-          }
-        } else {
-          setYearOptions([currentYear, currentYear - 1, currentYear - 2]);
-        }
-      })
-      .catch(() => {
-        setYearOptions([currentYear, currentYear - 1, currentYear - 2]);
+  const filteredCategories = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return categories.filter((cat) => {
+      const governanceMatch = governanceFilter === "all" || cat.governanceAreaId === governanceFilter;
+      const textMatch =
+        q.length === 0 ||
+        cat.governanceCode.toLowerCase().includes(q) ||
+        cat.governanceName.toLowerCase().includes(q) ||
+        cat.categoryCode.toLowerCase().includes(q) ||
+        cat.categoryName.toLowerCase().includes(q);
+
+      if (!governanceMatch || !textMatch) return false;
+      if (statusFilter === "ALL") return true;
+
+      const officesToCheck = focusOffice === "all" ? offices : offices.filter((o) => o.id === focusOffice);
+      return officesToCheck.some((office) => {
+        const cell = cellMap[`${office.id}:${cat.id}`];
+        return (cell?.status ?? "NOT_SUBMITTED") === statusFilter;
       });
-  }, [currentYear, year]);
+    });
+  }, [categories, governanceFilter, searchQuery, statusFilter, focusOffice, offices, cellMap]);
 
-  const handleExport = () => {
-    const activeAreas = areas;
-    const activeOffices = offices;
-    const rows = [];
-    rows.push(["Governance Area", ...activeOffices.map((o) => o.code)].join(","));
-    for (const a of activeAreas) {
-      const line = [a.code, ...activeOffices.map((o) => normalizeMatrixStatus(matrixData[a.id]?.[o.id]))];
-      rows.push(line.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(","));
+  const kpis = useMemo(() => {
+    const base = { NOT_SUBMITTED: 0, PENDING: 0, REVISION_REQUESTED: 0, APPROVED: 0 };
+    const officesToCheck = focusOffice === "all" ? offices : offices.filter((o) => o.id === focusOffice);
+    for (const cat of filteredCategories) {
+      for (const office of officesToCheck) {
+        const status = cellMap[`${office.id}:${cat.id}`]?.status ?? "NOT_SUBMITTED";
+        base[status] = (base[status] || 0) + 1;
+      }
     }
-    const csv = rows.join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `compliance-matrix-${year}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    return base;
+  }, [filteredCategories, offices, focusOffice, cellMap]);
+
+  const visibleOffices = useMemo(
+    () => (focusOffice === "all" ? offices : offices.filter((o) => o.id === focusOffice)),
+    [focusOffice, offices]
+  );
+
+  const groupedRows = useMemo(() => {
+    const rows = [];
+    let lastGovernanceId = null;
+    for (const cat of filteredCategories) {
+      const governanceChanged = cat.governanceAreaId !== lastGovernanceId;
+      if (governanceChanged) {
+        rows.push({
+          type: "group",
+          key: `group:${cat.governanceAreaId}`,
+          governanceCode: cat.governanceCode,
+          governanceName: cat.governanceName,
+        });
+        lastGovernanceId = cat.governanceAreaId;
+      }
+      rows.push({
+        type: "category",
+        key: cat.id,
+        category: cat,
+      });
+    }
+    return rows;
+  }, [filteredCategories]);
+
+  const toggleGovernanceCollapse = (governanceAreaId) => {
+    const scopedKey = `${year}:${governanceAreaId}`;
+    setCollapsedGovernance((prev) => {
+      const next = new Set(prev);
+      if (next.has(scopedKey)) next.delete(scopedKey);
+      else next.add(scopedKey);
+      return next;
+    });
   };
 
-  useEffect(() => { loadData(); }, [loadData]);
-
-  const totalCells = areas.length * offices.length;
-  // Flatten all matrix statuses for summary counters
-  const allCellStatuses = Object.values(matrixData).flatMap((row) =>
-    Object.values(row || {}).map((s) => normalizeMatrixStatus(s))
+  const selectedDetail = selectedCellKey ? detailsMap[selectedCellKey] : null;
+  const selectedCell = selectedCellKey ? cellMap[selectedCellKey] : null;
+  const selectedOffice = useMemo(
+    () => offices.find((o) => selectedCellKey?.startsWith(`${o.id}:`)) || null,
+    [offices, selectedCellKey]
   );
-  const approvedCells = allCellStatuses.filter((s) => s === MATRIX_STATUSES.APPROVED).length;
-  const overallPct = totalCells > 0 ? Math.round((approvedCells / totalCells) * 100) : 0;
-  const statusKpis = [
-    { status: 'APPROVED',           count: approvedCells },
-    { status: 'PENDING',            count: allCellStatuses.filter((s) => s === MATRIX_STATUSES.PENDING).length },
-    { status: 'IN_PROGRESS',        count: allCellStatuses.filter((s) => s === MATRIX_STATUSES.IN_PROGRESS).length },
-    { status: 'REVISION_REQUESTED', count: allCellStatuses.filter((s) => s === MATRIX_STATUSES.REVISION_REQUESTED).length },
-    { status: 'DENIED',             count: allCellStatuses.filter((s) => s === MATRIX_STATUSES.DENIED).length },
-    {
-      status: 'NOT_STARTED',
-      count:
-        Math.max(totalCells - allCellStatuses.length, 0) +
-        allCellStatuses.filter((s) => s === MATRIX_STATUSES.NOT_STARTED).length,
-    },
-  ];
+  const selectedCategory = useMemo(
+    () => categories.find((c) => selectedCellKey?.endsWith(`:${c.id}`)) || null,
+    [categories, selectedCellKey]
+  );
 
-  const visibleAreas = showAtRiskOnly
-    ? areas.filter((a) => { const s = getAreaStats(a.id, offices, matrixData); return Math.round((s.approved / (s.total || 1)) * 100) < 80; })
-    : areas;
+  const groupedUnconfiguredAssignments = useMemo(() => {
+    const map = new Map();
+    for (const row of unconfiguredAssignments) {
+      const key = row.governanceAreaId;
+      if (!map.has(key)) {
+        map.set(key, {
+          governanceAreaId: row.governanceAreaId,
+          governanceCode: row.governanceCode,
+          governanceName: row.governanceName,
+          offices: [],
+        });
+      }
+      map.get(key).offices.push({
+        officeId: row.officeId,
+        officeCode: row.officeCode,
+        officeName: row.officeName,
+      });
+    }
+    return Array.from(map.values())
+      .map((group) => ({
+        ...group,
+        offices: group.offices.sort((a, b) => a.officeCode.localeCompare(b.officeCode) || a.officeName.localeCompare(b.officeName)),
+      }))
+      .sort((a, b) => a.governanceCode.localeCompare(b.governanceCode) || a.governanceName.localeCompare(b.governanceName));
+  }, [unconfiguredAssignments]);
 
   return (
-    <TooltipProvider>
     <div className="space-y-6">
-
-      {error && (
-        <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
-          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
-          <span>{error}</span>
-          <button className="ml-auto text-red-500 hover:text-red-700" onClick={() => setError(null)}>✕</button>
-        </div>
-      )}
-
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Compliance Matrix</h1>
           <p className="text-muted-foreground">
-            See which offices have submitted and been approved for each governance area
+            Category-level automatic checklist matrix by assigned office and submission status.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <Select value={year} onValueChange={setYear}>
-            <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-28">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               {yearOptions.map((y) => (
-                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
-            <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />Refresh
+          <Button variant="outline" size="sm" onClick={() => matrixQuery.refetch()} disabled={matrixQuery.isFetching}>
+            {matrixQuery.isFetching ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Refresh
           </Button>
-          <Button variant="outline" size="sm" onClick={handleExport}><Download className="mr-2 h-4 w-4" />Export</Button>
         </div>
       </div>
 
-      {/* ── Overall Progress Banner ─────────────────────────────────────────── */}
-      <Card className={cn('border-l-4', overallPct >= 80 ? 'border-l-green-500' : overallPct >= 50 ? 'border-l-amber-400' : 'border-l-red-500')}>
-        <CardContent className="pt-4 pb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex-1">
-              <div className="flex justify-between mb-1.5">
-                <div>
-                  <span className="text-sm font-semibold">Overall Compliance — {year}</span>
-                  <span className="text-xs text-muted-foreground ml-2">{approvedCells} of {totalCells} area-office combinations approved</span>
-                </div>
-                <span className={cn('text-xl font-bold', overallPct >= 80 ? 'text-green-600' : overallPct >= 50 ? 'text-amber-600' : 'text-red-600')}>
-                  {overallPct}%
-                </span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-3">
-                <div
-                  className={cn('h-3 rounded-full transition-all', overallPct >= 80 ? 'bg-green-500' : overallPct >= 50 ? 'bg-amber-400' : 'bg-red-500')}
-                  style={{ width: `${overallPct}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Filters ────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Focus office:</span>
-          <Select value={focusOffice} onValueChange={setFocusOffice}>
-            <SelectTrigger className="w-[180px] h-8 text-sm"><SelectValue placeholder="All offices" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All offices</SelectItem>
-              {offices.map((o) => (
-                <SelectItem key={o.id} value={o.id}>{o.code} — {o.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="relative w-full sm:w-[280px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8"
+            placeholder="Search governance/category..."
+          />
         </div>
-        <Button
-          variant={showAtRiskOnly ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setShowAtRiskOnly(!showAtRiskOnly)}
-          className={showAtRiskOnly ? 'bg-amber-500 hover:bg-amber-600 border-amber-500' : ''}
-        >
-          <AlertCircle className="mr-2 h-4 w-4" />
-          {showAtRiskOnly ? 'Showing Needs Attention' : 'Show Needs Attention'}
-        </Button>
-        {(focusOffice !== 'all' || showAtRiskOnly) && (
-          <Button variant="ghost" size="sm" onClick={() => { setFocusOffice('all'); setShowAtRiskOnly(false); }}>
-            Clear filters
-          </Button>
+        <Select value={focusOffice} onValueChange={setFocusOffice}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="All offices" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All offices</SelectItem>
+            {offices.map((office) => (
+              <SelectItem key={office.id} value={office.id}>
+                {office.code} - {office.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={governanceFilter} onValueChange={setGovernanceFilter}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="All governance areas" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All governance areas</SelectItem>
+            {governanceOptions.map((gov) => (
+              <SelectItem key={gov.id} value={gov.id}>
+                {gov.code} - {gov.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[190px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All statuses</SelectItem>
+            <SelectItem value="NOT_SUBMITTED">Not Submitted</SelectItem>
+            <SelectItem value="PENDING">Pending</SelectItem>
+            <SelectItem value="REVISION_REQUESTED">Needs Revision</SelectItem>
+            <SelectItem value="APPROVED">Approved</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {Object.entries(kpis).map(([status, count]) => (
+          <div key={status} className={cn("text-xs px-2.5 py-1 rounded-full border", STATUS_META[status].badge)}>
+            {count} {STATUS_META[status].label}
+          </div>
+        ))}
+        {governanceFilter !== "all" && (
+          <div className="text-xs px-2.5 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
+            Governance filter active
+          </div>
         )}
       </div>
 
-      {/* ── Legend ──────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2">
-        {statusKpis.map(({ status, count }) => {
-          const cfg = STATUS_CONFIG[status];
-          const Icon = cfg.icon;
-          return (
-            <div key={status} className={cn('flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border', cfg.badge)}>
-              <Icon className="h-3.5 w-3.5" />
-              <span>{count} {cfg.label}</span>
+      {unconfiguredAssignments.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 p-3 text-sm">
+          <p className="font-medium">Some assigned office-governance pairs are not yet configured.</p>
+          <p className="text-xs mt-1">
+            {unconfiguredAssignments.length} assignment(s) have no active template root categories for year {year}.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowUnconfiguredDetails((v) => !v)}
+            className="mt-2 inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2 hover:opacity-85"
+          >
+            {showUnconfiguredDetails ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            {showUnconfiguredDetails ? "Hide unconfigured assignments" : "View unconfigured assignments"}
+          </button>
+          {showUnconfiguredDetails && (
+            <div className="mt-3 space-y-2 rounded-md border border-amber-200 bg-white/70 p-2.5">
+              {groupedUnconfiguredAssignments.map((group) => (
+                <div key={group.governanceAreaId} className="rounded border border-amber-100 bg-amber-50/40 p-2">
+                  <p className="text-xs font-semibold">
+                    {group.governanceCode} - {group.governanceName}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {group.offices.map((office) => (
+                      <span
+                        key={`${group.governanceAreaId}:${office.officeId}`}
+                        className="text-[11px] rounded-full border border-amber-200 bg-amber-100/70 px-2 py-0.5"
+                      >
+                        {office.officeCode} - {office.officeName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-          );
-        })}
-      </div>
+          )}
+        </div>
+      )}
 
-      {/* ── Matrix Table ────────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center justify-between">
-            <span>Compliance Status — {year}</span>
-            {showAtRiskOnly && <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs">Showing {visibleAreas.length} areas needing attention</Badge>}
-          </CardTitle>
+          <CardTitle>Category Compliance Matrix</CardTitle>
           <CardDescription>
-            Rows = governance areas · Columns = offices · Click the blue review button on any row to manage submissions
+            Rows are checklist categories; columns are assigned offices. Click a cell for full checklist details.
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b bg-muted/40">
-                <th className="sticky left-0 bg-muted/40 z-10 px-4 py-3 text-left font-semibold min-w-[200px]">
-                  Governance Area
-                </th>
-                {offices.map((o) => {
-                  const stats = getOfficeStats(o.id, areas, matrixData);
-                  const isFocused = focusOffice === o.id;
-                  const isDimmed  = focusOffice !== 'all' && !isFocused;
-                  return (
-                    <th
-                      key={o.code}
-                      className={cn('px-3 py-3 text-center font-medium min-w-[100px] transition-opacity cursor-pointer', isDimmed && 'opacity-30')}
-                      onClick={() => setFocusOffice(focusOffice === o.id ? 'all' : o.id)}
-                    >
-                      <div className={cn('font-semibold', isFocused && 'text-primary underline')}>{o.code}</div>
-                      <div className="text-[10px] text-muted-foreground font-normal truncate max-w-[90px] mx-auto" title={o.name}>
-                        {o.name}
-                      </div>
-                      <div className="text-[10px] text-green-600 font-medium mt-0.5">
-                        {stats.approved}/{stats.total} ✓
-                      </div>
+          {matrixQuery.isLoading ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
+              <Loader2 className="h-5 w-5 mr-2 animate-spin" /> Loading compliance matrix...
+            </div>
+          ) : matrixQuery.error ? (
+            <div className="p-4 text-sm text-red-700 bg-red-50 border border-red-200 m-4 rounded-md">
+              Failed to load compliance matrix.
+            </div>
+          ) : filteredCategories.length === 0 ? (
+            <div className="p-6 text-sm text-muted-foreground">No categories match your current filters.</div>
+          ) : (
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b bg-muted/40">
+                  <th className="sticky left-0 z-10 bg-muted/40 text-left px-4 py-3 min-w-[260px]">Governance / Category</th>
+                  {visibleOffices.map((office) => (
+                    <th key={office.id} className="px-3 py-3 text-center min-w-[150px]">
+                      <div className="font-semibold">{office.code}</div>
+                      <div className="text-[11px] text-muted-foreground">{office.name}</div>
                     </th>
-                  );
-                })}
-                <th className="px-3 py-3 text-center font-medium min-w-[90px]">Row Progress</th>
-                <th className="px-3 py-3 text-center font-medium min-w-[90px]">Review</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleAreas.map((area, aIdx) => {
-                const areaStats = getAreaStats(area.id, offices, matrixData);
-                const pct = areaStats.total > 0 ? Math.round((areaStats.approved / areaStats.total) * 100) : 0;
-                const barColor = pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-amber-400' : 'bg-red-500';
-                const pctText  = pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-amber-700' : 'text-red-700';
-                return (
-                  <tr
-                    key={area.code}
-                    className={cn('border-b transition-colors hover:bg-muted/20', aIdx % 2 === 0 ? '' : 'bg-muted/10')}
-                  >
-                    <td className="sticky left-0 bg-background z-10 px-4 py-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono text-xs shrink-0">{area.code}</Badge>
-                        <span className="text-sm font-medium truncate max-w-[140px]" title={area.name}>{area.name}</span>
-                      </div>
-                    </td>
-                    {offices.map((o) => {
-                      const isFocused = focusOffice === o.id;
-                      const isDimmed  = focusOffice !== 'all' && !isFocused;
-                      return (
-                        <td key={o.id} className={cn('px-2 py-2 transition-opacity', isDimmed && 'opacity-20')}>
-                          <StatusCell status={matrixData[area.id]?.[o.id]} />
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {groupedRows.map((row, idx) => {
+                  if (row.type === "group") {
+                    const governanceAreaId = row.key.replace("group:", "");
+                    const isCollapsed = collapsedGovernance.has(`${year}:${governanceAreaId}`);
+                    return (
+                      <tr key={row.key} className="border-b bg-blue-50/60">
+                        <td
+                          className="sticky left-0 z-10 bg-blue-50/60 px-4 py-2 font-semibold text-blue-800"
+                          colSpan={1 + visibleOffices.length}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleGovernanceCollapse(governanceAreaId)}
+                            className="flex items-center gap-2 hover:opacity-90"
+                          >
+                            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            <span>{row.governanceCode} - {row.governanceName}</span>
+                            <span className="text-[11px] font-normal text-blue-700/80">
+                              ({isCollapsed ? "collapsed" : "expanded"})
+                            </span>
+                          </button>
                         </td>
-                      );
-                    })}
-                    <td className="px-3 py-2 text-center">
-                      <div className={cn('text-sm font-bold', pctText)}>{pct}%</div>
-                      <div className="w-full bg-muted rounded-full h-2 mt-1">
-                        <div className={cn('h-2 rounded-full transition-all', barColor)} style={{ width: `${pct}%` }} />
-                      </div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{areaStats.approved}/{areaStats.total}</div>
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 text-xs"
-                        onClick={() => navigate(`/submissions?governanceAreaId=${area.id}&year=${year}`)}
-                      >
-                        Review
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 bg-muted/30 font-semibold">
-                <td className="sticky left-0 bg-muted/30 z-10 px-4 py-2 text-sm font-semibold">Column Total</td>
-                {offices.map((o) => {
-                  const stats   = getOfficeStats(o.id, areas, matrixData);
-                  const pct     = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
-                  const isDimmed = focusOffice !== 'all' && focusOffice !== o.id;
+                      </tr>
+                    );
+                  }
+
+                  const cat = row.category;
+                  if (collapsedGovernance.has(`${year}:${cat.governanceAreaId}`)) return null;
                   return (
-                    <td key={o.id} className={cn('px-2 py-2 text-center transition-opacity', isDimmed && 'opacity-30')}>
-                      <div className={cn('text-sm font-bold', pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-amber-700' : 'text-red-700')}>{pct}%</div>
-                      <div className="w-full bg-muted rounded-full h-1.5 mt-1 mx-auto max-w-[60px]">
-                        <div className={cn('h-1.5 rounded-full', pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-amber-400' : 'bg-red-500')} style={{ width: `${pct}%` }} />
-                      </div>
-                    </td>
+                    <tr key={row.key} className={cn("border-b", idx % 2 === 1 && "bg-muted/10")}>
+                      <td className="sticky left-0 z-10 bg-background px-4 py-2">
+                        <div className="flex flex-col">
+                          <span className="text-[11px] text-muted-foreground">Category</span>
+                          <span className="font-medium">{cat.categoryCode} - {cat.categoryName}</span>
+                        </div>
+                      </td>
+                      {visibleOffices.map((office) => {
+                        const key = `${office.id}:${cat.id}`;
+                        const cell = cellMap[key];
+                        const status = cell?.status || "NOT_SUBMITTED";
+                        return (
+                          <td key={key} className="px-2 py-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCellKey(key)}
+                              className={cn(
+                                "w-full rounded-md border px-2 py-1.5 text-xs transition-colors text-left",
+                                STATUS_META[status].badge,
+                                "hover:brightness-95"
+                              )}
+                            >
+                              <div className="font-medium">{STATUS_META[status].label}</div>
+                              <div className="text-[10px] opacity-80 mt-0.5">
+                                {cell?.counts.submitted ?? 0}/{cell?.counts.totalItems ?? 0} submitted
+                              </div>
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
                   );
                 })}
-                <td className="px-3 py-2 text-center">
-                  <div className={cn('text-sm font-bold', overallPct >= 80 ? 'text-green-700' : overallPct >= 50 ? 'text-amber-700' : 'text-red-700')}>{overallPct}%</div>
-                </td>
-                <td className="px-3 py-2 text-center" />
-              </tr>
-            </tfoot>
-          </table>
+              </tbody>
+            </table>
+          )}
         </CardContent>
       </Card>
 
-      {/* ── Per-Office Summary Cards ─────────────────────────────────────────── */}
-      <div>
-        <h2 className="text-lg font-semibold mb-3">Office Summary</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {offices.map((o) => {
-            const stats = getOfficeStats(o.id, areas, matrixData);
-            const pct = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
-            return (
-              <Card key={o.id}>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <Badge variant="outline" className="font-mono text-xs mb-1">{o.code}</Badge>
-                      <p className="text-sm font-medium">{o.name}</p>
+      <Dialog open={Boolean(selectedCellKey)} onOpenChange={(open) => !open && setSelectedCellKey(null)}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedOffice?.code || "Office"} - {selectedCategory?.categoryCode || "Category"} Checklist
+            </DialogTitle>
+            <DialogDescription>
+              {selectedCategory?.governanceCode} - {selectedCategory?.governanceName} | Status:{" "}
+              {STATUS_META[selectedCell?.status || "NOT_SUBMITTED"].label}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto pr-1 space-y-2">
+            {!selectedDetail || selectedDetail.items.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-8">
+                No active checklist items in this category.
+              </div>
+            ) : (
+              selectedDetail.items.map((item) => {
+                const status = item.latestSubmissionStatus || "NOT_SUBMITTED";
+                return (
+                  <div key={item.checklistItemId} className="rounded-md border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium">{item.itemCode} - {item.itemTitle}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Submitted: {item.submittedAt ? new Date(item.submittedAt).toLocaleString("en-PH") : "Not submitted"}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className={STATUS_META[status]?.badge || STATUS_META.NOT_SUBMITTED.badge}>
+                        {STATUS_META[status]?.label || status}
+                      </Badge>
                     </div>
-                    <span className={cn(
-                      'text-lg font-bold',
-                      pct >= 80 ? 'text-green-600' : pct >= 50 ? 'text-amber-600' : 'text-red-600'
-                    )}>{pct}%</span>
+                    {(item.reviewerRemarks || item.officeRemarks) && (
+                      <div className="mt-2 text-xs space-y-1">
+                        {item.reviewerRemarks && (
+                          <p>
+                            <span className="font-semibold">Reviewer remarks:</span> {item.reviewerRemarks}
+                          </p>
+                        )}
+                        {item.officeRemarks && (
+                          <p>
+                            <span className="font-semibold">Office remarks:</span> {item.officeRemarks}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="w-full bg-muted rounded-full h-2 mb-3">
-                    <div
-                      className={cn('h-2 rounded-full transition-all', pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500')}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 text-xs">
-                    <span className="text-green-700 bg-green-50 rounded px-1.5 py-0.5 border border-green-200">{stats.approved} approved</span>
-                    <span className="text-amber-700 bg-amber-50 rounded px-1.5 py-0.5 border border-amber-200">{stats.pending} pending</span>
-                    {stats.denied > 0 && <span className="text-red-700 bg-red-50 rounded px-1.5 py-0.5 border border-red-200">{stats.denied} denied</span>}
-                    {stats.revision > 0 && <span className="text-orange-700 bg-orange-50 rounded px-1.5 py-0.5 border border-orange-200">{stats.revision} revision</span>}
-                    {stats.notSubmitted > 0 && <span className="text-muted-foreground bg-muted rounded px-1.5 py-0.5 border">{stats.notSubmitted} missing</span>}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
-
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
-    </TooltipProvider>
   );
 }
