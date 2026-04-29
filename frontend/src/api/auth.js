@@ -38,8 +38,8 @@ export async function requestPasswordReset(email) {
   return response.data;
 }
 
-export async function resetPassword(token, newPassword) {
-  const response = await api.post("/auth/reset-password", { token, newPassword });
+export async function resetPassword(email, token, newPassword) {
+  const response = await api.post("/auth/reset-password", { email, token, newPassword });
   return response.data;
 }
 

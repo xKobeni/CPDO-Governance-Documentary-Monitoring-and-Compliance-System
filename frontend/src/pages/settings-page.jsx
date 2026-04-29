@@ -133,7 +133,7 @@ export default function SettingsPage() {
     setForgotLoading(true);
     setForgotError("");
     try {
-      await resetPassword(codeDigits, forgotNewPassword);
+      await resetPassword(forgotEmail.trim(), codeDigits, forgotNewPassword);
       setForgotSuccess("Password reset successfully! Logging you out...");
       setTimeout(async () => {
         await logout();

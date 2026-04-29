@@ -28,8 +28,17 @@ import {
   deleteEmailVerificationToken,
 } from "../models/email-verification.model.js";
 import { sendUserEmailVerification } from "../services/user-email-verification.service.js";
-import { createSession, findValidSessionByHash, revokeSession } from "../models/sessions.model.js";
-import { createPasswordResetToken, findValidResetToken, revokeResetTokens } from "../models/password-reset.model.js";
+import {
+  createSession,
+  findValidSessionByHash,
+  revokeSession,
+  revokeAllSessionsByUserId,
+} from "../models/sessions.model.js";
+import {
+  createPasswordResetToken,
+  consumeValidResetTokenForEmail,
+  revokeResetTokens,
+} from "../models/password-reset.model.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -325,6 +334,7 @@ const forgotPasswordSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
+  email: z.string().email(),
   token: z.string().min(1),
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
@@ -404,13 +414,13 @@ export async function resetPassword(req, res) {
     return res.status(400).json({ message: msg });
   }
 
-  const { token, newPassword } = parsed.data;
+  const { email, token, newPassword } = parsed.data;
   const normalizedToken = token.replace(/\D/g, "");
   if (normalizedToken.length !== 6) {
     return res.status(400).json({ message: "Enter the 6-digit code from your email." });
   }
 
-  const valid = await findValidResetToken(normalizedToken);
+  const valid = await consumeValidResetTokenForEmail(email, normalizedToken);
   if (!valid) {
     return res.status(400).json({ message: "Invalid or expired reset code. Please request a new one." });
   }
@@ -420,8 +430,7 @@ export async function resetPassword(req, res) {
   if (!updated) {
     return res.status(500).json({ message: "Failed to update password" });
   }
-
-  await revokeResetTokens(valid.user_id);
+  await revokeAllSessionsByUserId(valid.user_id);
 
   try {
     await writeAuditLog({
@@ -468,7 +477,6 @@ export async function verifyEmail(req, res) {
       const welcomeEmail = buildVerificationSuccessWelcomeEmail({
         name: user.full_name || "Team Member",
         email: user.email,
-        temporaryPassword: valid.temporary_password || "",
         role: user.role_name || user.role_code || "",
         department: user.office_name || "",
         loginUrl,

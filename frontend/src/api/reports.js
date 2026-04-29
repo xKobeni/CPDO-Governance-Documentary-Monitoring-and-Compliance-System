@@ -14,3 +14,16 @@ export async function getReportOverview(params = {}) {
   const response = await api.get('/dashboard/overview', { params });
   return response.data;
 }
+
+export async function getComplianceProgress(params = {}) {
+  const response = await api.get('/reports/compliance-progress', { params });
+  return response.data;
+}
+
+export async function downloadComplianceProgress(params = {}, format = 'csv') {
+  const response = await api.get('/reports/compliance-progress/export', {
+    params: { ...params, format },
+    responseType: 'blob',
+  });
+  return response.data;
+}

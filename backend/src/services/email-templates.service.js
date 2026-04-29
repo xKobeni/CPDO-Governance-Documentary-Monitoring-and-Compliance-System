@@ -203,6 +203,7 @@ export function buildVerificationSuccessWelcomeEmail({
   name = "Team Member",
   email = "",
   temporaryPassword = "",
+  context = "verified",
   role = "",
   department = "",
   loginUrl = "",
@@ -214,7 +215,14 @@ export function buildVerificationSuccessWelcomeEmail({
   const companyName = company.name || "SGLG Monitoring System";
   const companyEmail = company.email || "cpdc.systems@gmail.com";
   const companyWebsite = company.website || "";
-  const subject = `Account successfully verified - ${appName} login details`;
+  const isCreatedContext = context === "created";
+  const subject = isCreatedContext
+    ? `Account created - ${appName} login details`
+    : `Account successfully verified - ${appName} login details`;
+  const headerTitle = isCreatedContext ? "Account Created" : "Account Successfully Verified";
+  const introText = isCreatedContext
+    ? `Your ${appName} account has been created successfully.`
+    : `Congratulations! Your email address has been successfully verified and your ${appName} account is now active.`;
 
   const passwordLine = temporaryPassword
     ? `Temporary Password: ${temporaryPassword}`
@@ -223,7 +231,7 @@ export function buildVerificationSuccessWelcomeEmail({
   const text = [
     `Dear ${name},`,
     "",
-    `Congratulations! Your email address has been successfully verified and your ${appName} account is now active.`,
+    introText,
     "",
     "Your login details:",
     `Email Address: ${email || "-"}`,
@@ -248,7 +256,7 @@ export function buildVerificationSuccessWelcomeEmail({
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Account Successfully Verified - Your Login Credentials</title>
+  <title>${headerTitle} - Your Login Credentials</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body style="margin:0; padding:0; background-color:#f4f6f8; font-family:'Segoe UI', sans-serif;">
@@ -259,14 +267,14 @@ export function buildVerificationSuccessWelcomeEmail({
           <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px; background-color:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.05);">
             <tr>
               <td style="background-color:#991b1b; text-align:center; padding:30px 20px;">
-                <h1 style="color:#ffffff; font-size:24px; margin:16px 0 8px;">Account Successfully Verified</h1>
+                <h1 style="color:#ffffff; font-size:24px; margin:16px 0 8px;">${headerTitle}</h1>
                 <p style="color:#fecaca; margin:0;">Your login credentials are ready</p>
               </td>
             </tr>
             <tr>
               <td style="padding:30px 20px 20px; color:#333333;">
                 <p style="margin-top:0;">Dear ${name},</p>
-                <p>Congratulations! Your email address has been successfully verified and your ${appName} account is now active.</p>
+                <p>${introText}</p>
                 <p>Below are your login credentials to access the system:</p>
 
                 <div style="background-color:#f8f9fa; border:2px solid #e9ecef; border-radius:8px; padding:20px; margin:20px 0;">

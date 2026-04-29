@@ -113,7 +113,7 @@ export default function ForgotPasswordPage() {
     setError("");
     setSuccess("");
     try {
-      await resetPassword(codeDigits, newPassword);
+      await resetPassword(email.trim(), codeDigits, newPassword);
       setSuccess("Password reset successfully! Redirecting to login...");
       setTimeout(() => navigate("/login", { replace: true }), 2000);
     } catch (err) {

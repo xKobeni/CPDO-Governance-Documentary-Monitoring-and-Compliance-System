@@ -30,6 +30,8 @@ import {
   Printer,
   Activity,
   Medal,
+  ShieldCheck,
+  TimerOff,
 } from 'lucide-react';
 import {
   BarChart,
@@ -45,7 +47,13 @@ import {
 } from 'recharts';
 import { toast } from 'react-hot-toast';
 import { cn } from '../lib/utils';
-import { getReportSummary, getNoUploadReport, getReportOverview } from '../api/reports';
+import {
+  getReportSummary,
+  getNoUploadReport,
+  getReportOverview,
+  getComplianceProgress,
+  downloadComplianceProgress,
+} from '../api/reports';
 import { getYears } from '../api/years';
 import { getOffices } from '../api/offices';
 import { useAuth } from '../hooks/use-auth';
@@ -60,6 +68,12 @@ const STATUS_CONFIG = {
 };
 
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const COMPLIANCE_STATUS_CONFIG = {
+  NOT_STARTED: { label: 'Not Started', color: 'text-slate-600', bg: 'bg-slate-100', bar: '#64748b' },
+  IN_PROGRESS: { label: 'In Progress', color: 'text-blue-600', bg: 'bg-blue-100', bar: '#3b82f6' },
+  UNDER_REVIEW: { label: 'Under Review', color: 'text-amber-600', bg: 'bg-amber-100', bar: '#f59e0b' },
+  COMPLIANT: { label: 'Compliant', color: 'text-green-600', bg: 'bg-green-100', bar: '#22c55e' },
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, icon: Icon, color, bg, accentBar, pct }) {
@@ -110,6 +124,15 @@ function EmptyState({ icon: Icon = AlertCircle, title, sub }) {
 
 function downloadCSV(filename, csvString) {
   const blob = new Blob([csvString], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -233,6 +256,16 @@ export default function ReportsPage() {
     enabled: Boolean(selectedOfficeId) || isOfficeUser,
   });
 
+  const complianceQuery = useQuery({
+    queryKey: ['report-compliance-progress', year, selectedOfficeId || null],
+    queryFn: () =>
+      getComplianceProgress({
+        year,
+        ...(selectedOfficeId ? { officeId: selectedOfficeId } : {}),
+      }),
+    staleTime: 2 * 60 * 1000,
+  });
+
   // ── Derived: year / office lists ──────────────────────────────────────────────
   const yearOptions = useMemo(() => {
     const yrs = (yearsQuery.data?.years || []).map((y) => y.year).sort((a, b) => b - a);
@@ -285,6 +318,26 @@ export default function ReportsPage() {
     }));
   }, [overviewQuery.data]);
 
+  const complianceSnapshot = complianceQuery.data?.snapshot || null;
+  const complianceMilestones = complianceSnapshot?.milestones || {
+    NOT_STARTED: 0,
+    IN_PROGRESS: 0,
+    UNDER_REVIEW: 0,
+    COMPLIANT: 0,
+  };
+  const complianceMonthlyTrend = useMemo(() => {
+    const rows = complianceQuery.data?.monthlyTrend || [];
+    if (!rows.length) {
+      return MONTH_LABELS.map((name) => ({ name, Completion: 0, Reviewed: 0, Total: 0 }));
+    }
+    return rows.map((row) => ({
+      name: row.label,
+      Completion: Number(row.completionPercentage || 0),
+      Reviewed: Number(row.reviewed || 0),
+      Total: Number(row.totalExpected || 0),
+    }));
+  }, [complianceQuery.data]);
+
   const topAreas = useMemo(
     () => overviewQuery.data?.charts?.topGovernanceAreas || [],
     [overviewQuery.data]
@@ -313,22 +366,22 @@ export default function ReportsPage() {
   const generatedAt = useMemo(() => {
     const ts =
       activeTab === 'overview' ? overviewQuery.dataUpdatedAt :
-      activeTab === 'status'   ? summaryQuery.dataUpdatedAt  :
+      activeTab === 'status'   ? complianceQuery.dataUpdatedAt  :
       activeTab === 'missing'  ? missingQuery.dataUpdatedAt  :
       null;
     return ts
       ? new Date(ts).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
       : null;
-  }, [activeTab, overviewQuery.dataUpdatedAt, summaryQuery.dataUpdatedAt, missingQuery.dataUpdatedAt]);
+  }, [activeTab, overviewQuery.dataUpdatedAt, complianceQuery.dataUpdatedAt, missingQuery.dataUpdatedAt]);
 
   // ── Refresh ───────────────────────────────────────────────────────────────────
   const isRefreshing =
     overviewQuery.isFetching || summaryQuery.isFetching ||
-    missingQuery.isFetching;
+    missingQuery.isFetching || complianceQuery.isFetching;
 
   const handleRefresh = () => {
     if (activeTab === 'overview') { overviewQuery.refetch(); summaryQuery.refetch(); }
-    else if (activeTab === 'status') summaryQuery.refetch();
+    else if (activeTab === 'status') complianceQuery.refetch();
     else if (activeTab === 'missing') missingQuery.refetch();
   };
 
@@ -372,6 +425,23 @@ export default function ReportsPage() {
     downloadCSV(`recent-submissions-${year}.csv`, ctx + header + body);
   };
 
+  const exportCompliance = async (format) => {
+    try {
+      const blob = await downloadComplianceProgress(
+        {
+          year,
+          ...(selectedOfficeId ? { officeId: selectedOfficeId } : {}),
+        },
+        format
+      );
+      const officePart = selectedOfficeName ? toSlug(selectedOfficeName) : 'all-offices';
+      downloadBlob(`compliance-progress-${officePart}-${year}.${format}`, blob);
+      toast.success(`Compliance report exported (${format.toUpperCase()})`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to export compliance report.');
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6" data-tour-id="reports-root">
@@ -381,7 +451,7 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Submission statistics and compliance tracking for {year}
+            Compliance progress and tracking insights for {year}
             {generatedAt && (
               <span className="ml-2 text-xs opacity-70">· Generated {generatedAt}</span>
             )}
@@ -446,7 +516,7 @@ export default function ReportsPage() {
           </TabsTrigger>
           <TabsTrigger value="status" data-tour-tab="status" className="px-4 py-2.5">
             <BarChart3 className="h-3.5 w-3.5" />
-            Submission Status
+            Compliance Progress
           </TabsTrigger>
           <TabsTrigger value="missing" data-tour-tab="missing" className="px-4 py-2.5">
             <FileX className="h-3.5 w-3.5" />
@@ -664,10 +734,9 @@ export default function ReportsPage() {
           </Card>
         </TabsContent>
 
-        {/* ══ TAB: Submission Status ════════════════════════════════════════════ */}
+        {/* ══ TAB: Compliance Progress ═══════════════════════════════════════════ */}
         <TabsContent value="status" className="space-y-6 mt-6">
-          {/* KPI strip */}
-          {summaryQuery.isFetching && !summaryQuery.data ? (
+          {complianceQuery.isFetching && !complianceQuery.data ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               {Array.from({ length: 6 }).map((_, i) => (
                 <Card key={i}>
@@ -682,66 +751,122 @@ export default function ReportsPage() {
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              <KpiCard label="Total"          value={total.toLocaleString()} sub={`submissions in ${year}`} icon={FileText} color="text-foreground" bg="bg-muted" />
-              <KpiCard label="Approved"        value={statusMap.APPROVED.toLocaleString()} sub={total > 0 ? `${((statusMap.APPROVED/total)*100).toFixed(1)}% of total` : '—'} icon={CheckCircle2} color="text-green-600"  bg="bg-green-100"  accentBar="bg-green-500"  pct={total > 0 ? (statusMap.APPROVED/total)*100 : 0} />
-              <KpiCard label="Pending"          value={statusMap.PENDING.toLocaleString()} sub={total > 0 ? `${((statusMap.PENDING/total)*100).toFixed(1)}% of total` : '—'} icon={Clock}        color="text-amber-600"  bg="bg-amber-100"  accentBar="bg-amber-400"  pct={total > 0 ? (statusMap.PENDING/total)*100 : 0} />
-              <KpiCard label="Needs Revision"   value={statusMap.REVISION_REQUESTED.toLocaleString()} sub={total > 0 ? `${((statusMap.REVISION_REQUESTED/total)*100).toFixed(1)}% of total` : '—'} icon={RotateCcw} color="text-orange-600" bg="bg-orange-100" accentBar="bg-orange-500" pct={total > 0 ? (statusMap.REVISION_REQUESTED/total)*100 : 0} />
-              <KpiCard label="Denied"            value={statusMap.DENIED.toLocaleString()} sub={total > 0 ? `${((statusMap.DENIED/total)*100).toFixed(1)}% of total` : '—'} icon={XCircle} color="text-red-600" bg="bg-red-100" accentBar="bg-red-500" pct={total > 0 ? (statusMap.DENIED/total)*100 : 0} />
               <KpiCard
-                label="Approval Rate"
-                value={approvalRate !== null ? `${approvalRate}%` : '—'}
-                sub={approvalRate !== null ? `of ${reviewed} reviewed` : 'no reviewed yet'}
-                icon={TrendingUp}
-                color={approvalRate !== null ? (Number(approvalRate) >= 80 ? 'text-green-600' : Number(approvalRate) >= 50 ? 'text-amber-600' : 'text-red-600') : 'text-muted-foreground'}
+                label="Total Expected"
+                value={(complianceSnapshot?.totalExpected || 0).toLocaleString()}
+                sub={`active compliance items in ${year}`}
+                icon={FileText}
+                color="text-foreground"
                 bg="bg-muted"
-                accentBar={approvalRate !== null ? (Number(approvalRate) >= 80 ? 'bg-green-500' : Number(approvalRate) >= 50 ? 'bg-amber-400' : 'bg-red-500') : undefined}
-                pct={approvalRate ? Number(approvalRate) : 0}
+              />
+              <KpiCard
+                label="Reviewed"
+                value={(complianceSnapshot?.reviewed || 0).toLocaleString()}
+                sub={`reviewed / expected in ${year}`}
+                icon={ShieldCheck}
+                color="text-blue-600"
+                bg="bg-blue-100"
+              />
+              <KpiCard
+                label="Compliant"
+                value={(complianceMilestones.COMPLIANT || 0).toLocaleString()}
+                sub={`${complianceSnapshot?.totalExpected ? ((complianceMilestones.COMPLIANT / complianceSnapshot.totalExpected) * 100).toFixed(1) : '0.0'}% of expected`}
+                icon={CheckCircle2}
+                color="text-green-600"
+                bg="bg-green-100"
+                accentBar="bg-green-500"
+                pct={complianceSnapshot?.totalExpected ? (complianceMilestones.COMPLIANT / complianceSnapshot.totalExpected) * 100 : 0}
+              />
+              <KpiCard
+                label="Under Review"
+                value={(complianceMilestones.UNDER_REVIEW || 0).toLocaleString()}
+                sub={`${complianceSnapshot?.totalExpected ? ((complianceMilestones.UNDER_REVIEW / complianceSnapshot.totalExpected) * 100).toFixed(1) : '0.0'}% of expected`}
+                icon={RotateCcw}
+                color="text-amber-600"
+                bg="bg-amber-100"
+                accentBar="bg-amber-400"
+                pct={complianceSnapshot?.totalExpected ? (complianceMilestones.UNDER_REVIEW / complianceSnapshot.totalExpected) * 100 : 0}
+              />
+              <KpiCard
+                label="In Progress"
+                value={(complianceMilestones.IN_PROGRESS || 0).toLocaleString()}
+                sub={`${complianceSnapshot?.totalExpected ? ((complianceMilestones.IN_PROGRESS / complianceSnapshot.totalExpected) * 100).toFixed(1) : '0.0'}% of expected`}
+                icon={Clock}
+                color="text-sky-600"
+                bg="bg-sky-100"
+                accentBar="bg-sky-500"
+                pct={complianceSnapshot?.totalExpected ? (complianceMilestones.IN_PROGRESS / complianceSnapshot.totalExpected) * 100 : 0}
+              />
+              <KpiCard
+                label="Overdue/Blocked"
+                value={(complianceSnapshot?.overdueBlocked || 0).toLocaleString()}
+                sub="past due and still unresolved"
+                icon={TimerOff}
+                color={(complianceSnapshot?.overdueBlocked || 0) > 0 ? 'text-red-600' : 'text-green-600'}
+                bg={(complianceSnapshot?.overdueBlocked || 0) > 0 ? 'bg-red-100' : 'bg-green-100'}
               />
             </div>
           )}
 
-          {/* Chart + distribution */}
           <div className="grid gap-6 lg:grid-cols-5">
             <Card className="lg:col-span-3">
               <CardHeader className="flex flex-row items-start justify-between gap-3">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-muted-foreground" />
-                    Submission Status Breakdown
+                    <TrendingUp className="h-5 w-5 text-muted-foreground" />
+                    Monthly Compliance Completion
                   </CardTitle>
                   <CardDescription>
-                    Distribution for {year}
+                    Reviewed / expected by month for {year}
                     {selectedOfficeName ? ` — ${selectedOfficeName}` : ' — all offices'}
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={exportSummaryCSV} disabled={total === 0}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export CSV
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => exportCompliance('csv')}>
+                    <Download className="h-4 w-4 mr-2" />
+                    CSV
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => exportCompliance('xlsx')}>
+                    <Download className="h-4 w-4 mr-2" />
+                    XLSX
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => exportCompliance('pdf')}>
+                    <Download className="h-4 w-4 mr-2" />
+                    PDF
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                {summaryQuery.isFetching && !summaryQuery.data ? (
+                {complianceQuery.isFetching && !complianceQuery.data ? (
                   <div className="flex items-center justify-center h-52 text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin mr-3" /> Loading…
                   </div>
-                ) : total === 0 ? (
-                  <EmptyState title="No submissions found" sub="Try changing the year or office filter." />
+                ) : !complianceSnapshot?.totalExpected ? (
+                  <EmptyState title="No compliance data found" sub="Try changing the year or office filter." />
                 ) : (
                   <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                    <LineChart data={complianceMonthlyTrend} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} />
                       <RechartsTooltip
-                        formatter={(v) => [v, 'Submissions']}
+                        formatter={(v, name, ctx) => {
+                          if (name === 'Completion') {
+                            return [`${Number(v).toFixed(1)}% (${ctx?.payload?.Reviewed || 0}/${ctx?.payload?.Total || 0})`, 'Completion'];
+                          }
+                          return [v, name];
+                        }}
                         contentStyle={{ borderRadius: '8px', fontSize: '12px' }}
                       />
-                      <Bar dataKey="count" name="Submissions" radius={[4, 4, 0, 0]} maxBarSize={52}>
-                        {chartData.map((entry) => (
-                          <Cell key={entry.name} fill={entry.fill} />
-                        ))}
-                      </Bar>
-                    </BarChart>
+                      <Line
+                        type="monotone"
+                        dataKey="Completion"
+                        stroke="#2563eb"
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: '#2563eb' }}
+                        activeDot={{ r: 5 }}
+                      />
+                    </LineChart>
                   </ResponsiveContainer>
                 )}
               </CardContent>
@@ -749,24 +874,23 @@ export default function ReportsPage() {
 
             <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle className="text-base">Status Distribution</CardTitle>
-                <CardDescription>Proportion of each status</CardDescription>
+                <CardTitle className="text-base">Milestone Distribution</CardTitle>
+                <CardDescription>Current compliance status counts</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 pt-2">
-                {summaryQuery.isFetching && !summaryQuery.data ? (
+                {complianceQuery.isFetching && !complianceQuery.data ? (
                   <LoadingRows n={4} />
-                ) : total === 0 ? (
+                ) : !complianceSnapshot?.totalExpected ? (
                   <p className="text-sm text-muted-foreground text-center py-8">No data</p>
                 ) : (
-                  Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
-                    const count = statusMap[key] ?? 0;
-                    const pct   = total > 0 ? (count / total) * 100 : 0;
-                    const Icon  = cfg.icon;
+                  Object.entries(COMPLIANCE_STATUS_CONFIG).map(([key, cfg]) => {
+                    const count = complianceMilestones[key] ?? 0;
+                    const pct   = complianceSnapshot.totalExpected > 0 ? (count / complianceSnapshot.totalExpected) * 100 : 0;
                     return (
                       <div key={key} className="space-y-1">
                         <div className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-2">
-                            <Icon className={cn('h-3.5 w-3.5 shrink-0', cfg.color)} />
+                            <span className={cn('h-2.5 w-2.5 rounded-full', cfg.bg)} />
                             <span>{cfg.label}</span>
                           </div>
                           <div className="flex items-center gap-2 text-xs">
@@ -784,10 +908,10 @@ export default function ReportsPage() {
                     );
                   })
                 )}
-                {!summaryQuery.isFetching && total > 0 && (
+                {!complianceQuery.isFetching && (complianceSnapshot?.totalExpected || 0) > 0 && (
                   <div className="pt-2 border-t flex justify-between text-xs text-muted-foreground">
-                    <span>Total submissions</span>
-                    <span className="font-semibold text-foreground">{total.toLocaleString()}</span>
+                    <span>Completion percentage</span>
+                    <span className="font-semibold text-foreground">{Number(complianceSnapshot?.completionPercentage || 0).toFixed(1)}%</span>
                   </div>
                 )}
               </CardContent>
@@ -992,9 +1116,9 @@ export default function ReportsPage() {
           },
           {
             title: "Analyze status distribution",
-            description: "In Submission Status tab, compare counts and percentages per status, then export the summary report.",
+            description: "In Compliance Progress tab, analyze milestone counts, completion trend, and export executive reports.",
             selector: '[data-tour-tab="status"]',
-            selectorLabel: "Submission Status tab",
+            selectorLabel: "Compliance Progress tab",
             tabValue: "status",
           },
           {

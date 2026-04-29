@@ -439,7 +439,6 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL,
-  temporary_password TEXT,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -447,7 +446,7 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
 CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user ON email_verification_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_hash ON email_verification_tokens(token_hash);
 CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_expires ON email_verification_tokens(expires_at);
-ALTER TABLE email_verification_tokens ADD COLUMN IF NOT EXISTS temporary_password TEXT;
+ALTER TABLE email_verification_tokens DROP COLUMN IF EXISTS temporary_password;
 
 -- Upgrade existing databases: add users.email_verified and grandfather current accounts
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN;

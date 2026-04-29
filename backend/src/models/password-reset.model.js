@@ -36,6 +36,28 @@ export async function findValidResetToken(token) {
 }
 
 /**
+ * Atomically consume a valid reset token scoped to the account email.
+ * This guarantees single-use and prevents cross-account token collisions.
+ * @param {string} email - Account email
+ * @param {string} token - Raw token from user
+ * @returns {Promise<{ user_id: string } | null>}
+ */
+export async function consumeValidResetTokenForEmail(email, token) {
+  const tokenHash = sha256(token);
+  const result = await pool.query(
+    `DELETE FROM password_reset_tokens prt
+     USING users u
+     WHERE prt.user_id = u.id
+       AND lower(u.email) = lower($1)
+       AND prt.token_hash = $2
+       AND prt.expires_at > now()
+     RETURNING prt.user_id`,
+    [email, tokenHash]
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
  * Delete a reset token (after successful use or when creating a new one).
  * @param {string} userId - User ID (optional, for revoking all tokens for user)
  * @param {string} [token] - Optional specific token hash; if omitted, revokes all for user

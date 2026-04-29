@@ -12,6 +12,7 @@ import {
   updateUserPassword,
 } from "../models/users.model.js";
 import { revokeEmailVerificationTokens } from "../models/email-verification.model.js";
+import { revokeAllSessionsByUserId } from "../models/sessions.model.js";
 import { sendUserEmailVerification } from "../services/user-email-verification.service.js";
 import { sendMail } from "../services/maileroo.service.js";
 import { buildVerificationSuccessWelcomeEmail } from "../services/email-templates.service.js";
@@ -74,15 +75,43 @@ export async function createUserHandler(req, res) {
   };
 
   try {
-    const sendResult = await sendUserEmailVerification(user.id, user.email, {
-      temporaryPassword: rawPassword,
-    });
+    const sendResult = await sendUserEmailVerification(user.id, user.email);
     if (sendResult.skipped && process.env.NODE_ENV !== "production") {
       payload.verificationDevToken = sendResult.rawToken;
     }
   } catch (e) {
     console.error("[users] Failed to send verification email", e?.message || e);
     payload.verificationEmailWarning = "Verification email could not be sent. Use resend from user management or ask the user to use Resend on the login page.";
+  }
+
+  try {
+    const base = (env.frontendUrl || env.corsOrigin || "").replace(/\/$/, "");
+    const loginUrl = base ? `${base}/login` : "";
+    const credentialEmail = buildVerificationSuccessWelcomeEmail({
+      name: fullName || "Team Member",
+      email: user.email,
+      temporaryPassword: rawPassword,
+      context: "created",
+      role: roleCode || "",
+      department: "",
+      loginUrl,
+    });
+
+    const credentialSend = await sendMail({
+      to: user.email,
+      subject: credentialEmail.subject,
+      text: credentialEmail.text,
+      html: credentialEmail.html,
+    });
+
+    if (credentialSend?.skipped) {
+      payload.credentialEmailWarning =
+        "Credential email was not sent because SMTP is not configured in this environment.";
+    }
+  } catch (e) {
+    console.error("[users] Failed to send credential email", e?.message || e);
+    payload.credentialEmailWarning =
+      "User was created, but sending the credential email failed. Share the temporary password manually.";
   }
 
   return res.status(201).json(payload);
@@ -229,6 +258,7 @@ export async function resetUserPasswordHandler(req, res) {
   if (!updated) {
     return res.status(500).json({ message: "Failed to reset password" });
   }
+  await revokeAllSessionsByUserId(userId);
 
   let credentialEmailSent = false;
   let credentialEmailWarning;
