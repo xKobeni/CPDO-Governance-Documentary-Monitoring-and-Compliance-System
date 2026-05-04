@@ -35,7 +35,8 @@ export function createApp() {
   app.use(pinoHttp({ logger }));
   app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
 
-  app.get("/health", (req, res) => res.json({ ok: true }));
+  // Allow trailing whitespace — Render health-check path is easy to typo as "/health "
+  app.get(/^\/health\s*$/i, (req, res) => res.json({ ok: true }));
 
   app.use("/api", apiGlobalLimiter, routes);
 
