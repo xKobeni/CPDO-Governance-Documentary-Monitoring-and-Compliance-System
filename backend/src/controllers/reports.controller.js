@@ -236,6 +236,191 @@ function applyDownloadHeaders(res, { format, fileStem }) {
   res.setHeader("Content-Disposition", `attachment; filename=\"${fileStem}.${extension}\"`);
 }
 
+function drawSectionTitle(doc, title) {
+  doc
+    .moveDown(0.8)
+    .font("Helvetica-Bold")
+    .fontSize(11)
+    .fillColor("#0f172a")
+    .text(title);
+  doc
+    .moveDown(0.15)
+    .strokeColor("#cbd5e1")
+    .lineWidth(1)
+    .moveTo(doc.page.margins.left, doc.y)
+    .lineTo(doc.page.width - doc.page.margins.right, doc.y)
+    .stroke();
+  doc.moveDown(0.35);
+}
+
+function drawMetricTable(doc, rows) {
+  const left = doc.page.margins.left;
+  const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const labelWidth = Math.floor(usableWidth * 0.66);
+  const valueWidth = usableWidth - labelWidth;
+  const rowHeight = 20;
+
+  doc.font("Helvetica-Bold").fontSize(10).fillColor("#0f172a");
+  doc.rect(left, doc.y, usableWidth, rowHeight).fill("#e2e8f0");
+  doc
+    .fillColor("#0f172a")
+    .text("Metric", left + 8, doc.y + 6, { width: labelWidth - 12 })
+    .text("Value", left + labelWidth + 8, doc.y + 6, { width: valueWidth - 12 });
+  doc.y += rowHeight;
+
+  doc.font("Helvetica").fontSize(10);
+  rows.forEach((row, idx) => {
+    const y = doc.y;
+    doc.rect(left, y, usableWidth, rowHeight).fill(idx % 2 === 0 ? "#ffffff" : "#f8fafc");
+    doc
+      .fillColor("#0f172a")
+      .text(row.metric, left + 8, y + 6, { width: labelWidth - 12 })
+      .text(String(row.value), left + labelWidth + 8, y + 6, { width: valueWidth - 12, align: "right" });
+    doc.y += rowHeight;
+  });
+}
+
+function drawMonthlyTrendTable(doc, monthlyTrend) {
+  const left = doc.page.margins.left;
+  const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const rowHeight = 18;
+  const columns = [
+    { key: "label", label: "Month", width: 70, align: "left" },
+    { key: "totalExpected", label: "Expected", width: 70, align: "right" },
+    { key: "reviewed", label: "Reviewed", width: 70, align: "right" },
+    { key: "completionPercentage", label: "Completion %", width: 85, align: "right" },
+    { key: "compliant", label: "Compliant", width: 70, align: "right" },
+    { key: "underReview", label: "Under Review", width: 78, align: "right" },
+    { key: "inProgress", label: "In Progress", width: 70, align: "right" },
+    { key: "notStarted", label: "Not Started", width: 70, align: "right" },
+  ];
+
+  const headerWidth = columns.reduce((sum, col) => sum + col.width, 0);
+  const tableWidth = Math.min(headerWidth, usableWidth);
+  const scale = tableWidth / headerWidth;
+  columns.forEach((col) => {
+    col.width = Math.floor(col.width * scale);
+  });
+
+  const drawHeader = () => {
+    doc.rect(left, doc.y, tableWidth, rowHeight).fill("#e2e8f0");
+    let x = left;
+    doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a");
+    columns.forEach((col) => {
+      doc.text(col.label, x + 4, doc.y + 5, {
+        width: col.width - 8,
+        align: col.align === "left" ? "left" : "right",
+      });
+      x += col.width;
+    });
+    doc.y += rowHeight;
+  };
+
+  drawHeader();
+  doc.font("Helvetica").fontSize(8.5);
+  monthlyTrend.forEach((row, idx) => {
+    if (doc.y > doc.page.height - doc.page.margins.bottom - 28) {
+      doc.addPage();
+      drawHeader();
+    }
+
+    const y = doc.y;
+    doc.rect(left, y, tableWidth, rowHeight).fill(idx % 2 === 0 ? "#ffffff" : "#f8fafc");
+    let x = left;
+    columns.forEach((col) => {
+      const value =
+        col.key === "completionPercentage" ? `${Number(row[col.key] || 0).toFixed(2)}%` : String(row[col.key] ?? 0);
+      doc.fillColor("#0f172a").text(value, x + 4, y + 5, {
+        width: col.width - 8,
+        align: col.align,
+      });
+      x += col.width;
+    });
+    doc.y += rowHeight;
+  });
+}
+
+function drawReportHeader(doc, { reportTitle, subtitle, year, coverage, generatedAt }) {
+  doc
+    .rect(doc.page.margins.left, doc.y, doc.page.width - doc.page.margins.left - doc.page.margins.right, 56)
+    .fill("#0f172a");
+  const bannerTop = doc.y;
+  doc
+    .fillColor("#ffffff")
+    .font("Helvetica-Bold")
+    .fontSize(11)
+    .text("Republic of the Philippines", doc.page.margins.left + 14, bannerTop + 8, { align: "left" })
+    .fontSize(10)
+    .font("Helvetica")
+    .text("City Planning and Development Office", doc.page.margins.left + 14, bannerTop + 23, { align: "left" })
+    .text("CPDO Monitoring System", doc.page.margins.left + 14, bannerTop + 36, { align: "left" });
+  doc.moveDown(2.6);
+
+  doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(15).text(reportTitle, { align: "center" });
+  if (subtitle) {
+    doc.moveDown(0.2).font("Helvetica").fontSize(10).fillColor("#334155").text(subtitle, { align: "center" });
+  }
+  doc.moveDown(0.6);
+
+  const left = doc.page.margins.left;
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const boxHeight = 58;
+  const top = doc.y;
+  doc.roundedRect(left, top, width, boxHeight, 3).fill("#f8fafc");
+  doc.strokeColor("#cbd5e1").lineWidth(1).roundedRect(left, top, width, boxHeight, 3).stroke();
+  doc
+    .fillColor("#0f172a")
+    .font("Helvetica")
+    .fontSize(9.5)
+    .text(`Reporting Year: ${year}`, left + 10, top + 10)
+    .text(`Coverage: ${coverage}`, left + 10, top + 25)
+    .text(`Generated On: ${generatedAt}`, left + 10, top + 40)
+    .text("Prepared By: CPDO Monitoring System", left + width / 2, top + 10);
+  doc.y = top + boxHeight + 4;
+}
+
+function finalizePdfWithFooter(doc, generatedAt) {
+  // Footer intentionally disabled per UI/reporting request.
+  // Keep function for compatibility with existing export handlers.
+  void doc;
+  void generatedAt;
+}
+
+async function fetchMissingUploads({ year, officeId, governanceAreaId }) {
+  const params = [year, officeId];
+  let govFilter = "";
+  if (governanceAreaId) {
+    params.push(governanceAreaId);
+    govFilter = `AND t.governance_area_id = $${params.length}`;
+  }
+
+  const { rows } = await pool.query(
+    `SELECT
+        ga.code as governance_code,
+        ga.name as governance_name,
+        t.id as template_id,
+        ci.id as checklist_item_id,
+        ci.item_code,
+        ci.title as item_title
+     FROM checklist_templates t
+     JOIN governance_areas ga ON ga.id = t.governance_area_id
+     JOIN checklist_items ci ON ci.template_id = t.id
+     LEFT JOIN submissions s
+       ON s.year = $1
+      AND s.office_id = $2
+      AND s.checklist_item_id = ci.id
+     WHERE t.year = $1
+       AND t.status = 'ACTIVE'
+       AND ci.is_active = TRUE
+       ${govFilter}
+       AND s.id IS NULL
+     ORDER BY ga.sort_order, ci.sort_order, ci.item_code`,
+    params
+  );
+
+  return rows;
+}
+
 /**
  * Summary by status for a year (optionally governance area / office)
  */
@@ -278,54 +463,128 @@ export async function noUploadHandler(req, res) {
   if (req.user.role === "OFFICE") officeId = req.user.officeId;
   if (!officeId) return res.status(400).json({ message: "officeId is required (unless OFFICE user)" });
 
-  const params = [year, officeId];
-  let govFilter = "";
-  if (governanceAreaId) {
-    params.push(governanceAreaId);
-    govFilter = `AND t.governance_area_id = $${params.length}`;
-  }
-
-  const { rows } = await pool.query(
-    `SELECT
-        ga.code as governance_code,
-        ga.name as governance_name,
-        t.id as template_id,
-        ci.id as checklist_item_id,
-        ci.item_code,
-        ci.title as item_title
-     FROM checklist_templates t
-     JOIN governance_areas ga ON ga.id = t.governance_area_id
-     JOIN checklist_items ci ON ci.template_id = t.id
-     LEFT JOIN submissions s
-       ON s.year = $1
-      AND s.office_id = $2
-      AND s.checklist_item_id = ci.id
-     WHERE t.year = $1
-       AND t.status = 'ACTIVE'
-       AND ci.is_active = TRUE
-       ${govFilter}
-       AND s.id IS NULL
-     ORDER BY ga.sort_order, ci.sort_order, ci.item_code`,
-    params
-  );
+  const rows = await fetchMissingUploads({ year, officeId, governanceAreaId });
 
   return res.json({ year, officeId, governanceAreaId, missing: rows });
 }
 
-/**
- * Dashboard overview (single payload for cards + charts + recent activity)
- */
-export async function dashboardOverviewHandler(req, res) {
-  const year = parseYear(req.query.year);
-  if (!year) return res.status(400).json({ message: "Invalid year" });
+export async function noUploadExportHandler(req, res) {
+  const year = Number(req.query.year);
+  if (!year) return res.status(400).json({ message: "year is required" });
+
+  const format = String(req.query.format || "csv").toLowerCase();
+  if (!["csv", "pdf"].includes(format)) {
+    return res.status(400).json({ message: "Invalid format. Use csv or pdf." });
+  }
 
   const governanceAreaId = req.query.governanceAreaId || null;
   let officeId = req.query.officeId || null;
+  if (req.user.role === "OFFICE") officeId = req.user.officeId;
+  if (!officeId) return res.status(400).json({ message: "officeId is required (unless OFFICE user)" });
 
-  if (req.user.role === "OFFICE") {
-    officeId = req.user.officeId;
+  const rows = await fetchMissingUploads({ year, officeId, governanceAreaId });
+  const fileStem = `missing-uploads-${safeSlug(officeId)}-${year}`;
+
+  if (format === "pdf" && rows.length === 0) {
+    return res.status(422).json({
+      message: "No missing uploads found for the selected filters. PDF was not generated.",
+    });
   }
 
+  applyDownloadHeaders(res, { format, fileStem });
+
+  if (format === "csv") {
+    const csvLines = [
+      "Governance Area,Governance Code,Item Code,Item Title",
+      ...rows.map((r) =>
+        `"${r.governance_name}","${r.governance_code}","${r.item_code || ""}","${(r.item_title || "").replace(/"/g, '""')}"`
+      ),
+    ];
+    return res.send(csvLines.join("\n"));
+  }
+
+  const grouped = rows.reduce((acc, row) => {
+    if (!acc[row.governance_code]) {
+      acc[row.governance_code] = { name: row.governance_name, items: [] };
+    }
+    acc[row.governance_code].items.push(row);
+    return acc;
+  }, {});
+
+  const doc = new PDFDocument({ margin: 42, size: "A4", bufferPages: true });
+  doc.pipe(res);
+
+  const generatedAt = new Date().toLocaleString("en-PH");
+  drawReportHeader(doc, {
+    reportTitle: "MISSING UPLOADS REPORT",
+    subtitle: "Checklist items without submission",
+    year,
+    coverage: `Office #${officeId}`,
+    generatedAt,
+  });
+  doc.font("Helvetica").fontSize(10).fillColor("#0f172a").text(`Total Missing Items: ${rows.length}`);
+
+  drawSectionTitle(doc, "I. Missing Items by Governance Area");
+  if (!rows.length) {
+    doc.font("Helvetica").fontSize(10).text("No missing uploads found for the selected filters.");
+    finalizePdfWithFooter(doc, generatedAt);
+    doc.end();
+    return;
+  }
+
+  const left = doc.page.margins.left;
+  const totalWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const rowHeight = 18;
+  const codeWidth = 72;
+  const titleWidth = totalWidth - codeWidth - 12;
+
+  Object.entries(grouped).forEach(([code, group]) => {
+    if (doc.y > doc.page.height - doc.page.margins.bottom - 80) doc.addPage();
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(10)
+      .fillColor("#0f172a")
+      .text(`${code} - ${group.name} (${group.items.length} missing)`);
+    doc.moveDown(0.2);
+
+    doc.rect(left, doc.y, totalWidth, rowHeight).fill("#e2e8f0");
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor("#0f172a")
+      .text("Item Code", left + 6, doc.y + 5, { width: codeWidth - 8 })
+      .text("Checklist Item", left + codeWidth, doc.y + 5, { width: titleWidth, align: "left" });
+    doc.y += rowHeight;
+
+    group.items.forEach((item, idx) => {
+      if (doc.y > doc.page.height - doc.page.margins.bottom - 26) doc.addPage();
+      const y = doc.y;
+      doc.rect(left, y, totalWidth, rowHeight).fill(idx % 2 === 0 ? "#ffffff" : "#f8fafc");
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .fillColor("#0f172a")
+        .text(item.item_code || "-", left + 6, y + 5, { width: codeWidth - 8 })
+        .text(item.item_title || "Untitled item", left + codeWidth, y + 5, { width: titleWidth, align: "left" });
+      doc.y += rowHeight;
+    });
+    doc.moveDown(0.5);
+  });
+
+  // Avoid forcing a trailing page when very close to bottom.
+  const bottomSafeY = doc.page.height - doc.page.margins.bottom - 16;
+  if (doc.y <= bottomSafeY) {
+    doc
+      .font("Helvetica-Oblique")
+      .fontSize(8.5)
+      .fillColor("#475569")
+      .text("This is a system-generated report intended for monitoring and compliance follow-up.");
+  }
+  finalizePdfWithFooter(doc, generatedAt);
+  doc.end();
+}
+
+async function buildDashboardOverviewDataset({ year, governanceAreaId, officeId, userId }) {
   const { params, where } = buildSubmissionWhere({ year, governanceAreaId, officeId });
 
   const statusResult = await pool.query(
@@ -343,7 +602,6 @@ export async function dashboardOverviewHandler(req, res) {
     DENIED: 0,
     REVISION_REQUESTED: 0,
   };
-
   for (const row of statusResult.rows) {
     statusMap[row.status] = Number(row.count || 0);
   }
@@ -353,7 +611,6 @@ export async function dashboardOverviewHandler(req, res) {
     statusMap.APPROVED +
     statusMap.DENIED +
     statusMap.REVISION_REQUESTED;
-
   const reviewedSubmissions =
     statusMap.APPROVED +
     statusMap.DENIED +
@@ -429,10 +686,10 @@ export async function dashboardOverviewHandler(req, res) {
     `SELECT COUNT(*)::int AS count
      FROM notifications
      WHERE user_id = $1 AND is_read = FALSE`,
-    [req.user.sub]
+    [userId]
   );
 
-  return res.json({
+  return {
     year,
     filters: {
       governanceAreaId,
@@ -456,7 +713,168 @@ export async function dashboardOverviewHandler(req, res) {
       topGovernanceAreas: topGovernanceResult.rows,
     },
     recentSubmissions: recentResult.rows,
+  };
+}
+
+/**
+ * Dashboard overview (single payload for cards + charts + recent activity)
+ */
+export async function dashboardOverviewHandler(req, res) {
+  const year = parseYear(req.query.year);
+  if (!year) return res.status(400).json({ message: "Invalid year" });
+
+  const governanceAreaId = req.query.governanceAreaId || null;
+  let officeId = req.query.officeId || null;
+
+  if (req.user.role === "OFFICE") {
+    officeId = req.user.officeId;
+  }
+
+  const payload = await buildDashboardOverviewDataset({
+    year,
+    governanceAreaId,
+    officeId,
+    userId: req.user.sub,
   });
+
+  return res.json(payload);
+}
+
+export async function dashboardOverviewExportHandler(req, res) {
+  const year = parseYear(req.query.year);
+  if (!year) return res.status(400).json({ message: "Invalid year" });
+
+  const format = String(req.query.format || "pdf").toLowerCase();
+  if (!["csv", "pdf"].includes(format)) {
+    return res.status(400).json({ message: "Invalid format. Use csv or pdf." });
+  }
+
+  const governanceAreaId = req.query.governanceAreaId || null;
+  let officeId = req.query.officeId || null;
+  if (req.user.role === "OFFICE") officeId = req.user.officeId;
+
+  const data = await buildDashboardOverviewDataset({
+    year,
+    governanceAreaId,
+    officeId,
+    userId: req.user.sub,
+  });
+
+  const fileStem = `dashboard-overview-${safeSlug(officeId || "all-offices")}-${year}`;
+  const hasDashboardData =
+    data.kpis.totalSubmissions > 0 ||
+    data.recentSubmissions.length > 0 ||
+    (data.charts?.topGovernanceAreas?.length || 0) > 0;
+
+  if (format === "pdf" && !hasDashboardData) {
+    return res.status(422).json({
+      message: "No dashboard data found for the selected filters. PDF was not generated.",
+    });
+  }
+
+  applyDownloadHeaders(res, { format, fileStem });
+
+  if (format === "csv") {
+    const csvLines = [
+      "Section,Metric,Value",
+      `KPI,Total Submissions,${data.kpis.totalSubmissions}`,
+      `KPI,Pending,${data.kpis.pendingSubmissions}`,
+      `KPI,Approved,${data.kpis.approvedSubmissions}`,
+      `KPI,Denied,${data.kpis.deniedSubmissions}`,
+      `KPI,Needs Revision,${data.kpis.revisionRequestedSubmissions}`,
+      `KPI,Reviewed,${data.kpis.reviewedSubmissions}`,
+      `KPI,Approval Rate,${data.kpis.approvalRate}%`,
+      `KPI,Review Completion Rate,${data.kpis.reviewCompletionRate}%`,
+      `KPI,Unread Notifications,${data.kpis.unreadNotifications}`,
+      "",
+      "Recent Submissions",
+      "Office,Area,Item Code,Item Title,Status,Submitted At",
+      ...data.recentSubmissions.map(
+        (r) =>
+          `"${r.office_name}","${r.governance_code}","${r.item_code || ""}","${(r.item_title || "").replace(/"/g, '""')}","${r.status}","${new Date(r.submitted_at).toLocaleString("en-PH")}"`
+      ),
+    ];
+    return res.send(csvLines.join("\n"));
+  }
+
+  const doc = new PDFDocument({ margin: 42, size: "A4", bufferPages: true });
+  doc.pipe(res);
+  const generatedAt = new Date().toLocaleString("en-PH");
+
+  drawReportHeader(doc, {
+    reportTitle: "DASHBOARD EXECUTIVE REPORT",
+    subtitle: "KPI summary, status distribution, and recent submissions",
+    year,
+    coverage: officeId ? `Office #${officeId}` : "All Offices",
+    generatedAt,
+  });
+
+  drawSectionTitle(doc, "I. Key Performance Indicators");
+  drawMetricTable(doc, [
+    { metric: "Total Submissions", value: data.kpis.totalSubmissions },
+    { metric: "Pending", value: data.kpis.pendingSubmissions },
+    { metric: "Approved", value: data.kpis.approvedSubmissions },
+    { metric: "Denied", value: data.kpis.deniedSubmissions },
+    { metric: "Needs Revision", value: data.kpis.revisionRequestedSubmissions },
+    { metric: "Reviewed", value: data.kpis.reviewedSubmissions },
+    { metric: "Approval Rate", value: `${Number(data.kpis.approvalRate || 0).toFixed(2)}%` },
+    { metric: "Review Completion Rate", value: `${Number(data.kpis.reviewCompletionRate || 0).toFixed(2)}%` },
+    { metric: "Unread Notifications", value: data.kpis.unreadNotifications },
+  ]);
+
+  drawSectionTitle(doc, "II. Recent Submissions");
+  if (!data.recentSubmissions.length) {
+    doc.font("Helvetica").fontSize(10).fillColor("#0f172a").text("No recent submissions available for selected filters.");
+  } else {
+    const left = doc.page.margins.left;
+    const totalWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const rowHeight = 18;
+    const columns = [
+      { label: "Office", width: 122 },
+      { label: "Area", width: 40 },
+      { label: "Item", width: 170 },
+      { label: "Status", width: 70 },
+      { label: "Submitted", width: 100 },
+    ];
+    const scale = totalWidth / columns.reduce((sum, c) => sum + c.width, 0);
+    columns.forEach((c) => {
+      c.width = Math.floor(c.width * scale);
+    });
+
+    doc.rect(left, doc.y, totalWidth, rowHeight).fill("#e2e8f0");
+    let x = left;
+    doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a");
+    columns.forEach((c) => {
+      doc.text(c.label, x + 4, doc.y + 5, { width: c.width - 8 });
+      x += c.width;
+    });
+    doc.y += rowHeight;
+
+    data.recentSubmissions.forEach((item, idx) => {
+      if (doc.y > doc.page.height - doc.page.margins.bottom - 26) {
+        doc.addPage();
+      }
+      const y = doc.y;
+      doc.rect(left, y, totalWidth, rowHeight).fill(idx % 2 === 0 ? "#ffffff" : "#f8fafc");
+      x = left;
+      const values = [
+        item.office_name,
+        item.governance_code,
+        `${item.item_code || "-"} ${item.item_title || ""}`.trim(),
+        item.status,
+        new Date(item.submitted_at).toLocaleDateString("en-PH"),
+      ];
+      doc.font("Helvetica").fontSize(8.4).fillColor("#0f172a");
+      values.forEach((v, i) => {
+        doc.text(String(v), x + 4, y + 5, { width: columns[i].width - 8, ellipsis: true });
+        x += columns[i].width;
+      });
+      doc.y += rowHeight;
+    });
+  }
+
+  finalizePdfWithFooter(doc, generatedAt);
+  doc.end();
 }
 
 /**
@@ -515,6 +933,13 @@ export async function complianceProgressExportHandler(req, res) {
   const { year, officeId, governanceAreaId } = parsed;
   const data = await buildComplianceProgressDataset({ year, officeId, governanceAreaId });
   const fileStem = `compliance-progress-${safeSlug(officeId || "all-offices")}-${year}`;
+
+  if (format === "pdf" && Number(data.snapshot?.totalExpected || 0) === 0) {
+    return res.status(422).json({
+      message: "No compliance records found for the selected filters. PDF was not generated.",
+    });
+  }
+
   applyDownloadHeaders(res, { format, fileStem });
 
   if (format === "csv") {
@@ -600,39 +1025,41 @@ export async function complianceProgressExportHandler(req, res) {
     return res.end();
   }
 
-  const doc = new PDFDocument({ margin: 48, size: "A4" });
+  const doc = new PDFDocument({ margin: 42, size: "A4", bufferPages: true });
   doc.pipe(res);
-  doc.fontSize(18).text("Compliance Progress Report", { align: "left" });
-  doc.moveDown(0.5);
-  doc.fontSize(11).text(`Year: ${year}`);
-  doc.text(`Office: ${officeId || "All Offices"}`);
-  doc.text(`Generated: ${new Date().toLocaleString("en-PH")}`);
-  doc.moveDown(1);
 
-  doc.fontSize(13).text("Executive Summary");
-  doc.moveDown(0.4);
-  const executiveLines = [
-    `Total Expected Items: ${data.snapshot.totalExpected}`,
-    `Reviewed Items: ${data.snapshot.reviewed}`,
-    `Completion Percentage: ${data.snapshot.completionPercentage}%`,
-    `Overdue/Blocked Items: ${data.snapshot.overdueBlocked}`,
-    `Not Started: ${data.snapshot.milestones.NOT_STARTED}`,
-    `In Progress: ${data.snapshot.milestones.IN_PROGRESS}`,
-    `Under Review: ${data.snapshot.milestones.UNDER_REVIEW}`,
-    `Compliant: ${data.snapshot.milestones.COMPLIANT}`,
-    `Denied: ${data.snapshot.details.denied}`,
-  ];
-  doc.fontSize(11);
-  executiveLines.forEach((line) => doc.text(`- ${line}`));
-
-  doc.moveDown(1);
-  doc.fontSize(13).text("Monthly Trend");
-  doc.moveDown(0.4);
-  doc.fontSize(10);
-  data.monthlyTrend.forEach((row) => {
-    doc.text(
-      `${row.label}: ${row.completionPercentage}% (${row.reviewed}/${row.totalExpected}) | C:${row.compliant} UR:${row.underReview} IP:${row.inProgress} NS:${row.notStarted}`
-    );
+  const generatedAt = new Date().toLocaleString("en-PH");
+  const officeLabel = officeId ? `Office #${officeId}` : "All Offices";
+  drawReportHeader(doc, {
+    reportTitle: "COMPLIANCE PROGRESS EXECUTIVE REPORT",
+    subtitle: "Compliance milestones and monthly performance",
+    year,
+    coverage: officeLabel,
+    generatedAt,
   });
+
+  drawSectionTitle(doc, "I. Executive Summary");
+  drawMetricTable(doc, [
+    { metric: "Total Expected Items", value: data.snapshot.totalExpected },
+    { metric: "Reviewed Items", value: data.snapshot.reviewed },
+    { metric: "Completion Percentage", value: `${Number(data.snapshot.completionPercentage || 0).toFixed(2)}%` },
+    { metric: "Overdue / Blocked Items", value: data.snapshot.overdueBlocked },
+    { metric: "Not Started", value: data.snapshot.milestones.NOT_STARTED },
+    { metric: "In Progress", value: data.snapshot.milestones.IN_PROGRESS },
+    { metric: "Under Review", value: data.snapshot.milestones.UNDER_REVIEW },
+    { metric: "Compliant", value: data.snapshot.milestones.COMPLIANT },
+    { metric: "Denied", value: data.snapshot.details.denied },
+  ]);
+
+  drawSectionTitle(doc, "II. Monthly Compliance Trend");
+  drawMonthlyTrendTable(doc, data.monthlyTrend);
+
+  doc.moveDown(0.8);
+  doc
+    .font("Helvetica-Oblique")
+    .fontSize(8.5)
+    .fillColor("#475569")
+    .text("This is a system-generated report intended for monitoring, audit support, and management decision-making.");
+  finalizePdfWithFooter(doc, generatedAt);
   doc.end();
 }

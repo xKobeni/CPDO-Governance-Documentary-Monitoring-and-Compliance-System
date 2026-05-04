@@ -13,9 +13,17 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import { ChevronDown, ChevronRight, Loader2, RefreshCw, Search } from "lucide-react";
+import { Download } from "lucide-react";
 import { getYears } from "../api/years";
-import { getComplianceMatrix } from "../api/governance";
+import { downloadComplianceMatrix, getComplianceMatrix } from "../api/governance";
 import { cn } from "../lib/utils";
+import { toast } from "react-hot-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 
 const STATUS_META = {
   NOT_SUBMITTED: { label: "Not Submitted", badge: "bg-muted text-muted-foreground border-border" },
@@ -34,6 +42,15 @@ export default function GovernanceCompliancePage() {
   const [selectedCellKey, setSelectedCellKey] = useState(null);
   const [collapsedGovernance, setCollapsedGovernance] = useState(new Set());
   const [showUnconfiguredDetails, setShowUnconfiguredDetails] = useState(false);
+
+  const downloadBlob = (filename, blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const yearsQuery = useQuery({
     queryKey: ["years", "active"],
@@ -198,6 +215,18 @@ export default function GovernanceCompliancePage() {
       .sort((a, b) => a.governanceCode.localeCompare(b.governanceCode) || a.governanceName.localeCompare(b.governanceName));
   }, [unconfiguredAssignments]);
 
+  const canDownload = !matrixQuery.isFetching && categories.length > 0 && offices.length > 0;
+
+  const handleDownload = async (format) => {
+    try {
+      const blob = await downloadComplianceMatrix(Number(year), format);
+      downloadBlob(`compliance-matrix-${year}.${format}`, blob);
+      toast.success(`Compliance matrix downloaded (${format.toUpperCase()})`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to download compliance matrix.");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -224,6 +253,18 @@ export default function GovernanceCompliancePage() {
             {matrixQuery.isFetching ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Refresh
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={!canDownload}>
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => handleDownload("xlsx")}>Download Excel (.xlsx)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownload("pdf")}>Download PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

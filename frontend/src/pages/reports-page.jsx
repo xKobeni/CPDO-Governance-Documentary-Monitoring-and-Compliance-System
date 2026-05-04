@@ -27,7 +27,6 @@ import {
   Building2,
   Loader2,
   Trophy,
-  Printer,
   Activity,
   Medal,
   ShieldCheck,
@@ -53,7 +52,17 @@ import {
   getReportOverview,
   getComplianceProgress,
   downloadComplianceProgress,
+  downloadMissingUploads,
+  downloadDashboardOverview,
 } from '../api/reports';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
 import { getYears } from '../api/years';
 import { getOffices } from '../api/offices';
 import { useAuth } from '../hooks/use-auth';
@@ -442,6 +451,45 @@ export default function ReportsPage() {
     }
   };
 
+  const exportMissing = async (format) => {
+    try {
+      const blob = await downloadMissingUploads(
+        {
+          year,
+          ...(selectedOfficeId ? { officeId: selectedOfficeId } : {}),
+        },
+        format
+      );
+      const officePart = selectedOfficeName ? toSlug(selectedOfficeName) : 'office';
+      downloadBlob(`missing-uploads-${officePart}-${year}.${format}`, blob);
+      toast.success(`Missing uploads exported (${format.toUpperCase()})`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to export missing uploads report.');
+    }
+  };
+
+  const exportDashboard = async (format) => {
+    try {
+      const blob = await downloadDashboardOverview(
+        {
+          year,
+          ...(selectedOfficeId ? { officeId: selectedOfficeId } : {}),
+        },
+        format
+      );
+      const officePart = selectedOfficeName ? toSlug(selectedOfficeName) : 'all-offices';
+      downloadBlob(`dashboard-overview-${officePart}-${year}.${format}`, blob);
+      toast.success(`Dashboard report exported (${format.toUpperCase()})`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to export dashboard report.');
+    }
+  };
+
+  const canExportCompliance = !complianceQuery.isFetching && Boolean(complianceSnapshot?.totalExpected);
+  const canExportMissing = !missingQuery.isFetching && missingList.length > 0;
+  const canExportRecent = !overviewQuery.isFetching && recentSubmissions.length > 0;
+  const canExportOverview = !overviewQuery.isFetching && Boolean(overviewQuery.data);
+
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6" data-tour-id="reports-root">
@@ -490,6 +538,53 @@ export default function ReportsPage() {
             </Select>
           )}
 
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={
+                  (activeTab === 'overview' && !canExportOverview) ||
+                  (activeTab === 'status' && !canExportCompliance) ||
+                  (activeTab === 'missing' && !canExportMissing)
+                }
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {activeTab === 'overview' && (
+                <>
+                  <DropdownMenuLabel>Overview Exports</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={exportRecentCSV} disabled={!canExportRecent}>Recent Submissions (CSV)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportDashboard('csv')}>Dashboard Summary (CSV)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportDashboard('pdf')}>Dashboard Executive (PDF)</DropdownMenuItem>
+                </>
+              )}
+
+              {activeTab === 'status' && (
+                <>
+                  <DropdownMenuLabel>Compliance Exports</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => exportCompliance('csv')}>Compliance (CSV)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportCompliance('xlsx')}>Compliance (XLSX)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportCompliance('pdf')}>Government PDF</DropdownMenuItem>
+                </>
+              )}
+
+              {activeTab === 'missing' && (
+                <>
+                  <DropdownMenuLabel>Missing Uploads Exports</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={exportMissingCSV}>Missing Uploads (CSV)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportMissing('pdf')}>Missing Uploads (PDF)</DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button
             variant="outline"
             size="sm"
@@ -500,10 +595,6 @@ export default function ReportsPage() {
             Refresh
           </Button>
 
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
         </div>
       </div>
 
@@ -666,12 +757,6 @@ export default function ReportsPage() {
                 <CardTitle className="text-base">Recent Submissions</CardTitle>
                 <CardDescription>Last 10 submissions across all offices</CardDescription>
               </div>
-              {recentSubmissions.length > 0 && (
-                <Button variant="outline" size="sm" onClick={exportRecentCSV}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export CSV
-                </Button>
-              )}
             </CardHeader>
             <CardContent>
               {overviewQuery.isFetching && !overviewQuery.data ? (
@@ -821,20 +906,6 @@ export default function ReportsPage() {
                     {selectedOfficeName ? ` — ${selectedOfficeName}` : ' — all offices'}
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => exportCompliance('csv')}>
-                    <Download className="h-4 w-4 mr-2" />
-                    CSV
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => exportCompliance('xlsx')}>
-                    <Download className="h-4 w-4 mr-2" />
-                    XLSX
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => exportCompliance('pdf')}>
-                    <Download className="h-4 w-4 mr-2" />
-                    PDF
-                  </Button>
-                </div>
               </CardHeader>
               <CardContent>
                 {complianceQuery.isFetching && !complianceQuery.data ? (
@@ -935,12 +1006,6 @@ export default function ReportsPage() {
                       : 'Select an office from the filter above to view missing uploads'}
                   </CardDescription>
                 </div>
-                {missingList.length > 0 && (
-                  <Button variant="outline" size="sm" onClick={exportMissingCSV} className="shrink-0">
-                    <Download className="h-4 w-4 mr-2" />
-                    Export CSV
-                  </Button>
-                )}
               </div>
             </CardHeader>
             <CardContent>

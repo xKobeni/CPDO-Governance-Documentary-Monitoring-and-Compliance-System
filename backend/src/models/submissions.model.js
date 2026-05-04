@@ -92,7 +92,8 @@ export async function listSubmissions(filters = {}, limit = 20, offset = 0) {
     `SELECT s.id, s.year, s.status, s.submitted_at,
             o.name as office_name,
             ga.code as governance_code,
-            ci.item_code, ci.title as item_title
+            ci.item_code, ci.title as item_title,
+            (SELECT COUNT(*)::int FROM submission_comments sc WHERE sc.submission_id = s.id) AS comment_count
      FROM submissions s
      JOIN offices o ON o.id = s.office_id
      JOIN governance_areas ga ON ga.id = s.governance_area_id

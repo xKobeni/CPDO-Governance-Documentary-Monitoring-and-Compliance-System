@@ -40,3 +40,11 @@ export async function getComplianceMatrix(year) {
   return response.data; // { year, cells: [] }
 }
 
+export async function downloadComplianceMatrix(year, format = "xlsx") {
+  const response = await api.get("/governance-areas/compliance-matrix/export", {
+    params: { year, format },
+    responseType: "blob",
+  });
+  return response.data;
+}
+

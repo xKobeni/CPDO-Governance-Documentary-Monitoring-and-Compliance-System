@@ -4,7 +4,7 @@ import {
   createSubmission, getSubmissionById, listSubmissions
 } from "../models/submissions.model.js";
 import { listReviews } from "../models/reviews.model.js";
-import { createNotification, createNotificationsBulk } from "../models/notifications.model.js";
+import { notifyOfficeOpenedSubmission, notifyReviewDecision } from "../services/submission-notifications.service.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
 const createSubmissionSchema = z.object({
@@ -112,31 +112,14 @@ export async function createSubmissionHandler(req, res) {
     }
     return res.status(409).json({ message: "Submission could not be created due to a concurrent update. Please retry." });
   }
-  // For OFFICE users, notify all ADMIN/STAFF that a new submission was created,
-  // so they see something even before any files are uploaded.
   if (req.user.role === "OFFICE") {
     const full = await getSubmissionById(submission.id);
-    const { rows: staffUsers } = await pool.query(
-      `SELECT DISTINCT u.id
-       FROM users u
-       JOIN roles r ON r.id = u.role_id
-       WHERE r.code IN ('ADMIN', 'STAFF')
-         AND u.is_active = TRUE`,
-      []
-    );
-
-    const notifications = staffUsers.map(user => ({
-      userId: user.id,
-      type: "SUBMISSION_RECEIVED",
-      title: `New submission - ${full?.office_name ?? "Office"}`,
-      body: full
-        ? `${full.item_title} (${full.governance_code}) from ${full.office_name}`
-        : `A new submission was created by an office user.`,
-      linkSubmissionId: submission.id,
-    }));
-    if (notifications.length > 0) {
-      await createNotificationsBulk(notifications);
-    }
+    await notifyOfficeOpenedSubmission({
+      submissionId: submission.id,
+      officeName: full?.office_name ?? "Office",
+      itemTitle: full?.item_title ?? "Checklist item",
+      governanceCode: full?.governance_code ?? "",
+    });
   }
 
   return res.status(201).json({ submission });
@@ -264,52 +247,30 @@ export async function reviewSubmissionHandler(req, res) {
     client.release();
   }
 
-  // Create notification for the office user(s) who submitted
-  const notificationType = 
+  const notificationType =
     parsed.data.action === "APPROVE" ? "APPROVED" :
     parsed.data.action === "DENY" ? "DENIED" :
     "REVISION_REQUESTED";
 
-  const notificationTitle = 
+  const notificationTitle =
     parsed.data.action === "APPROVE" ? "Submission Approved" :
     parsed.data.action === "DENY" ? "Submission Denied" :
     "Revision Requested";
 
-  const notificationBody = parsed.data.decisionNotes || 
+  const notificationBody = parsed.data.decisionNotes ||
     `Your submission for ${submission.item_title} has been ${notificationTitle.toLowerCase()}.`;
 
-  // Notify the user who submitted (if not the reviewer)
-  if (submission.submitted_by !== req.user.sub) {
-    await createNotification({
-      userId: submission.submitted_by,
-      type: notificationType,
-      title: notificationTitle,
-      body: notificationBody,
-      linkSubmissionId: submissionId,
-    });
-  }
-
-  // Notify other STAFF/ADMIN users (optional - so they know it's been reviewed)
-  // Get all ADMIN and STAFF users
-  const { rows: staffUsers } = await pool.query(
-    `SELECT DISTINCT u.id FROM users u
-     JOIN roles r ON r.id = u.role_id
-     WHERE r.code IN ('ADMIN', 'STAFF')
-     AND u.id != $1
-     AND u.is_active = TRUE`,
-    [req.user.sub]
-  );
-
-  const notifications = staffUsers.map(user => ({
-    userId: user.id,
-    type: notificationType,
-    title: `${notificationTitle} - ${submission.office_name}`,
-    body: `${submission.item_title} from ${submission.office_name}`,
-    linkSubmissionId: submissionId,
-  }));
-  if (notifications.length > 0) {
-    await createNotificationsBulk(notifications);
-  }
+  await notifyReviewDecision({
+    submissionId,
+    officeId: submission.office_id,
+    reviewerUserId: req.user.sub,
+    reviewerRole: req.user.role,
+    notificationType,
+    officeTitle: notificationTitle,
+    officeBody: notificationBody,
+    officeName: submission.office_name,
+    itemTitle: submission.item_title,
+  });
 
   return res.json({ review, status: newStatus });
 }

@@ -114,6 +114,23 @@ function NoSubmissionPill() {
   );
 }
 
+/** Shown on checklist / list rows when the submission has discussion comments */
+function SubmissionDiscussionHint({ count }) {
+  const n = Number(count ?? 0);
+  if (n <= 0) return null;
+  const label = n === 1 ? "1 comment in discussion" : `${n} comments in discussion`;
+  return (
+    <span
+      className="inline-flex items-center gap-1 shrink-0 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200"
+      title={label}
+      aria-label={label}
+    >
+      <MessageSquare className="h-3.5 w-3.5" />
+      <span className="text-[10px] font-semibold tabular-nums leading-none">{n}</span>
+    </span>
+  );
+}
+
 function formatDateTime(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString("en-PH", {
@@ -130,6 +147,25 @@ function formatBytes(bytes) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Truncate long file names with ellipsis; full name on hover */
+function EllipsisFileName({ name, className, quoted = false }) {
+  const raw = name != null ? String(name) : "";
+  if (!raw) return <span className={className}>—</span>;
+  const display = quoted ? `"${raw}"` : raw;
+  return (
+    <span
+      className={cn(
+        "min-w-0 max-w-full truncate align-bottom",
+        quoted ? "inline-block" : "block",
+        className
+      )}
+      title={raw}
+    >
+      {display}
+    </span>
+  );
 }
 
 function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
@@ -198,7 +234,11 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
     mutationFn: (text) => createSubmissionComment(submissionId, text),
     onSuccess: async () => {
       setCommentText("");
-      await queryClient.invalidateQueries({ queryKey: ["submissions", "comments", submissionId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["submissions", "comments", submissionId] }),
+        queryClient.invalidateQueries({ queryKey: ["submissions"] }),
+        queryClient.invalidateQueries({ queryKey: ["offices"] }),
+      ]);
     },
     onError: (err) => {
       toast.error(err?.response?.data?.message || "Failed to post comment");
@@ -208,7 +248,11 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
   const deleteCommentMutation = useMutation({
     mutationFn: (commentId) => deleteSubmissionComment(submissionId, commentId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["submissions", "comments", submissionId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["submissions", "comments", submissionId] }),
+        queryClient.invalidateQueries({ queryKey: ["submissions"] }),
+        queryClient.invalidateQueries({ queryKey: ["offices"] }),
+      ]);
     },
     onError: (err) => {
       toast.error(err?.response?.data?.message || "Failed to delete comment");
@@ -245,7 +289,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
   return (
     <>
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-full max-w-[calc(100vw-2rem)] sm:max-w-5xl lg:max-w-6xl max-h-[85vh] min-w-0 overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-muted-foreground" />
@@ -262,8 +306,8 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
             Loading…
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-6 min-w-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Overview</CardTitle>
@@ -310,7 +354,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
             </div>
 
             {/* Files */}
-            <Card>
+            <Card className="min-w-0 overflow-hidden">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Paperclip className="h-4 w-4 text-muted-foreground" />
@@ -318,7 +362,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
                 </CardTitle>
                 <CardDescription>Versioned uploads for this submission</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-3 min-w-0">
                 <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Input
@@ -353,28 +397,43 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
                 ) : files.length === 0 ? (
                   <div className="text-sm text-muted-foreground">No files uploaded yet.</div>
                 ) : (
-                  <div className="rounded-md border overflow-hidden">
-                    <Table>
+                  <div className="rounded-md border overflow-hidden min-w-0 max-w-full">
+                    <Table
+                      className="table-fixed w-full min-w-0"
+                      containerClassName="overflow-x-hidden min-w-0 max-w-full"
+                    >
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Version</TableHead>
-                          <TableHead>File</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead className="text-right">Size</TableHead>
-                          <TableHead>Uploaded</TableHead>
-                          <TableHead />
+                          <TableHead className="w-18">Version</TableHead>
+                          <TableHead className="min-w-0 w-[32%]">File</TableHead>
+                          <TableHead className="min-w-0 w-[18%] max-w-32">Type</TableHead>
+                          <TableHead className="w-20 text-right whitespace-nowrap">Size</TableHead>
+                          <TableHead className="min-w-0 max-w-[28%] whitespace-normal leading-tight">
+                            Uploaded
+                          </TableHead>
+                          <TableHead className="w-28 whitespace-nowrap text-right pr-1">
+                            <span className="sr-only">Actions</span>
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {files.map((f) => (
                           <TableRow key={f.id}>
                             <TableCell className="font-mono text-xs">{f.version_no}</TableCell>
-                            <TableCell className="font-medium">{f.file_name}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{f.mime_type}</TableCell>
-                            <TableCell className="text-right text-xs text-muted-foreground">{formatBytes(f.file_size_bytes)}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{formatDateTime(f.uploaded_at)}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
+                            <TableCell className="font-medium max-w-0 min-w-0 overflow-hidden">
+                              <EllipsisFileName name={f.file_name} className="font-medium" />
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground max-w-0 min-w-0 overflow-hidden">
+                              <span className="block truncate" title={f.mime_type}>{f.mime_type}</span>
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">
+                              {formatBytes(f.file_size_bytes)}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground whitespace-normal leading-snug max-w-44">
+                              {formatDateTime(f.uploaded_at)}
+                            </TableCell>
+                            <TableCell className="w-28 p-1 text-right align-middle">
+                              <div className="flex items-center justify-end gap-0.5 shrink-0">
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -557,12 +616,17 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
             <Upload className="h-5 w-5" />
             Replace Existing File?
           </DialogTitle>
-          <DialogDescription className="pt-1">
-            This submission already has a current file:{" "}
-            <span className="font-medium text-foreground">"{currentFile?.file_name}"</span>.
-            <br />
-            Uploading <span className="font-medium text-foreground">"{fileToUpload?.name}"</span> will
-            permanently delete the old file from storage. This cannot be undone.
+          <DialogDescription className="pt-1 space-y-1">
+            <span className="block">
+              This submission already has a current file:{" "}
+              <EllipsisFileName quoted name={currentFile?.file_name} className="font-medium text-foreground max-w-[min(100%,18rem)]" />
+              .
+            </span>
+            <span className="block">
+              Uploading{" "}
+              <EllipsisFileName quoted name={fileToUpload?.name} className="font-medium text-foreground max-w-[min(100%,18rem)]" />{" "}
+              will permanently delete the old file from storage. This cannot be undone.
+            </span>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
@@ -598,11 +662,13 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
             <Trash2 className="h-5 w-5" />
             Delete File
           </DialogTitle>
-          <DialogDescription className="pt-1">
-            Are you sure you want to permanently delete{" "}
-            <span className="font-medium text-foreground">"{fileToDelete?.file_name}"</span>?
-            <br />
-            This will remove the file from storage and cannot be undone.
+          <DialogDescription className="pt-1 space-y-1">
+            <span className="block">
+              Are you sure you want to permanently delete{" "}
+              <EllipsisFileName quoted name={fileToDelete?.file_name} className="font-medium text-foreground max-w-[min(100%,18rem)]" />
+              ?
+            </span>
+            <span className="block">This will remove the file from storage and cannot be undone.</span>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
@@ -1063,9 +1129,12 @@ export default function SubmissionsPage() {
                           <Badge variant="outline" className="font-mono text-xs">{s.governance_code}</Badge>
                         </TableCell>
                         <TableCell className="min-w-[280px]">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium">{s.item_title}</p>
-                            <p className="text-xs text-muted-foreground">{s.item_code}</p>
+                          <div className="min-w-0 flex items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium">{s.item_title}</p>
+                              <p className="text-xs text-muted-foreground">{s.item_code}</p>
+                            </div>
+                            <SubmissionDiscussionHint count={s.comment_count} />
                           </div>
                         </TableCell>
                         <TableCell>
@@ -1335,7 +1404,7 @@ export default function SubmissionsPage() {
                           onClick={() => s?.id && setSelectedId(s.id)}
                         >
                           <TableCell className="min-w-[260px] py-2.5">
-                            <div className="relative min-w-0" style={{ paddingLeft: r.depth ? r.depth * 12 : 0 }}>
+                            <div className="relative min-w-0 flex items-start gap-2" style={{ paddingLeft: r.depth ? r.depth * 12 : 0 }}>
                               {r.depth > 0 && (
                                 <span
                                   aria-hidden="true"
@@ -1345,7 +1414,8 @@ export default function SubmissionsPage() {
                                   <span className="absolute left-1.5 top-1/2 w-3 h-px bg-border" />
                                 </span>
                               )}
-                              <p className="text-sm font-medium">{r.title}</p>
+                              <p className="text-sm font-medium min-w-0 flex-1 pr-1">{r.title}</p>
+                              <SubmissionDiscussionHint count={s?.commentCount} />
                             </div>
                           </TableCell>
                           <TableCell className="py-2.5">

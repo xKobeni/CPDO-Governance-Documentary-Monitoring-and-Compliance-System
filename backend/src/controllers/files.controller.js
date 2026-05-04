@@ -11,8 +11,10 @@ import {
   getAllFileExplorerData,
 } from "../models/submissionFiles.model.js";
 import { touchSubmissionSubmittedBy } from "../models/submissions.model.js";
-import { createNotificationsBulk } from "../models/notifications.model.js";
-import { pool } from "../config/db.js";
+import {
+  notifyOfficeFirstFileUploaded,
+  notifyOfficeReplacedFile,
+} from "../services/submission-notifications.service.js";
 import { env } from "../config/env.js";
 
 export async function getFileExplorerHandler(req, res) {
@@ -116,45 +118,20 @@ export async function uploadSubmissionFileHandler(req, res) {
 
   if (req.user.role === "OFFICE") {
     if (isReplacement) {
-      // Replacement — notify ADMIN only with a distinct message
-      const { rows: admins } = await pool.query(
-        `SELECT DISTINCT u.id
-         FROM users u
-         JOIN roles r ON r.id = u.role_id
-         WHERE r.code = 'ADMIN'
-           AND u.is_active = TRUE`
-      );
-
-      const notifications = admins.map((u) => ({
-        userId: u.id,
-        type: "FILE_REPLACED",
-        title: `File replaced - ${submission.office_name}`,
-        body: `${submission.item_title}: "${previousCurrent.file_name}" was replaced with "${req.file.originalname}"`,
-        linkSubmissionId: submissionId,
-      }));
-      if (notifications.length > 0) {
-        await createNotificationsBulk(notifications);
-      }
+      await notifyOfficeReplacedFile({
+        submissionId,
+        officeName: submission.office_name,
+        itemTitle: submission.item_title,
+        previousFileName: previousCurrent.file_name,
+        newFileName: req.file.originalname,
+      });
     } else {
-      // First-time upload — notify ADMIN + STAFF
-      const { rows: staffUsers } = await pool.query(
-        `SELECT DISTINCT u.id
-         FROM users u
-         JOIN roles r ON r.id = u.role_id
-         WHERE r.code IN ('ADMIN', 'STAFF')
-           AND u.is_active = TRUE`
-      );
-
-      const notifications = staffUsers.map((u) => ({
-        userId: u.id,
-        type: "SUBMISSION_RECEIVED",
-        title: `New submission file - ${submission.office_name}`,
-        body: `${submission.item_title}: ${req.file.originalname}`,
-        linkSubmissionId: submissionId,
-      }));
-      if (notifications.length > 0) {
-        await createNotificationsBulk(notifications);
-      }
+      await notifyOfficeFirstFileUploaded({
+        submissionId,
+        officeName: submission.office_name,
+        itemTitle: submission.item_title,
+        fileName: req.file.originalname,
+      });
     }
   }
 

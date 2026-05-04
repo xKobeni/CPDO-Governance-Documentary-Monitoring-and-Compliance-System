@@ -139,6 +139,7 @@ export async function getOfficeChecklistHandler(req, res) {
               status: row.submission_status,
               submittedAt: row.submitted_at,
               officeRemarks: row.office_remarks,
+              commentCount: Number(row.submission_comment_count ?? 0),
             }
           : null,
       });

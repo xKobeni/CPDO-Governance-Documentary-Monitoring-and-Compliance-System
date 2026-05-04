@@ -22,7 +22,11 @@ function parseNumber(raw, fallback) {
 
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
-  port: Number(process.env.PORT ?? 5000),
+  /** Empty or invalid PORT must not become 0 (random bind); breaks Render port detection. */
+  port: (() => {
+    const p = parseNumber(process.env.PORT, 5000);
+    return p > 0 ? p : 5000;
+  })(),
 
   databaseUrl: process.env.DATABASE_URL,
   databaseSsl: parseDatabaseSsl(process.env.DATABASE_SSL),

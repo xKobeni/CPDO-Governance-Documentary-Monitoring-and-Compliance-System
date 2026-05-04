@@ -1,8 +1,10 @@
 import { z } from "zod";
-import { pool } from "../config/db.js";
 import { createComment, getSubmissionComments, getCommentById, deleteComment } from "../models/comments.model.js";
 import { getSubmissionById } from "../models/submissions.model.js";
-import { createNotification, createNotificationsBulk } from "../models/notifications.model.js";
+import {
+  notifyOfficeCommentToReviewers,
+  notifyStaffOrAdminCommentToOffice,
+} from "../services/submission-notifications.service.js";
 import { findUserById } from "../models/users.model.js";
 import { getPaginationParams, formatPaginatedResponse } from "../utils/pagination.js";
 
@@ -58,34 +60,21 @@ export async function createCommentHandler(req, res) {
   const body = `${authorName}: ${preview}`;
 
   if (req.user.role === "OFFICE") {
-    // Office commented → notify Staff and Admin
-    const { rows: staffUsers } = await pool.query(
-      `SELECT u.id FROM users u
-       JOIN roles r ON r.id = u.role_id
-       WHERE r.code IN ('ADMIN', 'STAFF') AND u.is_active = TRUE`,
-      []
-    );
-    const notifications = staffUsers.map(user => ({
-      userId: user.id,
-      type: "NEW_COMMENT",
-      title,
-      body,
-      linkSubmissionId: submissionId,
-    }));
-    if (notifications.length > 0) {
-      await createNotificationsBulk(notifications);
-    }
+    await notifyOfficeCommentToReviewers({
+      submissionId,
+      itemTitle: submission.item_title,
+      commentTitle: title,
+      commentBody: body,
+    });
   } else {
-    // Staff/Admin commented → notify the office user who submitted
-    if (submission.submitted_by && submission.submitted_by !== req.user.sub) {
-      await createNotification({
-        userId: submission.submitted_by,
-        type: "NEW_COMMENT",
-        title,
-        body,
-        linkSubmissionId: submissionId,
-      });
-    }
+    await notifyStaffOrAdminCommentToOffice({
+      submissionId,
+      officeId: submission.office_id,
+      itemTitle: submission.item_title,
+      commentTitle: title,
+      commentBody: body,
+      authorUserId: req.user.sub,
+    });
   }
 
   return res.status(201).json({ comment });

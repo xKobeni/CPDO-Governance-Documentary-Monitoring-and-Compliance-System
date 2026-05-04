@@ -12,6 +12,7 @@ import {
   deleteGovernanceAreaHandler,
   areasWithStatsHandler,
   complianceMatrixHandler,
+  complianceMatrixExportHandler,
 } from "../controllers/governance.controller.js";
 
 import { listOfficesForAreaHandler } from "../controllers/assignments.controller.js";
@@ -24,6 +25,7 @@ r.use(requireAuth, checkSessionInactivity);
 r.get("/",                  longCache,  asyncHandler(listGovernanceAreasHandler));
 r.get("/stats",             shortCache, asyncHandler(areasWithStatsHandler));
 r.get("/compliance-matrix", shortCache, asyncHandler(complianceMatrixHandler));
+r.get("/compliance-matrix/export", asyncHandler(complianceMatrixExportHandler));
 r.get("/:id",               longCache,  asyncHandler(getGovernanceAreaHandler));
 
 // READ - assigned offices for a governance area (admin + staff for submission review)

@@ -22,6 +22,12 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
+import {
   ClipboardList,
   CheckCircle2,
   Clock,
@@ -46,6 +52,7 @@ import {
   Activity,
   Settings,
   Calendar,
+  Download,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { getOfficeChecklist } from "../api/offices";
@@ -53,7 +60,7 @@ import { getGovernanceAreasWithStats } from "../api/governance";
 import { getYears } from "../api/years";
 import { getOffices } from "../api/offices";
 import { getUsers } from "../api/users";
-import { getReportSummary } from "../api/reports";
+import { downloadDashboardOverview, getReportSummary } from "../api/reports";
 import { listSubmissions } from "../api/submissions";
 import {
   BarChart, Bar, PieChart, Pie, Cell,
@@ -61,6 +68,7 @@ import {
   Legend, ResponsiveContainer,
 } from 'recharts';
 import HelpTourOverlay from "../components/help-tour-overlay";
+import { toast } from "react-hot-toast";
 
 const CARD_ACCENTS = [
   'border-l-blue-500', 'border-l-violet-500', 'border-l-emerald-500', 'border-l-amber-500',
@@ -91,6 +99,15 @@ function LiveClock() {
       </span>
     </>
   );
+}
+
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /** Derive a per-item UI status the same way my-checklists-page does */
@@ -195,6 +212,16 @@ function OfficeDashboard({ user }) {
     overdue:       { label: "Overdue",     color: "bg-red-100 text-red-700",     icon: AlertCircle },
   };
 
+  const handleDashboardExport = async (format) => {
+    try {
+      const blob = await downloadDashboardOverview({ year }, format);
+      downloadBlob(`dashboard-overview-${year}.${format}`, blob);
+      toast.success(`Dashboard downloaded (${format.toUpperCase()})`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to download dashboard report.");
+    }
+  };
+
   return (
     <div className="space-y-6" data-tour-id="dashboard-root">
       {/* Header */}
@@ -225,6 +252,18 @@ function OfficeDashboard({ user }) {
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             {isFetching ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</> : <><RefreshCw className="mr-2 h-4 w-4" />Refresh</>}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={loading}>
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => handleDashboardExport("csv")}>Dashboard CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDashboardExport("pdf")}>Dashboard PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={() => navigate("/my-checklists")} className="shrink-0">
             <ClipboardList className="mr-2 h-4 w-4" />
             My Checklists
@@ -577,6 +616,16 @@ function AdminDashboard({ user }) {
     { label: 'Manage Years',       icon: Calendar,      path: '/years',               color: 'text-slate-700',   bg: 'bg-slate-50'   },
   ];
 
+  const handleDashboardExport = async (format) => {
+    try {
+      const blob = await downloadDashboardOverview({ year }, format);
+      downloadBlob(`dashboard-overview-${year}.${format}`, blob);
+      toast.success(`Dashboard downloaded (${format.toUpperCase()})`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to download dashboard report.");
+    }
+  };
+
   return (
     <div className="space-y-6" data-tour-id="dashboard-root">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -606,6 +655,18 @@ function AdminDashboard({ user }) {
           <Button variant="outline" size="sm" onClick={loadAll} disabled={loading}>
             {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</> : <><RefreshCw className="mr-2 h-4 w-4" />Refresh</>}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={loading}>
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => handleDashboardExport("csv")}>Dashboard CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDashboardExport("pdf")}>Dashboard PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
         </div>
       </div>
@@ -1223,6 +1284,16 @@ function StaffDashboard({ user }) {
     { label: 'Notifications',       icon: Bell,          path: '/notifications', color: 'text-amber-600',  bg: 'bg-amber-50' },
   ];
 
+  const handleDashboardExport = async (format) => {
+    try {
+      const blob = await downloadDashboardOverview({ year }, format);
+      downloadBlob(`dashboard-overview-${year}.${format}`, blob);
+      toast.success(`Dashboard downloaded (${format.toUpperCase()})`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to download dashboard report.");
+    }
+  };
+
   return (
     <div className="space-y-6" data-tour-id="dashboard-root">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -1258,6 +1329,18 @@ function StaffDashboard({ user }) {
               ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</>
               : <><RefreshCw className="mr-2 h-4 w-4" />Refresh</>}
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={loading}>
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => handleDashboardExport("csv")}>Dashboard CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDashboardExport("pdf")}>Dashboard PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

@@ -350,7 +350,7 @@ function SubmitDialog({ item, open, onClose, onSubmit }) {
                       <div key={f.id} className="flex items-center gap-2 rounded bg-white/80 border border-amber-100 p-2">
                         <FileText className="h-4 w-4 shrink-0 text-amber-600" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{f.file_name}</p>
+                          <p className="text-sm font-medium truncate" title={f.file_name}>{f.file_name}</p>
                           <p className="text-xs text-muted-foreground">
                             {formatBytes(f.file_size_bytes)}
                             {f.uploaded_at ? ` · ${formatDate(f.uploaded_at)}` : ""}
@@ -642,7 +642,7 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
   return (
     <>
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-full max-w-[calc(100vw-2rem)] sm:max-w-5xl lg:max-w-6xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -693,7 +693,7 @@ function ViewSubmissionDialog({ item, open, onClose, onUploaded }) {
                   {files.map((f) => (
                     <div key={f.id} className="flex items-start justify-between gap-3 rounded-md bg-muted/40 border p-2.5">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{f.file_name}</p>
+                        <p className="text-sm font-medium truncate" title={f.file_name}>{f.file_name}</p>
                         <p className="text-xs text-muted-foreground">
                           v{f.version_no} · {formatBytes(f.file_size_bytes)} · {formatDate(f.uploaded_at)}
                         </p>

@@ -158,7 +158,8 @@ export async function getChecklistItemsForOffice(officeId, year) {
        s.id                    AS submission_id,
        s.status                AS submission_status,
        s.submitted_at,
-       s.office_remarks
+       s.office_remarks,
+       (SELECT COUNT(*)::int FROM submission_comments sc WHERE sc.submission_id = s.id) AS submission_comment_count
      FROM office_governance_assignments oga
      JOIN governance_areas ga        ON ga.id  = oga.governance_area_id
      LEFT JOIN checklist_templates ct ON ct.governance_area_id = ga.id AND ct.year = oga.year AND ct.status = 'ACTIVE'

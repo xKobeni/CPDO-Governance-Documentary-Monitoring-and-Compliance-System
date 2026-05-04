@@ -27,3 +27,19 @@ export async function downloadComplianceProgress(params = {}, format = 'csv') {
   });
   return response.data;
 }
+
+export async function downloadMissingUploads(params = {}, format = 'csv') {
+  const response = await api.get('/reports/no-upload/export', {
+    params: { ...params, format },
+    responseType: 'blob',
+  });
+  return response.data;
+}
+
+export async function downloadDashboardOverview(params = {}, format = 'pdf') {
+  const response = await api.get('/reports/dashboard-overview/export', {
+    params: { ...params, format },
+    responseType: 'blob',
+  });
+  return response.data;
+}
