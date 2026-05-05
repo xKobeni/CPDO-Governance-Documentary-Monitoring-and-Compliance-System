@@ -352,7 +352,7 @@ export function LoginForm({
                   type="email" 
                   value={email}
                   onChange={handleEmailChange}
-                  placeholder="admin@cpdo.gov.ph" 
+                  placeholder="sample@email.com" 
                   required 
                 />
               </Field>
@@ -368,6 +368,7 @@ export function LoginForm({
                   <Input 
                     id="password" 
                     name="password"
+                    placeholder="*******"
                     type={showPassword ? "text" : "password"}
                     required 
                   />

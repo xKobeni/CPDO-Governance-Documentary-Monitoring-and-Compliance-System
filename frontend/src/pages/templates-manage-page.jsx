@@ -249,7 +249,7 @@ export default function TemplatesManagePage() {
             <DialogTrigger asChild>
               <Button disabled={loading}><Plus className="mr-2 h-4 w-4" />Create Template</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-125">
+            <DialogContent className="sm:max-w-3xl">
               <DialogHeader>
                 <DialogTitle>Create New Template</DialogTitle>
                 <DialogDescription>A template is unique per governance area + year.</DialogDescription>
@@ -500,7 +500,7 @@ export default function TemplatesManagePage() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) setSelected(null); }}>
-        <DialogContent className="sm:max-w-125">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Edit Template</DialogTitle>
             <DialogDescription>{selected?.governance_code} · {selected?.year}</DialogDescription>
@@ -583,7 +583,7 @@ export default function TemplatesManagePage() {
 
       {/* Copy Dialog */}
       <Dialog open={isCopyOpen} onOpenChange={(open) => { setIsCopyOpen(open); if (!open) setSelected(null); }}>
-        <DialogContent className="sm:max-w-110">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Copy Template</DialogTitle>
             <DialogDescription>

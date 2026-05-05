@@ -39,18 +39,75 @@ const FREQ_LABEL = {
 
 const EMPTY_ITEM = {
   parentItemId: '', itemCode: '', title: '', description: '', isRequired: true,
-  frequency: 'ANNUAL', dueDate: '', allowedFileTypes: '', maxFiles: '3', sortOrder: '', isActive: true,
+  frequency: 'ANNUAL', dueDate: '', allowedFileTypes: 'pdf,docx', maxFiles: '1', sortOrder: '', isActive: true,
 };
+
+function incrementItemCode(code) {
+  if (!code) return '1';
+  const parts = code.split('.');
+  const last = parts[parts.length - 1];
+
+  if (/^\d+$/.test(last)) {
+    parts[parts.length - 1] = String(Number(last) + 1);
+    return parts.join('.');
+  }
+
+  if (/^[a-z]$/i.test(last)) {
+    const next = String.fromCharCode(last.toLowerCase().charCodeAt(0) + 1);
+    parts[parts.length - 1] = next;
+    return parts.join('.');
+  }
+
+  return `${code}.1`;
+}
+
+function generateNextItemCode(items, parentItemId) {
+  const siblings = items
+    .filter((i) => (i.parent_item_id ?? '') === (parentItemId ?? ''))
+    .sort((a, b) => a.sort_order - b.sort_order);
+
+  if (siblings.length === 0) {
+    if (!parentItemId) return '1';
+    const parent = items.find((i) => i.id === parentItemId);
+    return parent?.item_code ? `${parent.item_code}.1` : '1';
+  }
+
+  return incrementItemCode(siblings[siblings.length - 1].item_code);
+}
 
 function ItemForm({ form, setForm, rawItems }) {
   const isHeader = Number(form.maxFiles) === 0;
+  const [parentQuery, setParentQuery] = useState('');
+
+  const parentOptions = flattenTree(rawItems).filter((i) => {
+    const q = parentQuery.trim().toLowerCase();
+    if (!q) return true;
+    return i.item_code.toLowerCase().includes(q) || i.title.toLowerCase().includes(q);
+  });
 
   function setItemType(type) {
     if (type === 'header') {
       setForm({ ...form, maxFiles: '0', allowedFileTypes: '' });
     } else {
-      setForm({ ...form, maxFiles: isHeader ? '3' : form.maxFiles });
+      setForm({
+        ...form,
+        maxFiles: isHeader ? '1' : form.maxFiles,
+        allowedFileTypes: isHeader ? 'pdf,docx' : (form.allowedFileTypes || 'pdf,docx'),
+      });
     }
+  }
+
+  function handleParentChange(v) {
+    const parentItemId = v === 'none' ? '' : v;
+    const next = { ...form, parentItemId };
+    if (!form.itemCode.trim()) {
+      next.itemCode = generateNextItemCode(rawItems, parentItemId);
+    }
+    setForm(next);
+  }
+
+  function autoFillItemCode() {
+    setForm({ ...form, itemCode: generateNextItemCode(rawItems, form.parentItemId) });
   }
 
   return (
@@ -98,11 +155,19 @@ function ItemForm({ form, setForm, rawItems }) {
         <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Placement</p>
         <div className="space-y-1.5">
           <Label>Place under (Parent Section)</Label>
-          <Select value={form.parentItemId} onValueChange={(v) => setForm({ ...form, parentItemId: v === 'none' ? '' : v })}>
+          <Select value={form.parentItemId} onValueChange={handleParentChange}>
             <SelectTrigger><SelectValue placeholder="— No parent (top-level item)" /></SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-80">
+              <div className="px-2 pb-2">
+                <Input
+                  value={parentQuery}
+                  onChange={(e) => setParentQuery(e.target.value)}
+                  placeholder="Search parent by code/title..."
+                  className="h-8 text-xs"
+                />
+              </div>
               <SelectItem value="none">— No parent (top-level item)</SelectItem>
-              {flattenTree(rawItems).map((i) => {
+              {parentOptions.map((i) => {
                 const d = getDepth(rawItems, i.id);
                 return (
                   <SelectItem key={i.id} value={i.id}>
@@ -121,7 +186,12 @@ function ItemForm({ form, setForm, rawItems }) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label>Reference Code <span className="text-destructive">*</span></Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Reference Code <span className="text-destructive">*</span></Label>
+              <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={autoFillItemCode}>
+                Auto
+              </Button>
+            </div>
             <Input className="font-mono" placeholder="e.g. 1.1.a" value={form.itemCode} onChange={(e) => setForm({ ...form, itemCode: e.target.value })} />
             <p className="text-xs text-muted-foreground">Short code for ordering and referencing.</p>
           </div>
@@ -192,22 +262,22 @@ function ItemForm({ form, setForm, rawItems }) {
             {/* Accepted File Types — chip picker */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Accepted File Types</Label>
+                <Label>Accepted File Types <span className="text-destructive">*</span></Label>
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, allowedFileTypes: '' })}
+                  onClick={() => setForm({ ...form, allowedFileTypes: 'pdf,docx' })}
                   className={cn(
                     'text-xs px-2 py-0.5 rounded-full border transition-colors',
-                    form.allowedFileTypes === ''
+                    form.allowedFileTypes === 'pdf,docx'
                       ? 'bg-primary text-primary-foreground border-primary'
                       : 'border-border text-muted-foreground hover:border-muted-foreground/60'
                   )}
-                >Any type</button>
+                >Reset default</button>
               </div>
               {(() => {
                 const PRESETS = ['pdf', 'docx', 'xlsx', 'pptx', 'jpg', 'png', 'csv'];
                 const active = form.allowedFileTypes ? form.allowedFileTypes.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
-                const anyType = form.allowedFileTypes === '';
+                const anyType = false;
                 const custom = active.filter(t => !PRESETS.includes(t));
 
                 function toggle(ext) {
@@ -266,7 +336,7 @@ function ItemForm({ form, setForm, rawItems }) {
                       </div>
                     )}
                     {!anyType && active.length === 0 && (
-                      <p className="text-xs text-amber-600">No types selected — select at least one or switch to "Any type".</p>
+                      <p className="text-xs text-amber-600">No types selected — select at least one file type.</p>
                     )}
                     {!anyType && active.length > 0 && (
                       <p className="text-xs text-muted-foreground">Accepting: {active.map(t => `.${t}`).join(', ')}</p>
@@ -336,6 +406,7 @@ export default function TemplatesCategoriesPage() {
   const [error, setError]                       = useState(null);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [selectedYearFilter, setSelectedYearFilter] = useState('ALL');
   const [searchQuery, setSearchQuery]               = useState('');
   const [showInactive, setShowInactive]             = useState(true);
 
@@ -410,6 +481,26 @@ export default function TemplatesCategoriesPage() {
   useEffect(() => { loadItems(selectedTemplateId); }, [selectedTemplateId, loadItems]);
 
   // ── Derived ────────────────────────────────────────────────────────────────
+  const availableYears = [...new Set(templates.map((t) => String(t.year)))].sort((a, b) => Number(b) - Number(a));
+  const filteredTemplates = selectedYearFilter === 'ALL'
+    ? templates
+    : templates.filter((t) => String(t.year) === selectedYearFilter);
+
+  useEffect(() => {
+    if (!templates.length) return;
+    if (selectedYearFilter === 'ALL') return;
+    if (!availableYears.includes(selectedYearFilter)) return;
+    const selectedStillVisible = filteredTemplates.some((t) => t.id === selectedTemplateId);
+    if (!selectedStillVisible) {
+      setSelectedTemplateId(filteredTemplates[0]?.id ?? '');
+    }
+  }, [templates, availableYears, selectedYearFilter, filteredTemplates, selectedTemplateId]);
+
+  useEffect(() => {
+    if (!templates.length || selectedYearFilter !== 'ALL') return;
+    setSelectedYearFilter(availableYears[0] ?? 'ALL');
+  }, [templates, availableYears, selectedYearFilter]);
+
   const template    = templates.find((t) => t.id === selectedTemplateId);
   const rootItems   = rawItems.filter((i) => !i.parent_item_id);
   const totalActive = rawItems.filter((i) => i.is_active).length;
@@ -448,8 +539,23 @@ export default function TemplatesCategoriesPage() {
   const parseFileTypes = (s) =>
     s ? s.split(',').map((x) => x.trim().replace(/^\./, '')).filter(Boolean) : [];
 
+  const validateUploadSettings = () => {
+    const isHeader = Number(form.maxFiles) === 0;
+    if (isHeader) return true;
+    if (!form.maxFiles || Number(form.maxFiles) < 1) {
+      setError('Max files is required for document requirements.');
+      return false;
+    }
+    if (parseFileTypes(form.allowedFileTypes).length === 0) {
+      setError('Accepted file types are required for document requirements.');
+      return false;
+    }
+    return true;
+  };
+
   // ── Add item ───────────────────────────────────────────────────────────────
   const addItem = async () => {
+    if (!validateUploadSettings()) return;
     setSaving(true);
     setError(null);
     try {
@@ -497,6 +603,7 @@ export default function TemplatesCategoriesPage() {
   };
 
   const saveEdit = async () => {
+    if (!validateUploadSettings()) return;
     setSaving(true);
     setError(null);
     try {
@@ -590,15 +697,26 @@ export default function TemplatesCategoriesPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId} disabled={loadingTemplates}>
+            <Select value={selectedYearFilter} onValueChange={setSelectedYearFilter} disabled={loadingTemplates || availableYears.length === 0}>
+              <SelectTrigger className="w-full sm:w-40">
+                <SelectValue placeholder="Filter year" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All years</SelectItem>
+                {availableYears.map((year) => (
+                  <SelectItem key={year} value={year}>{year}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId} disabled={loadingTemplates || filteredTemplates.length === 0}>
               <SelectTrigger className="w-full sm:w-110">
                 {loadingTemplates
                   ? <span className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading templates…</span>
-                  : <SelectValue placeholder="Choose a template to manage its checklist items..." />
+                  : <SelectValue placeholder={filteredTemplates.length === 0 ? 'No templates in selected year.' : 'Choose a template to manage its checklist items...'} />
                 }
               </SelectTrigger>
               <SelectContent>
-                {templates.map((t) => (
+                {filteredTemplates.map((t) => (
                   <SelectItem key={t.id} value={t.id}>
                     <span className="font-mono text-xs mr-2">{t.governance_code}</span>
                     {t.year} · {t.title.length > 45 ? `${t.title.slice(0, 45)}…` : t.title}
@@ -664,7 +782,7 @@ export default function TemplatesCategoriesPage() {
                 <DialogTrigger asChild>
                   <Button size="sm" disabled={loadingItems}><Plus className="mr-2 h-4 w-4" />Add Item</Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-2xl">
+                <DialogContent className="sm:max-w-4xl">
                   <DialogHeader>
                     <DialogTitle>Add Checklist Item</DialogTitle>
                     <DialogDescription>Fill in the details below. Fields marked with <span className="text-destructive font-medium">*</span> are required.</DialogDescription>
@@ -695,7 +813,7 @@ export default function TemplatesCategoriesPage() {
             </div>
 
             {/* Tree Table */}
-            <div className="rounded-md border">
+            <div className="rounded-md border max-h-[60vh] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -743,9 +861,13 @@ export default function TemplatesCategoriesPage() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell">
-                          <Badge className={cn('text-xs border', FREQ_STYLE[item.frequency])}>
-                            {FREQ_LABEL[item.frequency]}
-                          </Badge>
+                          {item.max_files === 0 ? (
+                            ''
+                          ) : (
+                            <Badge className={cn('text-xs border', FREQ_STYLE[item.frequency])}>
+                              {FREQ_LABEL[item.frequency]}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-center hidden md:table-cell">
                           {item.is_required ? (
