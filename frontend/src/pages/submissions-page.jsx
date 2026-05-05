@@ -1131,8 +1131,8 @@ export default function SubmissionsPage() {
                         <TableCell className="min-w-[280px]">
                           <div className="min-w-0 flex items-start gap-2">
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium">{s.item_title}</p>
-                              <p className="text-xs text-muted-foreground">{s.item_code}</p>
+                              <p className="text-sm font-medium truncate" title={s.item_title}>{s.item_title}</p>
+                              <p className="text-xs text-muted-foreground truncate" title={s.item_code}>{s.item_code}</p>
                             </div>
                             <SubmissionDiscussionHint count={s.comment_count} />
                           </div>
@@ -1371,7 +1371,13 @@ export default function SubmissionsPage() {
                     {checklistRows.map((r) => {
                       if (r.isHeader) {
                         return (
-                          <TableRow key={r.id} className="bg-muted/25 hover:bg-muted/25">
+                          <TableRow
+                            key={r.id}
+                            className={cn(
+                              "hover:bg-muted/25",
+                              r.depth === 0 ? "bg-muted/55 border-t border-b border-border/80" : "bg-muted/25"
+                            )}
+                          >
                             <TableCell className="min-w-[260px] py-2.5">
                               <div className="relative min-w-0 flex items-center gap-2" style={{ paddingLeft: r.depth ? r.depth * 12 : 0 }}>
                                 {r.depth > 0 && (
@@ -1384,7 +1390,12 @@ export default function SubmissionsPage() {
                                   </span>
                                 )}
                                 <Badge variant="secondary" className="font-mono text-xs font-bold">{r.itemCode}</Badge>
-                                <p className="text-sm font-bold truncate">{r.title}</p>
+                                <p
+                                  className={cn("text-sm truncate", r.depth === 0 ? "font-extrabold text-foreground" : "font-bold")}
+                                  title={r.title}
+                                >
+                                  {r.title}
+                                </p>
                               </div>
                             </TableCell>
                             <TableCell />
@@ -1414,14 +1425,16 @@ export default function SubmissionsPage() {
                                   <span className="absolute left-1.5 top-1/2 w-3 h-px bg-border" />
                                 </span>
                               )}
-                              <p className="text-sm font-medium min-w-0 flex-1 pr-1">{r.title}</p>
+                              <p className="text-sm font-medium min-w-0 flex-1 pr-1 truncate" title={r.title}>{r.title}</p>
                               <SubmissionDiscussionHint count={s?.commentCount} />
                             </div>
                           </TableCell>
                           <TableCell className="py-2.5">
                             {s?.status ? <StatusPill status={s.status} /> : <NoSubmissionPill />}
                           </TableCell>
-                          <TableCell className="py-2.5 text-xs text-muted-foreground">{formatDateTime(s?.submittedAt)}</TableCell>
+                          <TableCell className="py-2.5 text-xs text-muted-foreground">
+                            {s?.submittedAt ? formatDateTime(s.submittedAt) : "Not submitted"}
+                          </TableCell>
                         </TableRow>
                       );
                     })}
