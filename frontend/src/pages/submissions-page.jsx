@@ -1359,10 +1359,10 @@ export default function SubmissionsPage() {
               </div>
             ) : (
               <div className="rounded-lg border overflow-hidden shadow-sm">
-                <Table>
+                <Table className="table-fixed w-full">
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableHead className="font-semibold">Item</TableHead>
+                      <TableHead className="font-semibold w-[65%]">Item</TableHead>
                       <TableHead className="font-semibold w-[140px]">Status</TableHead>
                       <TableHead className="font-semibold w-[160px]">Submitted</TableHead>
                     </TableRow>
@@ -1378,7 +1378,7 @@ export default function SubmissionsPage() {
                               r.depth === 0 ? "bg-muted/55 border-t border-b border-border/80" : "bg-muted/25"
                             )}
                           >
-                            <TableCell className="min-w-[260px] py-2.5">
+                            <TableCell className="min-w-0 py-2.5">
                               <div className="relative min-w-0 flex items-center gap-2" style={{ paddingLeft: r.depth ? r.depth * 12 : 0 }}>
                                 {r.depth > 0 && (
                                   <span
@@ -1391,7 +1391,7 @@ export default function SubmissionsPage() {
                                 )}
                                 <Badge variant="secondary" className="font-mono text-xs font-bold">{r.itemCode}</Badge>
                                 <p
-                                  className={cn("text-sm truncate", r.depth === 0 ? "font-extrabold text-foreground" : "font-bold")}
+                                  className={cn("text-sm truncate block min-w-0", r.depth === 0 ? "font-extrabold text-foreground" : "font-bold")}
                                   title={r.title}
                                 >
                                   {r.title}
@@ -1414,7 +1414,7 @@ export default function SubmissionsPage() {
                           )}
                           onClick={() => s?.id && setSelectedId(s.id)}
                         >
-                          <TableCell className="min-w-[260px] py-2.5">
+                          <TableCell className="min-w-0 py-2.5">
                             <div className="relative min-w-0 flex items-start gap-2" style={{ paddingLeft: r.depth ? r.depth * 12 : 0 }}>
                               {r.depth > 0 && (
                                 <span
@@ -1425,7 +1425,7 @@ export default function SubmissionsPage() {
                                   <span className="absolute left-1.5 top-1/2 w-3 h-px bg-border" />
                                 </span>
                               )}
-                              <p className="text-sm font-medium min-w-0 flex-1 pr-1 truncate" title={r.title}>{r.title}</p>
+                              <p className="text-sm font-medium min-w-0 flex-1 pr-1 truncate block" title={r.title}>{r.title}</p>
                               <SubmissionDiscussionHint count={s?.commentCount} />
                             </div>
                           </TableCell>
