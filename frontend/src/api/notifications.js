@@ -1,5 +1,7 @@
 import api from '../lib/axios';
 
+const DEDUPE_WINDOW_MS = 2 * 60 * 1000;
+
 function normalizeNotification(notification) {
   return {
     id: notification.id,
@@ -15,12 +17,39 @@ function normalizeNotification(notification) {
   };
 }
 
+function dedupeNotifications(notifications) {
+  const seen = new Set();
+  const result = [];
+
+  for (const notification of notifications) {
+    const createdAtMs = new Date(notification.createdAt).getTime();
+    const windowBucket = Number.isFinite(createdAtMs)
+      ? Math.floor(createdAtMs / DEDUPE_WINDOW_MS)
+      : notification.createdAt;
+    const signature = [
+      notification.type,
+      notification.title,
+      notification.body,
+      notification.submissionId ?? '',
+      windowBucket,
+    ].join('|');
+
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+    result.push(notification);
+  }
+
+  return result;
+}
+
 function normalizeListResponse(responseData) {
+  const normalized = Array.isArray(responseData.data)
+    ? responseData.data.map(normalizeNotification)
+    : [];
+
   return {
     ...responseData,
-    data: Array.isArray(responseData.data)
-      ? responseData.data.map(normalizeNotification)
-      : [],
+    data: dedupeNotifications(normalized),
   };
 }
 

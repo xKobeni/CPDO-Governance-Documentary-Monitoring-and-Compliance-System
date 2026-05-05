@@ -417,7 +417,9 @@ export default function TemplatesCategoriesPage() {
   const [selected, setSelected]         = useState(null);
   const [form, setForm]                 = useState(EMPTY_ITEM);
   const [importForm, setImportForm]     = useState({ sourceTemplateId: '' });
-  const [importConfirm, setImportConfirm] = useState('');
+  const [importSearch, setImportSearch] = useState('');
+  const [importYearFilter, setImportYearFilter] = useState('ALL');
+  const [importAcknowledge, setImportAcknowledge] = useState(false);
 
   // Cache so switching back to a previously-loaded template is instant
   const itemsCache  = useRef({});
@@ -502,9 +504,23 @@ export default function TemplatesCategoriesPage() {
   }, [templates, availableYears, selectedYearFilter]);
 
   const template    = templates.find((t) => t.id === selectedTemplateId);
+  const sourceTemplate = templates.find((t) => t.id === importForm.sourceTemplateId);
   const rootItems   = rawItems.filter((i) => !i.parent_item_id);
   const totalActive = rawItems.filter((i) => i.is_active).length;
   const required    = rawItems.filter((i) => i.is_required).length;
+  const importAvailableYears = [...new Set(templates.filter((t) => t.id !== selectedTemplateId).map((t) => String(t.year)))].sort((a, b) => Number(b) - Number(a));
+  const importSourceOptions = templates
+    .filter((t) => t.id !== selectedTemplateId)
+    .filter((t) => importYearFilter === 'ALL' ? true : String(t.year) === importYearFilter)
+    .filter((t) => {
+      const q = importSearch.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        String(t.year).includes(q) ||
+        (t.governance_code ?? '').toLowerCase().includes(q) ||
+        (t.title ?? '').toLowerCase().includes(q)
+      );
+    });
 
   const visibleItems = flattenTree(rawItems).filter((i) => {
     const matchSearch = !searchQuery ||
@@ -517,7 +533,9 @@ export default function TemplatesCategoriesPage() {
   const openImport = () => {
     const fallback = templates.find((t) => t.id !== selectedTemplateId)?.id ?? '';
     setImportForm({ sourceTemplateId: fallback });
-    setImportConfirm('');
+    setImportSearch('');
+    setImportYearFilter('ALL');
+    setImportAcknowledge(false);
     setIsImportOpen(true);
   };
 
@@ -960,8 +978,18 @@ export default function TemplatesCategoriesPage() {
       </Dialog>
 
       {/* Copy all categories */}
-      <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
-        <DialogContent className="sm:max-w-2xl">
+      <Dialog
+        open={isImportOpen}
+        onOpenChange={(open) => {
+          setIsImportOpen(open);
+          if (!open) {
+            setImportSearch('');
+            setImportYearFilter('ALL');
+            setImportAcknowledge(false);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Copy all categories</DialogTitle>
             <DialogDescription>
@@ -970,31 +998,61 @@ export default function TemplatesCategoriesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-5 py-2">
+            <div className="rounded-md border bg-muted/40 p-3 text-sm">
+              <p className="font-medium mb-1">Copy summary</p>
+              <p className="text-muted-foreground">
+                <span className="font-medium text-foreground">From:</span>{' '}
+                {sourceTemplate ? `${sourceTemplate.governance_code} · ${sourceTemplate.year} — ${sourceTemplate.title}` : 'Select a source template'}
+              </p>
+              <p className="text-muted-foreground">
+                <span className="font-medium text-foreground">To:</span>{' '}
+                {template ? `${template.governance_code} · ${template.year} — ${template.title}` : 'Current template'}
+              </p>
+            </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label className="text-right">From *</Label>
-              <Select value={importForm.sourceTemplateId} onValueChange={(v) => setImportForm({ sourceTemplateId: v })}>
-                <SelectTrigger className="col-span-3 w-full"><SelectValue placeholder="Select source template" /></SelectTrigger>
-                <SelectContent>
-                  {templates.filter((t) => t.id !== selectedTemplateId).map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      <span className="font-mono text-xs mr-2">{t.governance_code}</span>
-                      {t.year} · {t.title.length > 45 ? `${t.title.slice(0, 45)}…` : t.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="col-span-3 space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <Select value={importYearFilter} onValueChange={setImportYearFilter}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue placeholder="Filter by year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All years</SelectItem>
+                      {importAvailableYears.map((year) => (
+                        <SelectItem key={year} value={year}>{year}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    className="h-8 sm:col-span-2"
+                    placeholder="Search source template (code/title)..."
+                    value={importSearch}
+                    onChange={(e) => setImportSearch(e.target.value)}
+                  />
+                </div>
+                <Select value={importForm.sourceTemplateId} onValueChange={(v) => setImportForm({ sourceTemplateId: v })}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Select source template" /></SelectTrigger>
+                  <SelectContent>
+                    {importSourceOptions.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        <span className="font-mono text-xs mr-2">{t.governance_code}</span>
+                        {t.year} · {t.title.length > 45 ? `${t.title.slice(0, 45)}…` : t.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label className="text-right">Confirm *</Label>
-              <div className="col-span-3 space-y-1.5">
-                <Input
-                  className="w-full"
-                  value={importConfirm}
-                  onChange={(e) => setImportConfirm(e.target.value)}
-                  placeholder="Type COPY to enable"
-                />
+              <div className="col-span-3 space-y-2">
+                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                  <Checkbox checked={importAcknowledge} onCheckedChange={(v) => setImportAcknowledge(Boolean(v))} />
+                  <span>I understand this will copy all categories from the selected source template.</span>
+                </label>
                 <p className="text-xs text-muted-foreground">
-                  Type <span className="font-mono font-semibold">COPY</span> to confirm this bulk action.
+                  Tip: Existing categories stay as-is; imported codes are auto-adjusted if duplicates are found.
                 </p>
               </div>
             </div>
@@ -1003,7 +1061,7 @@ export default function TemplatesCategoriesPage() {
             <Button variant="outline" onClick={() => setIsImportOpen(false)} disabled={saving}>Cancel</Button>
             <Button
               onClick={handleImportAll}
-              disabled={saving || !importForm.sourceTemplateId || importConfirm.trim().toUpperCase() !== 'COPY'}
+              disabled={saving || !importForm.sourceTemplateId || !importAcknowledge}
             >
               {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Copying…</> : 'Copy all categories'}
             </Button>

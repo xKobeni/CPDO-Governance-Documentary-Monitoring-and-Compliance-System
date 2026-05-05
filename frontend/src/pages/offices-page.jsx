@@ -90,12 +90,25 @@ export default function OfficesPage() {
   const [assignYearOptions, setAssignYearOptions] = useState([]);
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignSubmitting, setAssignSubmitting] = useState(false);
+  const [assignSearchQuery, setAssignSearchQuery] = useState('');
+  const [assignReadyFilter, setAssignReadyFilter] = useState('all');
 
   const assignabilityMeta = React.useMemo(() => {
     const map = {};
     for (const area of allGovernanceAreas) map[area.id] = area;
     return map;
   }, [allGovernanceAreas]);
+
+  const filteredAssignAreas = allGovernanceAreas.filter((area) => {
+    const q = assignSearchQuery.trim().toLowerCase();
+    const matchesSearch = !q
+      || area.name.toLowerCase().includes(q)
+      || (area.description ?? '').toLowerCase().includes(q);
+    const matchesReady = assignReadyFilter === 'all'
+      || (assignReadyFilter === 'ready' && area.is_assignable)
+      || (assignReadyFilter === 'not_ready' && !area.is_assignable);
+    return matchesSearch && matchesReady;
+  });
 
   // Load data on component mount
   useEffect(() => {
@@ -248,6 +261,8 @@ export default function OfficesPage() {
     setAssigningOffice(office);
     setAssignYear(new Date().getFullYear());
     setSelectedAreaIds([]);
+    setAssignSearchQuery('');
+    setAssignReadyFilter('all');
     setIsAssignDialogOpen(true);
     setAssignLoading(true);
     try {
@@ -745,8 +760,17 @@ export default function OfficesPage() {
       />
 
       {/* Assign Governance Areas Dialog */}
-      <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
-        <DialogContent className="sm:max-w-125">
+      <Dialog
+        open={isAssignDialogOpen}
+        onOpenChange={(open) => {
+          setIsAssignDialogOpen(open);
+          if (!open) {
+            setAssignSearchQuery('');
+            setAssignReadyFilter('all');
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Assign Governance Areas</DialogTitle>
             <DialogDescription>
@@ -767,6 +791,24 @@ export default function OfficesPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <Input
+                value={assignSearchQuery}
+                onChange={(e) => setAssignSearchQuery(e.target.value)}
+                placeholder="Search governance area..."
+                className="sm:col-span-2"
+              />
+              <Select value={assignReadyFilter} onValueChange={setAssignReadyFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter readiness" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Areas</SelectItem>
+                  <SelectItem value="ready">Ready</SelectItem>
+                  <SelectItem value="not_ready">Not Ready</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             {assignLoading ? (
               <div className="flex items-center justify-center py-8">
@@ -774,9 +816,11 @@ export default function OfficesPage() {
               </div>
             ) : allGovernanceAreas.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">No governance areas found.</p>
+            ) : filteredAssignAreas.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No governance areas match your filters.</p>
             ) : (
               <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
-                {allGovernanceAreas.map(area => (
+                {filteredAssignAreas.map(area => (
                   <label
                     key={area.id}
                     className={`flex items-start gap-3 px-4 py-3 transition-colors ${

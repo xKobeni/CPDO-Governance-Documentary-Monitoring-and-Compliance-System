@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { listYears, createYear, updateYear } from "../models/years.model.js";
+import { listYears, createYear, updateYear, ensureCurrentYearExists } from "../models/years.model.js";
 
 const yearSchema = z
   .number()
@@ -18,6 +18,7 @@ const updateSchema = z.object({
 
 export async function listYearsHandler(req, res) {
   const includeInactive = req.query.includeInactive === "true";
+  await ensureCurrentYearExists();
   const years = await listYears({ includeInactive });
   return res.json({ years });
 }

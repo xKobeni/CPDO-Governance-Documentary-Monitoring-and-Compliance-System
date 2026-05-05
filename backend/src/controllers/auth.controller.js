@@ -49,6 +49,14 @@ const updateMeSchema = z.object({
   fullName: z.string().min(2).max(120),
 });
 
+async function safeWriteAuditLog(payload) {
+  try {
+    await writeAuditLog(payload);
+  } catch {
+    // Never break auth flow because of audit logging.
+  }
+}
+
 function formatUserProfile(user) {
   return {
     id: user.id,
@@ -89,18 +97,18 @@ export async function login(req, res) {
   const { email, password } = parsed.data;
 
   const user = await findUserAuthByEmail(email);
+  const userAgent = req.headers["user-agent"] ?? null;
+  const ipAddress = req.ip ?? null;
 
   // Account exists but is deactivated — tell the user explicitly
   if (user && !user.is_active) {
-    try {
-      await writeAuditLog({
-        actorUserId: user.id,
-        action: "LOGIN_FAILED",
-        entityType: "USER",
-        entityId: user.id,
-        metadata: { email, reason: "account_deactivated" }
-      });
-    } catch (e) { /* don't break login flow */ }
+    await safeWriteAuditLog({
+      actorUserId: user.id,
+      action: "LOGIN_FAILED",
+      entityType: "USER",
+      entityId: user.id,
+      metadata: { email, reason: "account_deactivated", userAgent, ipAddress },
+    });
     return res.status(403).json({
       message: "Your account has been deactivated. Please contact the administrator.",
       code: "ACCOUNT_DEACTIVATED",
@@ -108,21 +116,32 @@ export async function login(req, res) {
   }
 
   if (!user) {
-    try {
-      await writeAuditLog({
-        actorUserId: null,
-        action: "LOGIN_FAILED",
-        entityType: "USER",
-        entityId: null,
-        metadata: { email, reason: "invalid_credentials" }
-      });
-    } catch (e) { /* don't break login flow */ }
+    await safeWriteAuditLog({
+      actorUserId: null,
+      action: "LOGIN_FAILED",
+      entityType: "USER",
+      entityId: null,
+      metadata: { email, reason: "invalid_credentials", userAgent, ipAddress },
+    });
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
   // Check if account is locked
   if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
     const minutesRemaining = Math.ceil((new Date(user.account_locked_until) - new Date()) / 60000);
+    await safeWriteAuditLog({
+      actorUserId: user.id,
+      action: "LOGIN_FAILED",
+      entityType: "USER",
+      entityId: user.id,
+      metadata: {
+        email,
+        reason: "account_locked",
+        lockedUntil: user.account_locked_until,
+        userAgent,
+        ipAddress,
+      },
+    });
     return res.status(423).json({
       message: `Account is locked. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
       lockedUntil: user.account_locked_until,
@@ -137,32 +156,22 @@ export async function login(req, res) {
     const updated = await recordFailedLoginAttempt(user.id);
     const attemptsRemaining = Math.max(0, 5 - (updated?.failed_login_attempts || 0));
     
-    // Manual audit logging for failed password
-    try {
-      await writeAuditLog({
-        actorUserId: user.id,
-        action: "LOGIN_FAILED",
-        entityType: "USER",
-        entityId: user.id,
-        metadata: { email, reason: "wrong_password", attemptsRemaining: attemptsRemaining }
-      });
-    } catch (e) {
-      // Don't break login flow for audit logging errors
-    }
+    await safeWriteAuditLog({
+      actorUserId: user.id,
+      action: "LOGIN_FAILED",
+      entityType: "USER",
+      entityId: user.id,
+      metadata: { email, reason: "wrong_password", attemptsRemaining, userAgent, ipAddress },
+    });
     
     if (updated?.account_locked_until && new Date(updated.account_locked_until) > new Date()) {
-      // Manual audit logging for account lockout
-      try {
-        await writeAuditLog({
-          actorUserId: user.id,
-          action: "ACCOUNT_LOCKED",
-          entityType: "USER",
-          entityId: user.id,
-          metadata: { email, lockedUntil: updated.account_locked_until }
-        });
-      } catch (e) {
-        // Don't break login flow for audit logging errors
-      }
+      await safeWriteAuditLog({
+        actorUserId: user.id,
+        action: "ACCOUNT_LOCKED",
+        entityType: "USER",
+        entityId: user.id,
+        metadata: { email, lockedUntil: updated.account_locked_until, userAgent, ipAddress },
+      });
       
       return res.status(423).json({
         message: "Account locked due to too many failed login attempts. Try again in 15 minutes.",
@@ -179,17 +188,13 @@ export async function login(req, res) {
   }
 
   if (!user.email_verified) {
-    try {
-      await writeAuditLog({
-        actorUserId: user.id,
-        action: "LOGIN_FAILED",
-        entityType: "USER",
-        entityId: user.id,
-        metadata: { email, reason: "email_not_verified" },
-      });
-    } catch (e) {
-      /* don't break login flow */
-    }
+    await safeWriteAuditLog({
+      actorUserId: user.id,
+      action: "LOGIN_FAILED",
+      entityType: "USER",
+      entityId: user.id,
+      metadata: { email, reason: "email_not_verified", userAgent, ipAddress },
+    });
     return res.status(403).json({
       message: "Please verify your email before signing in. Check your inbox for the verification link.",
       code: "EMAIL_NOT_VERIFIED",
@@ -233,6 +238,19 @@ export async function login(req, res) {
   const accessToken = signAccessToken(accessPayload);
 
   const fullUser = await findUserById(user.id);
+  await safeWriteAuditLog({
+    actorUserId: user.id,
+    action: "LOGIN_SUCCESS",
+    entityType: "USER",
+    entityId: user.id,
+    metadata: {
+      email: user.email,
+      role: user.role_code,
+      sessionId: session.id,
+      userAgent,
+      ipAddress,
+    },
+  });
 
   return res.json({
     accessToken,

@@ -58,6 +58,7 @@ import { useAuth } from '../hooks/use-auth';
 import { getAuditLogs, getAuditStats, exportAuditLogs } from '../api/audit-logs';
 import HelpTourOverlay from '../components/help-tour-overlay';
 const actionTypes = [
+  'LOGIN_SUCCESS', 'LOGIN_FAILED', 'ACCOUNT_LOCKED', 'LOGOUT',
   'CREATE_USER', 'UPDATE_USER', 'DELETE_USER', 'SET_USER_ACTIVE',
   'CREATE_OFFICE', 'UPDATE_OFFICE', 'DELETE_OFFICE', 'SET_OFFICE_ACTIVE',
   'CREATE_TEMPLATE', 'UPDATE_TEMPLATE', 'DELETE_TEMPLATE',
@@ -71,6 +72,8 @@ const entityTypes = [
 ];
 
 const getActionBadgeColor = (action) => {
+  if (action.includes('LOGIN') || action.includes('LOGOUT')) return 'bg-indigo-100 text-indigo-800';
+  if (action.includes('LOCKED')) return 'bg-rose-100 text-rose-800';
   if (action.includes('DELETE')) return 'bg-red-100 text-red-800';
   if (action.includes('CREATE')) return 'bg-green-100 text-green-800';
   if (action.includes('UPDATE') || action.includes('APPROVE')) return 'bg-blue-100 text-blue-800';

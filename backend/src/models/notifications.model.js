@@ -1,9 +1,36 @@
 import { pool } from "../config/db.js";
 
+const DUPLICATE_WINDOW_MINUTES = 2;
+
+async function hasRecentDuplicateNotification({ userId, type, title, body, linkSubmissionId }) {
+  const { rows } = await pool.query(
+    `SELECT 1
+     FROM notifications
+     WHERE user_id = $1
+       AND type = $2
+       AND title = $3
+       AND body IS NOT DISTINCT FROM $4
+       AND link_submission_id IS NOT DISTINCT FROM $5
+       AND created_at >= NOW() - ($6::int * INTERVAL '1 minute')
+     LIMIT 1`,
+    [userId, type, title, body ?? null, linkSubmissionId ?? null, DUPLICATE_WINDOW_MINUTES]
+  );
+  return rows.length > 0;
+}
+
 /**
  * Create a notification for a user
  */
 export async function createNotification({ userId, type, title, body, linkSubmissionId }) {
+  const duplicateExists = await hasRecentDuplicateNotification({
+    userId,
+    type,
+    title,
+    body,
+    linkSubmissionId,
+  });
+  if (duplicateExists) return null;
+
   const { rows } = await pool.query(
     `INSERT INTO notifications (user_id, type, title, body, link_submission_id)
      VALUES ($1,$2,$3,$4,$5)
@@ -18,12 +45,33 @@ export async function createNotification({ userId, type, title, body, linkSubmis
  */
 export async function createNotificationsBulk(notifications) {
   if (!notifications || notifications.length === 0) return [];
-  
+
+  const uniqueIncoming = [];
+  const seenIncoming = new Set();
+  for (const n of notifications) {
+    const key = `${n.userId}|${n.type}|${n.title}|${n.body ?? ""}|${n.linkSubmissionId ?? ""}`;
+    if (seenIncoming.has(key)) continue;
+    seenIncoming.add(key);
+    uniqueIncoming.push(n);
+  }
+
+  const filtered = [];
+  for (const n of uniqueIncoming) {
+    const duplicateExists = await hasRecentDuplicateNotification({
+      userId: n.userId,
+      type: n.type,
+      title: n.title,
+      body: n.body,
+      linkSubmissionId: n.linkSubmissionId,
+    });
+    if (!duplicateExists) filtered.push(n);
+  }
+  if (filtered.length === 0) return [];
+
   const values = [];
   const queryParams = [];
   let paramIndex = 1;
-
-  for (const n of notifications) {
+  for (const n of filtered) {
     values.push(`($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`);
     queryParams.push(n.userId, n.type, n.title, n.body ?? null, n.linkSubmissionId ?? null);
   }

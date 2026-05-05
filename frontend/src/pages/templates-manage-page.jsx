@@ -377,7 +377,7 @@ export default function TemplatesManagePage() {
           </div>
 
           {/* Table */}
-          <div className="rounded-md border">
+          <div className="rounded-md border max-h-[60vh] overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -448,13 +448,13 @@ export default function TemplatesManagePage() {
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />
-                          {t.status === 'DRAFT' ? (
+                          {t.status === 'ARCHIVED' ? (
                             <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openDelete(t)}>
                               <Trash2 className="mr-2 h-4 w-4" />Delete
                             </DropdownMenuItem>
                           ) : (
                             <DropdownMenuItem disabled>
-                              <Trash2 className="mr-2 h-4 w-4" />Delete (Draft only)
+                              <Trash2 className="mr-2 h-4 w-4" />Delete (Archived only)
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -663,7 +663,7 @@ export default function TemplatesManagePage() {
           },
           {
             title: "Manage templates from the table",
-            description: "Use row actions to edit details, duplicate templates, change status, or delete draft templates.",
+            description: "Use row actions to edit details, duplicate templates, change status, archive drafts, or delete archived templates.",
             selector: '[data-tour-id="templates-manage-directory"]',
             selectorLabel: "Template directory table",
           },

@@ -1,5 +1,15 @@
 import { pool } from "../config/db.js";
 
+export async function ensureCurrentYearExists() {
+  const currentYear = new Date().getFullYear();
+  await pool.query(
+    `INSERT INTO years (year, is_active)
+     VALUES ($1, TRUE)
+     ON CONFLICT (year) DO NOTHING`,
+    [currentYear]
+  );
+}
+
 export async function listYears({ includeInactive = true } = {}) {
   const where = includeInactive ? "" : "WHERE is_active = TRUE";
   const { rows } = await pool.query(

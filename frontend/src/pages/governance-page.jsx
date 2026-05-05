@@ -207,8 +207,20 @@ export default function GovernancePage() {
   };
 
   // ── Delete ──────────────────────────────────────────────────────────────────
-  const openDelete = (area) => { setSelected(area); setIsDeleteOpen(true); };
+  const openDelete = (area) => {
+    if (area.is_active) {
+      setError('Please deactivate this governance area before deleting it.');
+      return;
+    }
+    setSelected(area);
+    setIsDeleteOpen(true);
+  };
   const handleDelete = async () => {
+    if (selected?.is_active) {
+      setError('Please deactivate this governance area before deleting it.');
+      setIsDeleteOpen(false);
+      return;
+    }
     setSaving(true);
     try {
       await apiDeleteArea(selected.id);
@@ -505,9 +517,10 @@ export default function GovernancePage() {
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
                               onClick={() => openDelete(area)}
+                              disabled={area.is_active}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
+                              {area.is_active ? 'Delete (Deactivate first)' : 'Delete'}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -640,7 +653,7 @@ export default function GovernancePage() {
 
       {/* ── Assigned Offices Dialog ─────────────────────────────────────────── */}
       <Dialog open={isAssignedOfficesOpen} onOpenChange={setIsAssignedOfficesOpen}>
-        <DialogContent className="sm:max-w-[560px]">
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-muted-foreground" />
@@ -715,12 +728,16 @@ export default function GovernancePage() {
               Delete Governance Area
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong>{selected?.code} – {selected?.name}</strong>? This cannot be undone and will fail if templates are using this area.
+              {selected?.is_active ? (
+                <>This area is currently active. Deactivate it first before deleting.</>
+              ) : (
+                <>Are you sure you want to delete <strong>{selected?.code} – {selected?.name}</strong>? This cannot be undone and will fail if templates are using this area.</>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={saving}>
+            <Button variant="destructive" onClick={handleDelete} disabled={saving || selected?.is_active}>
               {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting…</> : 'Delete'}
             </Button>
           </DialogFooter>

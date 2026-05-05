@@ -18,7 +18,7 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 
 const router = Router();
 
-router.post("/login", loginLimiter, audit("LOGIN_ATTEMPT", "USER", null, (req) => ({ email: req.body.email })), asyncHandler(login));
+router.post("/login", loginLimiter, asyncHandler(login));
 router.get("/verify-email", verifyEmailLimiter, asyncHandler(verifyEmail));
 router.post("/forgot-password", forgotPasswordLimiter, asyncHandler(forgotPassword));
 router.post("/reset-password", forgotPasswordLimiter, asyncHandler(resetPassword));
