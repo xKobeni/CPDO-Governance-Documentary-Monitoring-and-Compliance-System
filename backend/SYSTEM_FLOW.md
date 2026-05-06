@@ -1,4 +1,4 @@
-# CPDO Monitoring System - Backend System Flow
+# SGLG Monitoring System (CPDO) — Backend System Flow
 
 This document explains how the backend works end-to-end, from request entry to database updates and API responses.
 

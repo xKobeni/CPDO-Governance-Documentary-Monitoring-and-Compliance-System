@@ -182,8 +182,8 @@ export const NavigationSidebar = React.memo(function NavigationSidebar({ classNa
             className="h-8 w-auto max-w-[140px] object-contain shrink-0"
           />
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-foreground truncate">CPDO Monitoring</h2>
-            <p className="text-[10px] text-muted-foreground">v1.0.0</p>
+            <h2 className="text-sm font-semibold text-foreground truncate">SGLG Monitoring System</h2>
+            <p className="text-[10px] text-muted-foreground">CPDO · v1.0.0</p>
           </div>
         </div>
       </div>

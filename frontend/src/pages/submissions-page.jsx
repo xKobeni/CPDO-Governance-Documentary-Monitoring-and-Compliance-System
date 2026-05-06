@@ -6,6 +6,7 @@ import { useLocation } from "react-router";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { Alert } from "../components/ui/alert";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import {
@@ -58,6 +59,7 @@ import {
 import { useAuth } from "../hooks/use-auth";
 import { cn } from "../lib/utils";
 import {
+  createSubmission,
   createSubmissionComment,
   deleteSubmissionComment,
   getSubmission,
@@ -168,15 +170,39 @@ function EllipsisFileName({ name, className, quoted = false }) {
   );
 }
 
-function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
+/** Opened from a list row: either an existing submission or a checklist leaf with nothing uploaded yet */
+function SubmissionDetailsDialog({ selection, open, onClose = () => {}, onPromoteToSubmission }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const canReview = ["ADMIN", "STAFF"].includes(String(user?.role || "").toUpperCase());
   const isAdmin = String(user?.role || "").toUpperCase() === "ADMIN";
 
+  const submissionId = selection?.kind === "submission" ? selection.submissionId : null;
+  const pendingContext = selection?.kind === "pending" ? selection : null;
+  const canInitialSubmit = Boolean(
+    pendingContext &&
+    (canReview || String(user?.officeId || "") === String(pendingContext.officeId || ""))
+  );
+
+  const roleUpper = String(user?.role || "").toUpperCase();
+  const isOfficeUser = roleUpper === "OFFICE";
+  /** Reviewer messaging: ADMIN and STAFF use the submissions review drill-down */
+  const isReviewer = canReview;
+  /** Office user opening pending for their own office (edge case vs My Checklists) */
+  const isOfficeStartingOwnPending = Boolean(
+    pendingContext && isOfficeUser && canInitialSubmit && !isReviewer
+  );
+
+  const roleLabelShort =
+    roleUpper === "ADMIN" ? "Administrator" :
+    roleUpper === "STAFF" ? "Staff reviewer" :
+    roleUpper === "OFFICE" ? "Office user" :
+    "User";
+
   const [reviewAction, setReviewAction] = useState("APPROVE");
   const [decisionNotes, setDecisionNotes] = useState("");
   const [commentText, setCommentText] = useState("");
+  const [pendingOfficeRemarks, setPendingOfficeRemarks] = useState("");
   const [fileToUpload, setFileToUpload] = useState(null);
   const [fileToDelete, setFileToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -198,6 +224,57 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
     queryKey: ["submissions", "comments", submissionId],
     queryFn: () => listSubmissionComments(submissionId, { page: 1, limit: 50 }),
     enabled: open && Boolean(submissionId),
+  });
+
+  React.useEffect(() => {
+    if (open && selection?.kind === "pending") {
+      setPendingOfficeRemarks("");
+      setFileToUpload(null);
+    }
+  }, [open, selection?.kind, selection?.checklistItemId]);
+
+  const createSubmissionUploadMutation = useMutation({
+    mutationFn: async ({ file, officeRemarks }) => {
+      if (!pendingContext) throw new Error("Missing checklist context");
+      const created = await createSubmission({
+        year: pendingContext.year,
+        officeId: pendingContext.officeId,
+        checklistItemId: pendingContext.checklistItemId,
+        officeRemarks: officeRemarks?.trim() ? officeRemarks.trim() : null,
+      });
+      const submission = created?.submission ?? created;
+      if (!submission?.id) throw new Error("Submission was not created");
+      let uploadOk = true;
+      try {
+        await uploadSubmissionFile(submission.id, file);
+      } catch (uploadErr) {
+        uploadOk = false;
+        toast.error(
+          uploadErr?.response?.data?.message ||
+            "Submission was created but the file could not be uploaded. Upload again in submission details."
+        );
+      }
+      return { submission, uploadOk };
+    },
+    onSuccess: async ({ submission, uploadOk }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["submissions"] }),
+        queryClient.invalidateQueries({ queryKey: ["offices"] }),
+        queryClient.invalidateQueries({ queryKey: ["governance-areas"] }),
+        queryClient.invalidateQueries({ queryKey: ["office-checklist"] }),
+      ]);
+      if (uploadOk) {
+        toast.success("Submission created and file uploaded");
+      }
+      setPendingOfficeRemarks("");
+      setFileToUpload(null);
+      if (typeof onPromoteToSubmission === "function") {
+        onPromoteToSubmission(submission.id);
+      }
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.message || err?.message || "Could not create submission");
+    },
   });
 
   const reviewMutation = useMutation({
@@ -288,19 +365,275 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <DialogContent className="w-full max-w-[calc(100vw-2rem)] sm:max-w-5xl lg:max-w-6xl max-h-[85vh] min-w-0 overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-muted-foreground" />
-            Submission details
+            {pendingContext ? "No submission yet" : "Submission details"}
           </DialogTitle>
-          <DialogDescription>
-            {submissionId}
+          <DialogDescription asChild>
+            <div className="space-y-1.5 text-left">
+              {pendingContext ? (
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-mono text-xs">{pendingContext.itemCode}</span>
+                  {" · "}
+                  {pendingContext.itemTitle}
+                </p>
+              ) : (
+                submissionId ? (
+                  <p className="font-mono text-xs text-muted-foreground break-all">{submissionId}</p>
+                ) : null
+              )}
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Your role:</span>{" "}
+                {roleLabelShort}
+                {pendingContext && canInitialSubmit && isReviewer ? (
+                  <span>
+                    {" "}
+                    — you can start or add to <span className="font-medium text-foreground">{pendingContext.officeName}</span>
+                    {"'"}s record for this item.
+                  </span>
+                ) : null}
+                {pendingContext && isOfficeStartingOwnPending ? (
+                  <span>
+                    {" "}
+                    — you can start this requirement for <span className="font-medium text-foreground">your office</span>
+                    {" "}(or use <span className="font-medium text-foreground">My Checklists</span> for the full list).
+                  </span>
+                ) : null}
+                {pendingContext && !canInitialSubmit ? (
+                  <span>
+                    {" "}
+                    — <span className="font-medium text-foreground">view only</span>
+                    . You cannot create a submission for this office.
+                  </span>
+                ) : null}
+                {!pendingContext && submission && isReviewer ? (
+                  <span>
+                    {" "}
+                    — you are reviewing <span className="font-medium text-foreground">{submission.office_name}</span>
+                    {"'"}s submission (uploads and comments go on their record).
+                  </span>
+                ) : null}
+                {!pendingContext && submission && isOfficeUser ? (
+                  <span>
+                    {" "}
+                    — this is <span className="font-medium text-foreground">your office</span>
+                    {"'"}s submission. Staff will review; you cannot approve or deny here.
+                  </span>
+                ) : null}
+              </p>
+            </div>
           </DialogDescription>
         </DialogHeader>
 
-        {(submissionQuery.isLoading || !submission) ? (
+        {pendingContext ? (
+          <div className="space-y-6 min-w-0">
+            <Alert className="border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              <AlertCircle className="h-4 w-4" />
+              <div className="text-sm">
+                <p className="font-medium">Nothing uploaded for this checklist item yet</p>
+                {canInitialSubmit && isReviewer ? (
+                  <>
+                    <p className="mt-1 text-muted-foreground dark:text-amber-200/90">
+                      Reporting year{" "}
+                      <span className="font-medium text-foreground">{pendingContext.year}</span>
+                      {" · "}the office listed below has not opened this requirement online.
+                      You can attach the first file as a reviewer—that creates their submission record in the system.
+                    </p>
+                    <ul className="mt-2 list-disc pl-4 space-y-1 text-muted-foreground dark:text-amber-200/90">
+                      <li>
+                        <span className="font-medium text-foreground">
+                          Submitting vs reviewing:
+                        </span>{" "}
+                        Offices normally submit from <strong>My Checklists</strong>. Use this button only when your office policy
+                        lets staff/admin upload on their behalf.
+                      </li>
+                      <li>
+                        <span className="font-medium text-foreground">Office remarks:</span>{" "}
+                        Optional notes save as if the submitting office typed them—they appear on their submission overview.
+                      </li>
+                      <li>
+                        <span className="font-medium text-foreground">After upload:</span>{" "}
+                        Discussion and <strong>Formal review</strong> unlock the same way as any other submission.
+                      </li>
+                    </ul>
+                  </>
+                ) : canInitialSubmit && isOfficeStartingOwnPending ? (
+                  <>
+                    <p className="mt-1 text-muted-foreground dark:text-amber-200/90">
+                      Reporting year{" "}
+                      <span className="font-medium text-foreground">{pendingContext.year}</span>
+                      . Your office has not uploaded anything for this line item yet.
+                    </p>
+                    <ul className="mt-2 list-disc pl-4 space-y-1 text-muted-foreground dark:text-amber-200/90">
+                      <li>
+                        You may attach a file here to start this requirement, or go to{" "}
+                        <strong>My Checklists</strong> to work through everything in order.
+                      </li>
+                      <li>
+                        <span className="font-medium text-foreground">Office remarks</span> are optional notes reviewers will see with your submission.
+                      </li>
+                    </ul>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-1 text-muted-foreground dark:text-amber-200/90">
+                      Reporting year{" "}
+                      <span className="font-medium text-foreground">{pendingContext.year}</span>
+                      . There is nothing on file yet for{" "}
+                      <span className="font-medium text-foreground">{pendingContext.officeName}</span>.
+                    </p>
+                    <ul className="mt-2 list-disc pl-4 space-y-1 text-muted-foreground dark:text-amber-200/90">
+                      <li>
+                        Your account cannot start this submission—you are in <strong>view only</strong> for this requirement.
+                      </li>
+                      <li>
+                        <span className="font-medium text-foreground">
+                          Who can upload the first file:
+                        </span>{" "}
+                        an <strong>Admin or Staff</strong> reviewer in the Submissions workflow for this governance area,
+                        or a logged-in user from <strong>{pendingContext.officeName}</strong>.
+                      </li>
+                      <li>The office can also submit from their <strong>My Checklists</strong> page when they are signed in.</li>
+                    </ul>
+                  </>
+                )}
+              </div>
+            </Alert>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Overview</CardTitle>
+                  <CardDescription>
+                    {pendingContext.officeName} · {pendingContext.governanceCode}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Status</span>
+                    <NoSubmissionPill />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Checklist item</span>
+                    <span className="font-medium text-right">
+                      {pendingContext.itemCode} — {pendingContext.itemTitle}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Submitted</span>
+                    <span className="font-medium">Not submitted</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Year</span>
+                    <span className="font-medium">{pendingContext.year}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-muted">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    Submission notes
+                    <Badge variant="outline" className="text-xs font-normal">Office remarks</Badge>
+                  </CardTitle>
+                  <CardDescription>
+                    {canInitialSubmit && isReviewer && (
+                      <span>Optional. Saved as remarks on {pendingContext.officeName}&apos;s submission—they read like the office typed them.</span>
+                    )}
+                    {canInitialSubmit && isOfficeStartingOwnPending && (
+                      <span>Optional notes reviewers see with your submission (same field as remarks in My Checklists).</span>
+                    )}
+                    {!canInitialSubmit &&
+                      "You cannot edit—submission has not been created yet for this requirement."}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="text-sm">
+                  {canInitialSubmit ? (
+                    <Textarea
+                      rows={5}
+                      placeholder={
+                        isReviewer
+                          ? `Optional remarks for ${pendingContext.officeName} (shows as Office remarks)`
+                          : "Optional remarks for reviewers (shows as Office remarks)"
+                      }
+                      value={pendingOfficeRemarks}
+                      onChange={(e) => setPendingOfficeRemarks(e.target.value)}
+                      disabled={createSubmissionUploadMutation.isPending}
+                      className="bg-background resize-y min-h-[100px]"
+                    />
+                  ) : (
+                    <p className="text-muted-foreground">—</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {canInitialSubmit ? (
+              <Card className="min-w-0 overflow-hidden">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                    First evidence file
+                  </CardTitle>
+                  <CardDescription>
+                    {isReviewer ? (
+                      <span>
+                        One step after you confirm: opens {pendingContext.officeName}&apos;s submission for reporting year{" "}
+                        {pendingContext.year}, then attaches your file as proof. Offices usually do this in My Checklists—use this path
+                        only when allowed.
+                      </span>
+                    ) : (
+                      <span>
+                        One step after you confirm: opens your office&apos;s submission for reporting year {pendingContext.year},
+                        then attaches your file as proof.
+                      </span>
+                    )}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 min-w-0">
+                  <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center flex-wrap">
+                    <Input
+                      type="file"
+                      className="max-w-full min-w-0 flex-1 sm:flex-none sm:max-w-md"
+                      onChange={(e) => setFileToUpload(e.target.files?.[0] || null)}
+                      disabled={createSubmissionUploadMutation.isPending}
+                    />
+                    <Button
+                      size="sm"
+                      className="gap-2 shrink-0"
+                      disabled={!fileToUpload || createSubmissionUploadMutation.isPending}
+                      onClick={() => {
+                        if (!fileToUpload || !pendingContext) return;
+                        createSubmissionUploadMutation.mutate({
+                          file: fileToUpload,
+                          officeRemarks: pendingOfficeRemarks,
+                        });
+                      }}
+                    >
+                      {createSubmissionUploadMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Working…
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4" />
+                          {isReviewer ? "Create office submission and upload" : "Start submission and upload"}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {isReviewer
+                      ? "Visible to Admin/Staff reviewers on this page. Not available to other offices or the public."
+                      : "Only your office can start its own submission for this item when you are signed in as an office user."}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
+        ) : (submissionQuery.isLoading || !submission) ? (
           <div className="flex items-center justify-center py-10 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" />
             Loading…
@@ -340,9 +673,9 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
                     <Badge variant="outline" className="text-xs font-normal border-emerald-300 text-emerald-700 dark:border-emerald-600 dark:text-emerald-400">Office remarks</Badge>
                   </CardTitle>
                   <CardDescription>
-                    {String(user?.role || "").toUpperCase() === "OFFICE"
-                      ? "Notes you provided when submitting — edit via My Checklists"
-                      : "Notes provided by the submitting office when they created this submission — separate from the discussion thread below"}
+                    {isReviewer
+                      ? `Remarks submitted with this record (${submission.office_name}). Not the same as Discussion comments below. Offices often edit theirs from My Checklists.`
+                      : "Notes your office submitted with this checklist item—these are not the Discussion thread below."}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="text-sm">
@@ -360,7 +693,23 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
                   <Paperclip className="h-4 w-4 text-muted-foreground" />
                   Files
                 </CardTitle>
-                <CardDescription>Versioned uploads for this submission</CardDescription>
+                <CardDescription>
+                  {isReviewer ? (
+                    <span>
+                      Evidence files for{" "}
+                      <span className="font-medium text-foreground">{submission.office_name}</span>
+                      . What you upload is stored on{" "}
+                      <span className="font-medium text-foreground">their</span> submission (not yours personally). Replacing
+                      the current file asks for confirmation.
+                    </span>
+                  ) : (
+                    <span>
+                      Supporting documents reviewers will open—attached to{" "}
+                      <span className="font-medium text-foreground">your office&apos;s</span> submission. Replacing may ask you
+                      to confirm.
+                    </span>
+                  )}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 min-w-0">
                 <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between">
@@ -481,13 +830,29 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
                   Discussion
                   <Badge variant="secondary" className="text-xs font-normal">Comments</Badge>
                 </CardTitle>
-                <CardDescription>Informal notes and questions — does not change status</CardDescription>
+                <CardDescription>
+                  {isReviewer ? (
+                    <span>
+                      Informal conversation about this submission.{" "}
+                      <span className="font-medium text-foreground">
+                        Comments do not approve, deny, or change status—use Formal review for that.
+                      </span>
+                    </span>
+                  ) : (
+                    <span>
+                      Ask reviewers questions here.{" "}
+                      <span className="font-medium text-foreground">
+                        Discussion does not change your submission status; staff decides under Formal review.
+                      </span>
+                    </span>
+                  )}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex flex-col gap-2">
                   <Textarea
                     rows={3}
-                    placeholder="Ask a question or add a note…"
+                    placeholder={isReviewer ? "Note or question about this submission (does not finalize review)…" : "Question or note for reviewers (does not finalize review)…"}
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     disabled={createCommentMutation.isPending}
@@ -541,7 +906,7 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
                     Formal review
                   </CardTitle>
                   <CardDescription>
-                    No further decision is required — this submission is already approved.
+                    No further Formal review is required—status is approved. Offices do not approve their own submissions; this decision was recorded by Admin/Staff earlier.
                   </CardDescription>
                 </CardHeader>
               </Card>
@@ -560,7 +925,12 @@ function SubmissionDetailsDialog({ submissionId, open, onClose = () => {} }) {
                         Formal Review
                         <Badge className="bg-blue-600 hover:bg-blue-700 text-white border-0">Decision</Badge>
                       </CardTitle>
-                      <CardDescription>Official approval decision — updates status and notifies submitter</CardDescription>
+                      <CardDescription>
+                        <span className="font-medium text-foreground">Staff and administrators only:</span>
+                        {" "}
+                        this is the official step that approves, denies, or asks for revisions. Submitting notifies the submitting
+                        office. This is separate from Discussion comments above.
+                      </CardDescription>
                     </div>
                   </div>
                 </CardHeader>
@@ -719,7 +1089,7 @@ export default function SubmissionsPage() {
   const [yearOptions, setYearOptions] = useState([]);
   const [status, setStatus] = useState("all");
   const [q, setQ] = useState("");
-  const [selectedId, setSelectedId] = useState(null);
+  const [detailSelection, setDetailSelection] = useState(null);
 
   // Drill-down: governance → office → submissions
   const [selectedGovernanceId, setSelectedGovernanceId] = useState(null);
@@ -807,17 +1177,70 @@ export default function SubmissionsPage() {
     keepPreviousData: true,
   });
 
+  /** Same query key as dashboard — reuse cache so root categories resolve without extra work */
+  const officeChecklistSelfQuery = useQuery({
+    queryKey: ["office-checklist", user?.officeId, yearNum ?? currentYear],
+    queryFn: () => getOfficeChecklist(user.officeId, yearNum || currentYear),
+    enabled: Boolean(!canReview && user?.officeId && yearNum),
+    staleTime: 2 * 60 * 1000,
+  });
+
+  /** Map governance area code + item code → top-level (root) checklist row — for office submission list */
+  const submissionRootByAreaAndItemCode = useMemo(() => {
+    const areas = officeChecklistSelfQuery.data?.data?.areas ?? [];
+    const map = new Map();
+    for (const area of areas) {
+      const rawItems = area.items ?? [];
+      const byId = new Map(
+        rawItems.map((it) => {
+          const id = String(it.id);
+          const rawParent = it.parentItemId ?? it.parent_item_id ?? it.parentId ?? null;
+          const parentId =
+            rawParent != null && rawParent !== "" ? String(rawParent) : null;
+          return [id, { ...it, id, parentId }];
+        })
+      );
+      const rootOfId = (itemId) => {
+        let cur = byId.get(String(itemId));
+        let root = cur;
+        while (cur) {
+          root = cur;
+          cur = cur.parentId ? byId.get(cur.parentId) : null;
+        }
+        return root;
+      };
+      const areaCode = String(area.code ?? "");
+      for (const it of rawItems) {
+        const root = rootOfId(it.id);
+        if (!root) continue;
+        const code = String(it.itemCode ?? it.item_code ?? "");
+        const key = `${areaCode}::${code}`;
+        map.set(key, {
+          rootCode: root.itemCode ?? root.item_code ?? "",
+          rootTitle: root.title ?? "",
+        });
+      }
+    }
+    return map;
+  }, [officeChecklistSelfQuery.data]);
+
   const rows = submissionsQuery.data?.data ?? [];
   const filteredRows = useMemo(() => {
     const qq = q.trim().toLowerCase();
     if (!qq) return rows;
-    return rows.filter((r) =>
-      String(r.office_name || "").toLowerCase().includes(qq) ||
-      String(r.governance_code || "").toLowerCase().includes(qq) ||
-      String(r.item_code || "").toLowerCase().includes(qq) ||
-      String(r.item_title || "").toLowerCase().includes(qq)
-    );
-  }, [rows, q]);
+    return rows.filter((r) => {
+      const rootKey = `${String(r.governance_code ?? "")}::${String(r.item_code ?? "")}`;
+      const root = submissionRootByAreaAndItemCode.get(rootKey);
+      const rootHay = root ? `${root.rootCode} ${root.rootTitle}`.toLowerCase() : "";
+      return (
+        String(r.office_name || "").toLowerCase().includes(qq) ||
+        String(r.governance_code || "").toLowerCase().includes(qq) ||
+        String(r.item_code || "").toLowerCase().includes(qq) ||
+        String(r.item_title || "").toLowerCase().includes(qq) ||
+        rootHay.includes(qq)
+      );
+    });
+  }, [rows, q, submissionRootByAreaAndItemCode]);
 
   const pagination = submissionsQuery.data?.pagination;
 
@@ -847,15 +1270,21 @@ export default function SubmissionsPage() {
     if (!selectedArea?.items?.length) return [];
     const items = selectedArea.items;
 
-    const nodes = items.map((it) => ({
-      id: it.id,
-      parentId: it.parentItemId ?? null,
-      itemCode: it.itemCode,
-      title: it.title,
-      sortOrder: it.sortOrder ?? 0,
-      submission: it.submission,
-      children: [],
-    }));
+    const nodes = items.map((it) => {
+      const id = String(it.id);
+      const rawParent = it.parentItemId ?? it.parent_item_id ?? it.parentId ?? null;
+      const parentId =
+        rawParent != null && rawParent !== "" ? String(rawParent) : null;
+      return {
+        id,
+        parentId,
+        itemCode: it.itemCode ?? it.item_code,
+        title: it.title,
+        sortOrder: it.sortOrder ?? it.sort_order ?? 0,
+        submission: it.submission,
+        children: [],
+      };
+    });
 
     const byId = new Map(nodes.map((n) => [n.id, n]));
     const roots = [];
@@ -876,6 +1305,16 @@ export default function SubmissionsPage() {
     const statusUpper = String(status || "all").toUpperCase();
     const qq = q.trim().toLowerCase();
 
+    const haystackForNode = (node) => {
+      const parts = [];
+      let cur = node;
+      while (cur) {
+        parts.push(`${cur.itemCode || ""} ${cur.title || ""}`);
+        cur = cur.parentId ? byId.get(cur.parentId) : null;
+      }
+      return parts.join(" ").toLowerCase();
+    };
+
     const keepLeaf = (leaf) => {
       const isSubmitted = Boolean(leaf.submission?.id);
 
@@ -887,8 +1326,7 @@ export default function SubmissionsPage() {
       }
 
       if (!qq) return true;
-      const hay = `${leaf.itemCode || ""} ${leaf.title || ""}`.toLowerCase();
-      return hay.includes(qq);
+      return haystackForNode(leaf).includes(qq);
     };
 
     const needed = new Set();
@@ -1036,6 +1474,7 @@ export default function SubmissionsPage() {
             onClick={() => {
               queryClient.invalidateQueries({ queryKey: ["submissions"] });
               queryClient.invalidateQueries({ queryKey: ["governance-areas"] });
+              queryClient.invalidateQueries({ queryKey: ["office-checklist"] });
             }}
             disabled={submissionsQuery.isFetching}
             className="gap-2"
@@ -1113,26 +1552,43 @@ export default function SubmissionsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Governance</TableHead>
+                      <TableHead>Root category</TableHead>
                       <TableHead>Item</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Submitted</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredRows.map((s) => (
+                    {filteredRows.map((s) => {
+                      const root = submissionRootByAreaAndItemCode.get(
+                        `${String(s.governance_code ?? "")}::${String(s.item_code ?? "")}`
+                      );
+                      return (
                       <TableRow
                         key={s.id}
                         className="cursor-pointer hover:bg-muted/40"
-                        onClick={() => setSelectedId(s.id)}
+                        onClick={() => setDetailSelection({ kind: "submission", submissionId: s.id })}
                       >
                         <TableCell>
                           <Badge variant="outline" className="font-mono text-xs">{s.governance_code}</Badge>
+                        </TableCell>
+                        <TableCell className="min-w-[160px] align-top">
+                          {root ? (
+                            <div className="min-w-0">
+                              <Badge variant="secondary" className="font-mono text-[10px] mb-0.5">{root.rootCode}</Badge>
+                              <p className="text-xs text-muted-foreground line-clamp-2" title={root.rootTitle}>{root.rootTitle}</p>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {officeChecklistSelfQuery.isLoading ? "…" : "—"}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="min-w-[280px]">
                           <div className="min-w-0 flex items-start gap-2">
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium truncate" title={s.item_title}>{s.item_title}</p>
-                              <p className="text-xs text-muted-foreground truncate" title={s.item_code}>{s.item_code}</p>
+                              <p className="text-xs text-muted-foreground truncate font-mono" title={s.item_code}>{s.item_code}</p>
                             </div>
                             <SubmissionDiscussionHint count={s.comment_count} />
                           </div>
@@ -1142,7 +1598,8 @@ export default function SubmissionsPage() {
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{formatDateTime(s.submitted_at)}</TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -1369,6 +1826,7 @@ export default function SubmissionsPage() {
                   </TableHeader>
                   <TableBody>
                     {checklistRows.map((r) => {
+                      const rowPad = 10 + r.depth * 18;
                       if (r.isHeader) {
                         return (
                           <TableRow
@@ -1379,19 +1837,28 @@ export default function SubmissionsPage() {
                             )}
                           >
                             <TableCell className="min-w-0 py-2.5">
-                              <div className="relative min-w-0 flex items-center gap-2" style={{ paddingLeft: r.depth ? r.depth * 12 : 0 }}>
+                              <div
+                                className="relative min-w-0 flex items-center gap-2"
+                                style={{ paddingLeft: rowPad }}
+                              >
                                 {r.depth > 0 && (
                                   <span
                                     aria-hidden="true"
-                                    className="absolute left-0 top-0 bottom-0 w-3"
+                                    className="pointer-events-none absolute text-muted-foreground/50"
+                                    style={{ left: Math.max(0, rowPad - 14), top: "0.45rem", bottom: "0.45rem", width: 10 }}
                                   >
-                                    <span className="absolute left-1.5 top-0 bottom-1/2 w-px bg-border" />
-                                    <span className="absolute left-1.5 top-1/2 w-3 h-px bg-border" />
+                                    <span className="absolute left-1/2 top-0 bottom-1/2 w-px bg-border -translate-x-1/2" />
+                                    <span className="absolute left-1/2 top-1/2 right-0 h-px bg-border -translate-x-1/2" />
                                   </span>
                                 )}
-                                <Badge variant="secondary" className="font-mono text-xs font-bold">{r.itemCode}</Badge>
+                                <Badge variant="secondary" className="font-mono text-xs font-bold shrink-0">
+                                  {r.itemCode}
+                                </Badge>
                                 <p
-                                  className={cn("text-sm truncate block min-w-0", r.depth === 0 ? "font-extrabold text-foreground" : "font-bold")}
+                                  className={cn(
+                                    "text-sm truncate block min-w-0",
+                                    r.depth === 0 ? "font-extrabold text-foreground" : "font-semibold text-foreground/90"
+                                  )}
                                   title={r.title}
                                 >
                                   {r.title}
@@ -1408,24 +1875,49 @@ export default function SubmissionsPage() {
                       return (
                         <TableRow
                           key={r.id}
-                          className={cn(
-                            "transition-colors",
-                            s?.id ? "cursor-pointer hover:bg-muted/50" : "opacity-90 hover:bg-muted/30"
-                          )}
-                          onClick={() => s?.id && setSelectedId(s.id)}
+                          className="transition-colors cursor-pointer hover:bg-muted/50"
+                          onClick={() => {
+                            if (s?.id) {
+                              setDetailSelection({ kind: "submission", submissionId: s.id });
+                              return;
+                            }
+                            setDetailSelection({
+                              kind: "pending",
+                              checklistItemId: r.id,
+                              officeId: selectedOfficeId,
+                              year: yearNum || currentYear,
+                              governanceCode: selectedGovernance?.code ?? "",
+                              itemCode: r.itemCode ?? "",
+                              itemTitle: r.title ?? "",
+                              officeName: selectedOffice?.office_name ?? "",
+                            });
+                          }}
                         >
                           <TableCell className="min-w-0 py-2.5">
-                            <div className="relative min-w-0 flex items-start gap-2" style={{ paddingLeft: r.depth ? r.depth * 12 : 0 }}>
+                            <div
+                              className="relative min-w-0 flex items-start gap-2"
+                              style={{ paddingLeft: rowPad }}
+                            >
                               {r.depth > 0 && (
                                 <span
                                   aria-hidden="true"
-                                  className="absolute left-0 top-0 bottom-0 w-3"
+                                  className="pointer-events-none absolute text-muted-foreground/50"
+                                  style={{ left: Math.max(0, rowPad - 14), top: "0.55rem", bottom: "0.25rem", width: 10 }}
                                 >
-                                  <span className="absolute left-1.5 top-0 bottom-0 w-px bg-border" />
-                                  <span className="absolute left-1.5 top-1/2 w-3 h-px bg-border" />
+                                  <span className="absolute left-1/2 top-0 bottom-0 w-px bg-border -translate-x-1/2" />
+                                  <span className="absolute left-1/2 top-1/2 right-0 h-px bg-border -translate-x-1/2" />
                                 </span>
                               )}
-                              <p className="text-sm font-medium min-w-0 flex-1 pr-1 truncate block" title={r.title}>{r.title}</p>
+                              <div className="min-w-0 flex-1 pr-1">
+                                <p className="text-sm font-medium truncate block" title={r.title}>
+                                  {r.title}
+                                </p>
+                                {r.itemCode ? (
+                                  <p className="text-xs text-muted-foreground font-mono truncate" title={r.itemCode}>
+                                    {r.itemCode}
+                                  </p>
+                                ) : null}
+                              </div>
                               <SubmissionDiscussionHint count={s?.commentCount} />
                             </div>
                           </TableCell>
@@ -1449,9 +1941,12 @@ export default function SubmissionsPage() {
       )}
 
       <SubmissionDetailsDialog
-        submissionId={selectedId}
-        open={Boolean(selectedId)}
-        onClose={() => setSelectedId(null)}
+        selection={detailSelection}
+        open={detailSelection != null}
+        onClose={() => setDetailSelection(null)}
+        onPromoteToSubmission={(submissionId) =>
+          setDetailSelection({ kind: "submission", submissionId })
+        }
       />
 
       <HelpTourOverlay steps={tutorialSteps} buttonLabel="Submissions page help" />

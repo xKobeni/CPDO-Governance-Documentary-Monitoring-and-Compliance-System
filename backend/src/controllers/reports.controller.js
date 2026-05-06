@@ -353,7 +353,7 @@ function drawReportHeader(doc, { reportTitle, subtitle, year, coverage, generate
     .fontSize(10)
     .font("Helvetica")
     .text("City Planning and Development Office", doc.page.margins.left + 14, bannerTop + 23, { align: "left" })
-    .text("CPDO Monitoring System", doc.page.margins.left + 14, bannerTop + 36, { align: "left" });
+    .text("SGLG Monitoring System", doc.page.margins.left + 14, bannerTop + 36, { align: "left" });
   doc.moveDown(2.6);
 
   doc.fillColor("#0f172a").font("Helvetica-Bold").fontSize(15).text(reportTitle, { align: "center" });
@@ -375,7 +375,7 @@ function drawReportHeader(doc, { reportTitle, subtitle, year, coverage, generate
     .text(`Reporting Year: ${year}`, left + 10, top + 10)
     .text(`Coverage: ${coverage}`, left + 10, top + 25)
     .text(`Generated On: ${generatedAt}`, left + 10, top + 40)
-    .text("Prepared By: CPDO Monitoring System", left + width / 2, top + 10);
+    .text("Prepared By: CPDO", left + width / 2, top + 10);
   doc.y = top + boxHeight + 4;
 }
 

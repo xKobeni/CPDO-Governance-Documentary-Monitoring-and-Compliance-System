@@ -118,7 +118,7 @@ function DashboardLayout() {
       "/notifications": "Notifications",
       "/file-manager": "File Manager",
     };
-    return pathTitles[path] || "CPDO Monitoring System";
+    return pathTitles[path] || "SGLG Monitoring System";
   };
 
   const formatCountdown = (seconds) => {

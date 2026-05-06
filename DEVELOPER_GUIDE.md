@@ -1,6 +1,8 @@
-# CPDO Monitoring System Developer Guide
+# SGLG Monitoring System — Developer Guide
 
-This guide helps future developers set up, run, and contribute to the CPDO Monitoring System quickly.
+*City Planning and Development Office (CPDO)*
+
+This guide helps future developers set up, run, and contribute to the SGLG Monitoring System (CPDO) quickly.
 
 ## 1) Project Structure
 
@@ -98,7 +100,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=your-user
 SMTP_PASS=your-pass
-MAIL_FROM="CPDO Monitoring <noreply@example.com>"
+MAIL_FROM="SGLG Monitoring (CPDO) <noreply@example.com>"
 ```
 
 ### Frontend `.env` (inside `frontend/`)

@@ -33,9 +33,9 @@ function TermsContent() {
       <section className="space-y-2">
         <h3 className="font-semibold text-base">1. Acceptance of Terms</h3>
         <p>
-          By accessing and using the CPDO Seal of Good Local Governance (SDLG) Monitoring System
-          ("the System"), you agree to be bound by these Terms of Service. If you do not agree,
-          you must not use the System.
+          By accessing and using the SGLG Monitoring System operated by the City Planning and
+          Development Office (CPDO) (&quot;the System&quot;), you agree to be bound by these Terms of Service.
+          If you do not agree, you must not use the System.
         </p>
       </section>
 
@@ -146,7 +146,7 @@ function PrivacyContent() {
 
       <section className="space-y-2">
         <h3 className="font-semibold text-base">2. Information We Collect</h3>
-        <p>When you use the SDLG Monitoring System, we may collect:</p>
+        <p>When you use the SGLG Monitoring System, we may collect:</p>
         <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
           <li><span className="text-foreground font-medium">Account data:</span> Name, email address, office assignment, and role.</li>
           <li><span className="text-foreground font-medium">Submission data:</span> Documents, checklists, and compliance records you upload.</li>
@@ -309,7 +309,7 @@ export function LoginForm({
               <div className="flex flex-col items-center gap-2 text-center mb-4">
                 <h1 className="text-2xl font-bold">Welcome back</h1>
                 <p className="text-balance text-muted-foreground">
-                  Login to your CPDO SDLG Monitoring System account
+                  Login to your SGLG Monitoring System account (CPDO)
                 </p>
               </div>
               
@@ -464,7 +464,7 @@ export function LoginForm({
         <DialogContent className="sm:max-w-2xl max-h-[82vh] flex flex-col gap-0 p-0">
           <DialogHeader className="px-6 pt-5 pb-4 border-b shrink-0">
             <DialogTitle className="text-base font-semibold">Terms of Service</DialogTitle>
-            <p className="text-xs text-muted-foreground">CPDO SDLG Monitoring System</p>
+            <p className="text-xs text-muted-foreground">SGLG Monitoring System · CPDO</p>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-5 text-xs/relaxed">
             <TermsContent />
@@ -478,7 +478,7 @@ export function LoginForm({
         <DialogContent className="sm:max-w-2xl max-h-[82vh] flex flex-col gap-0 p-0">
           <DialogHeader className="px-6 pt-5 pb-4 border-b shrink-0">
             <DialogTitle className="text-base font-semibold">Privacy Policy</DialogTitle>
-            <p className="text-xs text-muted-foreground">CPDO SDLG Monitoring System · R.A. 10173 compliant</p>
+            <p className="text-xs text-muted-foreground">SGLG Monitoring System · CPDO · R.A. 10173 compliant</p>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-5 text-xs/relaxed">
             <PrivacyContent />
