@@ -189,6 +189,43 @@ export default function GovernanceCompliancePage() {
     [categories, selectedCellKey]
   );
 
+  // For fully "Not Submitted" cells, keep top-level roots plus actionable leaves.
+  // Example: keep "3" and "3.a.1", hide intermediate headers like "3.a".
+  const selectedDetailItems = useMemo(() => {
+    const items = selectedDetail?.items ?? [];
+    if ((selectedCell?.status || "NOT_SUBMITTED") !== "NOT_SUBMITTED") {
+      return items.map((it) => ({ ...it, isHeader: false, isRoot: false, rootCode: null }));
+    }
+
+    const codes = items.map((it) => String(it.itemCode || "").trim()).filter(Boolean);
+    const isHeaderCode = (code) => codes.some((other) => other !== code && other.startsWith(`${code}.`));
+
+    const filtered = items.filter((it) => {
+      const code = String(it.itemCode || "").trim();
+      if (!code) return true;
+      const isRootCode = !code.includes(".");
+      return isRootCode || !isHeaderCode(code);
+    });
+
+    let currentRootCode = null;
+    let currentRootTitle = null;
+    return filtered.map((it) => {
+      const code = String(it.itemCode || "").trim();
+      const isRoot = Boolean(code) && !code.includes(".");
+      if (isRoot) {
+        currentRootCode = code;
+        currentRootTitle = it.itemTitle || null;
+      }
+      return {
+        ...it,
+        isHeader: isRoot,
+        isRoot,
+        rootCode: currentRootCode,
+        rootTitle: currentRootTitle,
+      };
+    });
+  }, [selectedDetail, selectedCell]);
+
   const groupedUnconfiguredAssignments = useMemo(() => {
     const map = new Map();
     for (const row of unconfiguredAssignments) {
@@ -470,7 +507,7 @@ export default function GovernanceCompliancePage() {
       </Card>
 
       <Dialog open={Boolean(selectedCellKey)} onOpenChange={(open) => !open && setSelectedCellKey(null)}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-hidden flex! flex-col!">
+        <DialogContent className="w-[min(96vw,1100px)] sm:max-w-[1100px] max-h-[88vh] overflow-hidden flex! flex-col!">
           <DialogHeader>
             <DialogTitle>
               {selectedOffice?.code || "Office"} - {selectedCategory?.categoryCode || "Category"} Checklist
@@ -481,25 +518,46 @@ export default function GovernanceCompliancePage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-2">
-            {!selectedDetail || selectedDetail.items.length === 0 ? (
+            {!selectedDetail || selectedDetailItems.length === 0 ? (
               <div className="text-sm text-muted-foreground py-8">
                 No active checklist items in this category.
               </div>
             ) : (
-              selectedDetail.items.map((item) => {
+              selectedDetailItems.map((item) => {
                 const status = item.latestSubmissionStatus || "NOT_SUBMITTED";
                 return (
-                  <div key={item.checklistItemId} className="rounded-md border p-3">
+                  <div
+                    key={item.checklistItemId}
+                    className={cn(
+                      "rounded-md border p-3",
+                      item.isHeader && "bg-muted/35 border-border/80"
+                    )}
+                  >
                     <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium">{item.itemCode} - {item.itemTitle}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Submitted: {item.submittedAt ? new Date(item.submittedAt).toLocaleString("en-PH") : "Not submitted"}
+                      <div className={cn(!item.isHeader && "pl-4")}>
+                        <p className={cn("text-sm", item.isHeader ? "font-semibold" : "font-medium")}>
+                          {item.itemCode} - {item.itemTitle}
                         </p>
+                        {item.isHeader ? (
+                          <p className="text-xs text-muted-foreground">Root header</p>
+                        ) : (
+                          <>
+                            {item.rootCode ? (
+                              <p className="text-[11px] text-muted-foreground">
+                                Root: {item.rootCode}{item.rootTitle ? ` - ${item.rootTitle}` : ""}
+                              </p>
+                            ) : null}
+                            <p className="text-xs text-muted-foreground">
+                              Submitted: {item.submittedAt ? new Date(item.submittedAt).toLocaleString("en-PH") : "Not submitted"}
+                            </p>
+                          </>
+                        )}
                       </div>
-                      <Badge variant="outline" className={STATUS_META[status]?.badge || STATUS_META.NOT_SUBMITTED.badge}>
-                        {STATUS_META[status]?.label || status}
-                      </Badge>
+                      {!item.isHeader ? (
+                        <Badge variant="outline" className={STATUS_META[status]?.badge || STATUS_META.NOT_SUBMITTED.badge}>
+                          {STATUS_META[status]?.label || status}
+                        </Badge>
+                      ) : null}
                     </div>
                     {(item.reviewerRemarks || item.officeRemarks) && (
                       <div className="mt-2 text-xs space-y-1">
