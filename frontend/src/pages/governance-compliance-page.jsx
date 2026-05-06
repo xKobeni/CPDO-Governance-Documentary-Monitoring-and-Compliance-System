@@ -470,7 +470,7 @@ export default function GovernanceCompliancePage() {
       </Card>
 
       <Dialog open={Boolean(selectedCellKey)} onOpenChange={(open) => !open && setSelectedCellKey(null)}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-hidden">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-hidden flex! flex-col!">
           <DialogHeader>
             <DialogTitle>
               {selectedOffice?.code || "Office"} - {selectedCategory?.categoryCode || "Category"} Checklist
@@ -480,7 +480,7 @@ export default function GovernanceCompliancePage() {
               {STATUS_META[selectedCell?.status || "NOT_SUBMITTED"].label}
             </DialogDescription>
           </DialogHeader>
-          <div className="overflow-y-auto pr-1 space-y-2">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-2">
             {!selectedDetail || selectedDetail.items.length === 0 ? (
               <div className="text-sm text-muted-foreground py-8">
                 No active checklist items in this category.
