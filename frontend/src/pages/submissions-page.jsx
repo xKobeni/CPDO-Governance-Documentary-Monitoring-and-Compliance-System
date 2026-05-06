@@ -1548,7 +1548,8 @@ export default function SubmissionsPage() {
               </div>
             ) : (
               <div className="rounded-md border overflow-hidden">
-                <Table>
+                <div className="max-h-[60vh] overflow-auto">
+                <Table className="min-w-[860px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Governance</TableHead>
@@ -1602,6 +1603,7 @@ export default function SubmissionsPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               </div>
             )}
           </CardContent>
@@ -1816,7 +1818,8 @@ export default function SubmissionsPage() {
               </div>
             ) : (
               <div className="rounded-lg border overflow-hidden shadow-sm">
-                <Table className="table-fixed w-full">
+                <div className="max-h-[62vh] overflow-auto">
+                <Table className="table-fixed w-full min-w-[900px]">
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
                       <TableHead className="font-semibold w-[65%]">Item</TableHead>
@@ -1932,6 +1935,7 @@ export default function SubmissionsPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               </div>
             )}
           </CardContent>
