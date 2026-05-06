@@ -189,8 +189,8 @@ export default function GovernanceCompliancePage() {
     [categories, selectedCellKey]
   );
 
-  // For fully "Not Submitted" cells, keep top-level roots plus actionable leaves.
-  // Example: keep "3" and "3.a.1", hide intermediate headers like "3.a".
+  // For fully "Not Submitted" cells, keep the full hierarchy (roots + intermediate headers + leaves)
+  // so structure remains visible in the modal.
   const selectedDetailItems = useMemo(() => {
     const items = selectedDetail?.items ?? [];
     if ((selectedCell?.status || "NOT_SUBMITTED") !== "NOT_SUBMITTED") {
@@ -200,25 +200,19 @@ export default function GovernanceCompliancePage() {
     const codes = items.map((it) => String(it.itemCode || "").trim()).filter(Boolean);
     const isHeaderCode = (code) => codes.some((other) => other !== code && other.startsWith(`${code}.`));
 
-    const filtered = items.filter((it) => {
-      const code = String(it.itemCode || "").trim();
-      if (!code) return true;
-      const isRootCode = !code.includes(".");
-      return isRootCode || !isHeaderCode(code);
-    });
-
     let currentRootCode = null;
     let currentRootTitle = null;
-    return filtered.map((it) => {
+    return items.map((it) => {
       const code = String(it.itemCode || "").trim();
       const isRoot = Boolean(code) && !code.includes(".");
+      const isHeader = Boolean(code) && isHeaderCode(code);
       if (isRoot) {
         currentRootCode = code;
         currentRootTitle = it.itemTitle || null;
       }
       return {
         ...it,
-        isHeader: isRoot,
+        isHeader,
         isRoot,
         rootCode: currentRootCode,
         rootTitle: currentRootTitle,
