@@ -1,6 +1,9 @@
 import { pool } from "../config/db.js";
+import { getChecklistItemsForOffice } from "../models/assignments.model.js";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
+
+const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function toFinitePercent(numerator, denominator) {
   if (!denominator) return 0;
@@ -421,6 +424,58 @@ async function fetchMissingUploads({ year, officeId, governanceAreaId }) {
   return rows;
 }
 
+async function fetchCompletedUploads({ year, officeId, governanceAreaId }) {
+  const params = [year, officeId];
+  let govFilter = "";
+  if (governanceAreaId) {
+    params.push(governanceAreaId);
+    govFilter = `AND ga.id = $${params.length}`;
+  }
+
+  const { rows } = await pool.query(
+    `SELECT
+        governance_code,
+        governance_name,
+        checklist_item_id,
+        item_code,
+        item_title,
+        status,
+        submitted_at,
+        updated_at
+     FROM (
+       SELECT
+         ga.code as governance_code,
+         ga.name as governance_name,
+         ci.id as checklist_item_id,
+         ci.item_code,
+         ci.title as item_title,
+         s.status,
+         s.submitted_at,
+         s.updated_at,
+         ga.sort_order as gov_sort_order,
+         ci.sort_order as item_sort_order,
+         ROW_NUMBER() OVER (
+           PARTITION BY ci.id
+           ORDER BY s.updated_at DESC NULLS LAST, s.submitted_at DESC NULLS LAST
+         ) AS rn
+       FROM submissions s
+       JOIN checklist_items ci ON ci.id = s.checklist_item_id
+       JOIN checklist_templates t ON t.id = ci.template_id
+       JOIN governance_areas ga ON ga.id = t.governance_area_id
+       WHERE s.year = $1
+         AND s.office_id = $2
+         AND t.status = 'ACTIVE'
+         AND ci.is_active = TRUE
+         ${govFilter}
+     ) subq
+     WHERE rn = 1
+     ORDER BY gov_sort_order, item_sort_order, item_code`,
+    params
+  );
+
+  return rows;
+}
+
 /**
  * Summary by status for a year (optionally governance area / office)
  */
@@ -582,6 +637,410 @@ export async function noUploadExportHandler(req, res) {
   }
   finalizePdfWithFooter(doc, generatedAt);
   doc.end();
+}
+
+/**
+ * COMPLETED UPLOADS: checklist items that have submissions
+ */
+export async function completedUploadsHandler(req, res) {
+  const year = Number(req.query.year);
+  if (!year) return res.status(400).json({ message: "year is required" });
+
+  const governanceAreaId = req.query.governanceAreaId || null;
+  let officeId = req.query.officeId || null;
+  if (req.user.role === "OFFICE") officeId = req.user.officeId;
+  if (!officeId) return res.status(400).json({ message: "officeId is required (unless OFFICE user)" });
+
+  const rows = await fetchCompletedUploads({ year, officeId, governanceAreaId });
+
+  return res.json({ year, officeId, governanceAreaId, completed: rows });
+}
+
+export async function completedUploadsExportHandler(req, res) {
+  const year = Number(req.query.year);
+  if (!year) return res.status(400).json({ message: "year is required" });
+
+  const format = String(req.query.format || "csv").toLowerCase();
+  if (!["csv", "xlsx"].includes(format)) {
+    return res.status(400).json({ message: "Invalid format. Use csv or xlsx." });
+  }
+
+  const governanceAreaId = req.query.governanceAreaId || null;
+  let officeId = req.query.officeId || null;
+  if (req.user.role === "OFFICE") officeId = req.user.officeId;
+  if (!officeId) return res.status(400).json({ message: "officeId is required (unless OFFICE user)" });
+
+  const rows = await fetchCompletedUploads({ year, officeId, governanceAreaId });
+  const fileStem = `completed-uploads-${safeSlug(officeId)}-${year}`;
+
+  applyDownloadHeaders(res, { format, fileStem });
+
+  if (format === "csv") {
+    const csvLines = [
+      "Governance Area,Governance Code,Item Code,Item Title,Status,Submitted At",
+      ...rows.map((r) =>
+        `"${r.governance_name}","${r.governance_code}","${r.item_code || ""}","${(r.item_title || "").replace(/"/g, '""')}","${r.status}","${new Date(r.submitted_at).toLocaleString("en-PH")}"`
+      ),
+    ];
+    return res.send(csvLines.join("\n"));
+  }
+
+  if (format === "xlsx") {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Completed Uploads");
+
+    worksheet.columns = [
+      { header: "Governance Area", key: "governance_name", width: 30 },
+      { header: "Area Code", key: "governance_code", width: 15 },
+      { header: "Item Code", key: "item_code", width: 15 },
+      { header: "Item Title", key: "item_title", width: 40 },
+      { header: "Status", key: "status", width: 18 },
+      { header: "Submitted At", key: "submitted_at", width: 20 },
+    ];
+
+    worksheet.headerRow = 1;
+    worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    worksheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0f172a" } };
+
+    rows.forEach((row) => {
+      worksheet.addRow({
+        governance_name: row.governance_name,
+        governance_code: row.governance_code,
+        item_code: row.item_code || "",
+        item_title: row.item_title || "",
+        status: row.status,
+        submitted_at: new Date(row.submitted_at).toLocaleString("en-PH"),
+      });
+    });
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    await workbook.xlsx.write(res);
+    return;
+  }
+}
+
+/**
+ * GOVERNANCE BY OFFICE: per-governance metrics for a single office
+ * Query params: year, officeId (officeId auto-filled for OFFICE role)
+ */
+export async function governanceByOfficeHandler(req, res) {
+  const year = Number(req.query.year);
+  if (!year) return res.status(400).json({ message: "year is required" });
+
+  let officeId = req.query.officeId || null;
+  if (req.user.role === "OFFICE") officeId = req.user.officeId;
+  if (!officeId) return res.status(400).json({ message: "officeId is required (unless OFFICE user)" });
+
+  const rows = await getChecklistItemsForOffice(officeId, year);
+
+  // Group by governance code
+  const grouped = {};
+  for (const r of rows) {
+    const key = r.governance_code || r.governance_name || 'UNKNOWN';
+    if (!grouped[key]) {
+      grouped[key] = {
+        governance_code: r.governance_code,
+        governance_area_id: r.governance_area_id,
+        governance_name: r.governance_name,
+        totalExpected: 0,
+        reviewed: 0,
+        compliant: 0,
+        underReview: 0,
+        inProgress: 0,
+        notStarted: 0,
+        missing: 0,
+      };
+    }
+
+    const g = grouped[key];
+
+    // Each row represents an assigned checklist item
+    g.totalExpected += 1;
+
+    if (!r.submission_id) {
+      g.missing += 1;
+      g.notStarted += 1;
+    } else {
+      const status = r.submission_status;
+      if (status === 'APPROVED') {
+        g.compliant += 1;
+        g.reviewed += 1;
+      } else if (status === 'DENIED') {
+        g.reviewed += 1;
+      } else if (status === 'REVISION_REQUESTED') {
+        g.reviewed += 1;
+        g.underReview += 1;
+      } else if (status === 'PENDING') {
+        g.inProgress += 1;
+      } else {
+        // unknown status, count as not started
+      }
+    }
+  }
+
+  const results = Object.values(grouped).map((row) => ({
+    ...row,
+    completionPercentage: toFinitePercent(row.reviewed, row.totalExpected),
+    missingPercentage: toFinitePercent(row.missing, row.totalExpected),
+  }));
+
+  // Build monthlyTrend per governance area (expected from templates + reviewed submissions)
+  try {
+    // expected per area per month
+    const expRes = await pool.query(
+      `SELECT ga.id AS governance_area_id, EXTRACT(MONTH FROM COALESCE(ci.due_date, make_date($1,12,31)))::int AS month, COUNT(*)::int AS expected
+       FROM checklist_templates t
+       JOIN checklist_items ci ON ci.template_id = t.id
+       JOIN governance_areas ga ON ga.id = t.governance_area_id
+       WHERE t.year = $1 AND t.status = 'ACTIVE' AND ci.is_active = TRUE
+       GROUP BY ga.id, month`,
+      [year]
+    );
+    const expectedMap = {};
+    for (const r of expRes.rows) {
+      expectedMap[`${r.governance_area_id}:${r.month}`] = Number(r.expected || 0);
+    }
+
+    // reviewed per area per month (office-scoped)
+    const revRes = await pool.query(
+      `SELECT s.governance_area_id, EXTRACT(MONTH FROM s.submitted_at)::int AS month,
+         COUNT(*) FILTER (WHERE s.status IN ('APPROVED','DENIED','REVISION_REQUESTED'))::int AS reviewed
+       FROM submissions s
+       WHERE s.year = $1 AND s.office_id = $2
+       GROUP BY s.governance_area_id, month`,
+      [year, officeId]
+    );
+    const reviewedMap = {};
+    for (const r of revRes.rows) {
+      reviewedMap[`${r.governance_area_id}:${r.month}`] = Number(r.reviewed || 0);
+    }
+
+    for (const r of results) {
+      const months = [];
+      for (let m = 1; m <= 12; m++) {
+        const expected = expectedMap[`${r.governance_area_id}:${m}`] || 0;
+        const reviewed = reviewedMap[`${r.governance_area_id}:${m}`] || 0;
+        months.push({ month: m, label: MONTH_LABELS[m - 1], totalExpected: expected, reviewed, completionPercentage: toFinitePercent(reviewed, expected) });
+      }
+      r.monthlyTrend = months;
+    }
+  } catch (err) {
+    // ignore monthly trend errors
+    for (const r of results) r.monthlyTrend = [];
+  }
+
+  // compute avg review days and YoY if requested
+  // Attach avgReviewDays per governance area
+  for (const r of results) {
+    try {
+      const revRes = await pool.query(
+        `SELECT ROUND(AVG(EXTRACT(EPOCH FROM rev.reviewed_at - s.submitted_at)/86400)::numeric,1)::float AS avg_review_days
+         FROM submissions s
+         JOIN reviews rev ON rev.submission_id = s.id
+         WHERE s.year = $1 AND s.office_id = $2 AND s.governance_area_id = $3`,
+        [year, officeId, r.governance_area_id]
+      );
+      r.avgReviewDays = revRes.rows[0]?.avg_review_days ?? null;
+    } catch (err) {
+      r.avgReviewDays = null;
+    }
+  }
+
+  // YoY: compare with previous year if available
+  try {
+    const prevRows = await getChecklistItemsForOffice(officeId, year - 1);
+    const prevGrouped = {};
+    for (const p of prevRows) {
+      const k = p.governance_code || p.governance_name || 'UNKNOWN';
+      if (!prevGrouped[k]) prevGrouped[k] = { totalExpected: 0, reviewed: 0 };
+      prevGrouped[k].totalExpected += 1;
+      if (p.submission_id) {
+        const st = p.submission_status;
+        if (st === 'APPROVED' || st === 'DENIED' || st === 'REVISION_REQUESTED') prevGrouped[k].reviewed += 1;
+      }
+    }
+    for (const r of results) {
+      const prev = prevGrouped[r.governance_code] || { totalExpected: 0, reviewed: 0 };
+      const prevPct = toFinitePercent(prev.reviewed, prev.totalExpected);
+      r.completionPercentageYoY = Number((r.completionPercentage - prevPct).toFixed(2));
+    }
+  } catch (err) {
+    // ignore YoY errors
+    for (const r of results) r.completionPercentageYoY = null;
+  }
+
+  // Export handling: if format param present, support csv/xlsx only
+  const format = String(req.query.format || '').toLowerCase();
+  if (!['csv', 'xlsx', ''].includes(format)) {
+    return res.status(400).json({ message: 'Invalid format. Use csv or xlsx.' });
+  }
+
+  if (format === 'xlsx') {
+    const workbook = new ExcelJS.Workbook();
+
+    const summary = workbook.addWorksheet('Executive Summary');
+    summary.addRow(['Governance Area Progress']);
+    summary.addRow(['Year', year]);
+    summary.addRow(['Office', officeId]);
+    summary.addRow([]);
+    summary.addRow(['Code', 'Area', 'Total Expected', 'Reviewed', 'Compliant', 'Missing', 'Completion %', 'Avg Review Days', 'YoY Δ']);
+    for (const r of results) {
+      summary.addRow([
+        r.governance_code,
+        r.governance_name,
+        r.totalExpected || 0,
+        r.reviewed || 0,
+        r.compliant || 0,
+        r.missing || 0,
+        `${Number(r.completionPercentage || 0).toFixed(2)}%`,
+        r.avgReviewDays != null ? r.avgReviewDays : '',
+        r.completionPercentageYoY != null ? `${r.completionPercentageYoY >= 0 ? '+' : ''}${r.completionPercentageYoY.toFixed(2)}pp` : '',
+      ]);
+    }
+
+    const trend = workbook.addWorksheet('Monthly Trends');
+    trend.addRow(['Area', ...MONTH_LABELS]);
+    for (const r of results) {
+      const row = [r.governance_name || r.governance_code];
+      const months = (r.monthlyTrend || []).reduce((acc, m) => {
+        acc[m.month - 1] = `${Number(m.completionPercentage || 0).toFixed(2)}%`;
+        return acc;
+      }, Array.from({ length: 12 }, () => '0.00%'));
+      trend.addRow(row.concat(months));
+    }
+
+    const buf = await workbook.xlsx.writeBuffer();
+    const fileStem = `governance-by-office-${safeSlug(officeId)}-${year}`;
+    applyDownloadHeaders(res, { format: 'xlsx', fileStem });
+    return res.send(Buffer.from(buf));
+  }
+
+  if (format === 'csv') {
+    const header = [
+      'Governance Code',
+      'Governance Name',
+      'Total Expected',
+      'Reviewed',
+      'Compliant',
+      'In Progress',
+      'Under Review',
+      'Not Started',
+      'Missing',
+      'Completion %',
+      'Missing %',
+      'Avg Review Days',
+      'Completion % YoY',
+    ].join(',');
+
+    const lines = results.map((r) => [
+      r.governance_code,
+      `"${(r.governance_name || '').replace(/"/g, '""')}"`,
+      r.totalExpected || 0,
+      r.reviewed || 0,
+      r.compliant || 0,
+      r.inProgress || 0,
+      r.underReview || 0,
+      r.notStarted || 0,
+      r.missing || 0,
+      `${Number(r.completionPercentage || 0).toFixed(2)}%`,
+      `${Number(r.missingPercentage || 0).toFixed(2)}%`,
+      r.avgReviewDays != null ? r.avgReviewDays : '',
+      r.completionPercentageYoY != null ? `${r.completionPercentageYoY >= 0 ? '+' : ''}${r.completionPercentageYoY.toFixed(2)}pp` : '',
+    ].join(','));
+
+    const csv = [header, ...lines].join('\n');
+    const fileStem = `governance-by-office-${safeSlug(officeId)}-${year}`;
+    applyDownloadHeaders(res, { format: 'csv', fileStem });
+    return res.send(csv);
+  }
+
+  return res.json({ year, officeId, data: results });
+}
+
+/**
+ * GOVERNANCE HEATMAP: returns completion % matrix for offices (rows) x governance areas (columns)
+ * Query params: year
+ */
+export async function governanceHeatmapHandler(req, res) {
+  const year = Number(req.query.year);
+  if (!year) return res.status(400).json({ message: 'year is required' });
+
+  // list assignments to determine offices and areas
+  const assignments = await pool.query(
+    `SELECT oga.office_id, o.name AS office_name, ga.id AS governance_area_id, ga.code AS governance_code, ga.name AS governance_name
+     FROM office_governance_assignments oga
+     JOIN offices o ON o.id = oga.office_id
+     JOIN governance_areas ga ON ga.id = oga.governance_area_id
+     WHERE oga.year = $1`,
+    [year]
+  );
+
+  const offices = {};
+  const areas = {};
+  for (const r of assignments.rows) {
+    offices[r.office_id] = r.office_name;
+    areas[r.governance_area_id] = { code: r.governance_code, name: r.governance_name };
+  }
+
+  // expected per area (from templates)
+  const expRes = await pool.query(
+    `SELECT ga.id AS governance_area_id, COUNT(ci.id)::int AS expected
+     FROM checklist_templates t
+     JOIN checklist_items ci ON ci.template_id = t.id
+     JOIN governance_areas ga ON ga.id = t.governance_area_id
+     WHERE t.year = $1 AND t.status = 'ACTIVE' AND ci.is_active = TRUE
+     GROUP BY ga.id`,
+    [year]
+  );
+  const expectedMap = {};
+  for (const r of expRes.rows) expectedMap[r.governance_area_id] = Number(r.expected || 0);
+
+  // reviewed per office x area
+  const revRes = await pool.query(
+    `SELECT s.office_id, s.governance_area_id, COUNT(*) FILTER (WHERE s.status IN ('APPROVED','DENIED','REVISION_REQUESTED'))::int AS reviewed
+     FROM submissions s
+     WHERE s.year = $1
+     GROUP BY s.office_id, s.governance_area_id`,
+    [year]
+  );
+  const reviewedMap = {};
+  for (const r of revRes.rows) reviewedMap[`${r.office_id}:${r.governance_area_id}`] = Number(r.reviewed || 0);
+
+  // build matrix
+  const officeList = Object.keys(offices).map((id) => ({ id, name: offices[id] }));
+  const areaList = Object.keys(areas).map((id) => ({ id, ...areas[id] }));
+  const matrix = areaList.map((a) => {
+    const row = { governance_area_id: a.id, governance_code: a.code, governance_name: a.name, values: [] };
+    for (const o of officeList) {
+      const expected = expectedMap[a.id] || 0;
+      const reviewed = reviewedMap[`${o.id}:${a.id}`] || 0;
+      const pct = toFinitePercent(reviewed, expected);
+      row.values.push({ officeId: o.id, officeName: o.name, completionPercentage: pct });
+    }
+    return row;
+  });
+
+  // support simple exports via format query param (csv)
+  const outFormat = String(req.query.format || '').toLowerCase();
+  if (outFormat && outFormat === 'csv') {
+    const fileStem = `governance-heatmap-${safeSlug('all-offices')}-${year}`;
+    applyDownloadHeaders(res, { format: outFormat, fileStem });
+
+    // header: area_code, area_name, <office1>, <office2>...
+    const header = ['Governance Code', 'Governance Name', ...officeList.map((o) => o.name)];
+    const lines = [header.join(',')];
+    for (const row of matrix) {
+      const cols = [row.governance_code, `"${(row.governance_name || '').replace(/"/g, '""')}"`, ...row.values.map((v) => `${Number(v.completionPercentage || 0).toFixed(2)}%`)];
+      lines.push(cols.join(','));
+    }
+    return res.send(lines.join('\n'));
+  }
+
+  if (outFormat === 'pdf') {
+    return res.status(400).json({ message: 'Invalid format. Use csv.' });
+  }
+
+  return res.json({ year, offices: officeList, areas: areaList, matrix });
 }
 
 async function buildDashboardOverviewDataset({ year, governanceAreaId, officeId, userId }) {

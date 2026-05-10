@@ -46,15 +46,33 @@ import {
 } from 'recharts';
 import { toast } from 'react-hot-toast';
 import { cn } from '../lib/utils';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   getReportSummary,
   getNoUploadReport,
   getReportOverview,
   getComplianceProgress,
+  getGovernanceByOffice,
   downloadComplianceProgress,
   downloadMissingUploads,
+  downloadCompletedUploads,
+  getCompletedUploads,
+  downloadGovernanceByOffice,
+  downloadGovernanceHeatmap,
   downloadDashboardOverview,
+  getGovernanceHeatmap,
 } from '../api/reports';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -167,6 +185,168 @@ function toSlug(str) {
   return str.replace(/\s+/g, '-').replace(/[^a-z0-9-]/gi, '').toLowerCase();
 }
 
+function generateCompletedUploadsPdfBlob({ year, officeName, completedByGov }) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+  const generatedAt = new Date().toLocaleString('en-PH');
+
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, doc.internal.pageSize.getWidth(), 60, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text('COMPLETED UPLOADS REPORT', 20, 25);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(`Prepared by CPDO Monitoring System · Year: ${year} · Coverage: ${officeName || 'N/A'} · Generated: ${generatedAt}`, 20, 45);
+
+  let yPos = 80;
+  const tableData = [];
+
+  Object.values(completedByGov).forEach((gov) => {
+    gov.items.forEach((item) => {
+      tableData.push([
+        gov.code,
+        gov.name,
+        item.item_code || 'N/A',
+        item.item_title || 'Untitled',
+        item.status,
+        new Date(item.submitted_at).toLocaleDateString('en-PH'),
+      ]);
+    });
+  });
+
+  autoTable(doc, {
+    startY: yPos,
+    theme: 'grid',
+    head: [['Area Code', 'Area Name', 'Item Code', 'Item Title', 'Status', 'Submitted']],
+    body: tableData,
+    styles: { fontSize: 7, cellPadding: 3, textColor: [15, 23, 42] },
+    headStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 35 },
+      1: { cellWidth: 70 },
+      2: { halign: 'center', cellWidth: 40 },
+      3: { cellWidth: 'auto' },
+      4: { halign: 'center', cellWidth: 50 },
+      5: { halign: 'center', cellWidth: 50 },
+    },
+  });
+
+  doc.setFontSize(7);
+  doc.setTextColor(71, 85, 105);
+  doc.text('This is a system-generated report intended for monitoring and compliance follow-up.', 20, doc.internal.pageSize.getHeight() - 15);
+  return doc.output('blob');
+}
+
+function generateGovernancePdfBlob({ year, officeName, rows }) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const generatedAt = new Date().toLocaleString('en-PH');
+
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, doc.internal.pageSize.getWidth(), 72, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('GOVERNANCE AREAS PROGRESS', 40, 30);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('Prepared by CPDO Monitoring System', 40, 48);
+  doc.text(`Year: ${year}`, 40, 62);
+  doc.text(`Coverage: ${officeName || 'All Offices'}`, 220, 62);
+  doc.text(`Generated: ${generatedAt}`, 420, 62);
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('By Area Summary', 40, 98);
+
+  autoTable(doc, {
+    startY: 112,
+    theme: 'grid',
+    head: [['Code', 'Area', 'Expected', 'Reviewed', 'Compliant', 'Missing', 'Completion %']],
+    body: rows.map((row) => [
+      row.governance_code,
+      row.governance_name,
+      row.totalExpected,
+      row.reviewed,
+      row.compliant,
+      row.missing,
+      `${Number(row.completionPercentage || 0).toFixed(1)}%`,
+    ]),
+    styles: { fontSize: 8, cellPadding: 4, textColor: [15, 23, 42] },
+    headStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+      4: { halign: 'right' },
+      5: { halign: 'right' },
+      6: { halign: 'right' },
+    },
+  });
+
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text('This is a system-generated report intended for monitoring and compliance follow-up.', 40, doc.internal.pageSize.getHeight() - 28);
+  return doc.output('blob');
+}
+
+function generateHeatmapPdfBlob({ year, matrix, offices }) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const generatedAt = new Date().toLocaleString('en-PH');
+
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, doc.internal.pageSize.getWidth(), 72, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('GOVERNANCE HEATMAP', 40, 30);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('Completion percentage by office and governance area', 40, 48);
+  doc.text(`Year: ${year}`, 40, 62);
+  doc.text(`Generated: ${generatedAt}`, 220, 62);
+
+  const head = ['Area', 'Code', ...offices.map((office) => office.name)];
+  const body = matrix.map((row) => [
+    row.governance_name,
+    row.governance_code,
+    ...row.values.map((value) => `${Number(value.completionPercentage || 0).toFixed(1)}%`),
+  ]);
+
+  autoTable(doc, {
+    startY: 112,
+    theme: 'grid',
+    head: [head],
+    body,
+    styles: { fontSize: 7, cellPadding: 3, textColor: [15, 23, 42] },
+    headStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    didParseCell: (data) => {
+      if (data.section !== 'body' || data.column.index < 2) return;
+      const text = String(data.cell.raw || '0').replace('%', '');
+      const pct = Number(text) || 0;
+      if (pct >= 80) {
+        data.cell.styles.fillColor = [220, 252, 231];
+        data.cell.styles.textColor = [22, 101, 52];
+      } else if (pct >= 50) {
+        data.cell.styles.fillColor = [254, 249, 195];
+        data.cell.styles.textColor = [146, 64, 14];
+      } else {
+        data.cell.styles.fillColor = [254, 226, 226];
+        data.cell.styles.textColor = [153, 27, 27];
+      }
+      data.cell.styles.halign = 'right';
+    },
+  });
+
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text('This is a system-generated report intended for monitoring and compliance follow-up.', 40, doc.internal.pageSize.getHeight() - 28);
+  return doc.output('blob');
+}
+
 // ─── Missing-uploads helpers (unchanged logic) ────────────────────────────────
 function buildMissingTree(items) {
   const sorted = [...items].sort((a, b) =>
@@ -215,6 +395,9 @@ export default function ReportsPage() {
   const [year, setYear] = useState(String(currentYear));
   const [selectedOfficeId, setSelectedOfficeId] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+  const [uploadView, setUploadView] = useState('missing'); // 'missing' or 'completed'
+  const [pdfExportRequest, setPdfExportRequest] = useState(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   // ── Queries ──────────────────────────────────────────────────────────────────
   const yearsQuery = useQuery({
@@ -265,6 +448,17 @@ export default function ReportsPage() {
     enabled: Boolean(selectedOfficeId) || isOfficeUser,
   });
 
+  const completedQuery = useQuery({
+    queryKey: ['report-completed', year, selectedOfficeId || (isOfficeUser ? '__own__' : null)],
+    queryFn: () =>
+      getCompletedUploads({
+        year,
+        ...(selectedOfficeId ? { officeId: selectedOfficeId } : {}),
+      }),
+    staleTime: 2 * 60 * 1000,
+    enabled: Boolean(selectedOfficeId) || isOfficeUser,
+  });
+
   const complianceQuery = useQuery({
     queryKey: ['report-compliance-progress', year, selectedOfficeId || null],
     queryFn: () =>
@@ -273,6 +467,24 @@ export default function ReportsPage() {
         ...(selectedOfficeId ? { officeId: selectedOfficeId } : {}),
       }),
     staleTime: 2 * 60 * 1000,
+  });
+
+  const governanceQuery = useQuery({
+    queryKey: ['governance-by-office', year, selectedOfficeId || (isOfficeUser ? '__own__' : null)],
+    queryFn: () =>
+      getGovernanceByOffice({
+        year,
+        ...(selectedOfficeId ? { officeId: selectedOfficeId } : {}),
+      }),
+    staleTime: 2 * 60 * 1000,
+    enabled: Boolean(selectedOfficeId) || isOfficeUser,
+  });
+
+  const heatmapQuery = useQuery({
+    queryKey: ['governance-heatmap', year],
+    queryFn: () => getGovernanceHeatmap({ year }),
+    staleTime: 5 * 60 * 1000,
+    enabled: activeTab === 'heatmap',
   });
 
   // ── Derived: year / office lists ──────────────────────────────────────────────
@@ -371,27 +583,41 @@ export default function ReportsPage() {
     [missingList]
   );
 
+  // ── Derived: completed uploads ───────────────────────────────────────────────────
+  const completedList = completedQuery.data?.completed || [];
+  const completedByGov = useMemo(
+    () =>
+      completedList.reduce((acc, item) => {
+        const key = item.governance_code;
+        if (!acc[key])
+          acc[key] = { name: item.governance_name, code: item.governance_code, items: [] };
+        acc[key].items.push(item);
+        return acc;
+      }, {}),
+    [completedList]
+  );
+
   // ── "Generated at" text ───────────────────────────────────────────────────────
   const generatedAt = useMemo(() => {
     const ts =
       activeTab === 'overview' ? overviewQuery.dataUpdatedAt :
       activeTab === 'status'   ? complianceQuery.dataUpdatedAt  :
-      activeTab === 'missing'  ? missingQuery.dataUpdatedAt  :
+      activeTab === 'missing'  ? (uploadView === 'missing' ? missingQuery.dataUpdatedAt : completedQuery.dataUpdatedAt) :
       null;
     return ts
       ? new Date(ts).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
       : null;
-  }, [activeTab, overviewQuery.dataUpdatedAt, complianceQuery.dataUpdatedAt, missingQuery.dataUpdatedAt]);
+  }, [activeTab, uploadView, overviewQuery.dataUpdatedAt, complianceQuery.dataUpdatedAt, missingQuery.dataUpdatedAt, completedQuery.dataUpdatedAt]);
 
   // ── Refresh ───────────────────────────────────────────────────────────────────
   const isRefreshing =
     overviewQuery.isFetching || summaryQuery.isFetching ||
-    missingQuery.isFetching || complianceQuery.isFetching;
+    missingQuery.isFetching || completedQuery.isFetching || complianceQuery.isFetching;
 
   const handleRefresh = () => {
     if (activeTab === 'overview') { overviewQuery.refetch(); summaryQuery.refetch(); }
     else if (activeTab === 'status') complianceQuery.refetch();
-    else if (activeTab === 'missing') missingQuery.refetch();
+    else if (activeTab === 'missing') { missingQuery.refetch(); completedQuery.refetch(); }
   };
 
   // ── CSV exports ───────────────────────────────────────────────────────────────
@@ -468,6 +694,101 @@ export default function ReportsPage() {
     }
   };
 
+  const exportCompleted = async (format) => {
+    if (format === 'pdf') {
+      setPdfExportRequest({ kind: 'completed' });
+      return;
+    }
+    try {
+      const blob = await downloadCompletedUploads(
+        {
+          year,
+          ...(selectedOfficeId ? { officeId: selectedOfficeId } : {}),
+        },
+        format
+      );
+      const officePart = selectedOfficeName ? toSlug(selectedOfficeName) : 'office';
+      downloadBlob(`completed-uploads-${officePart}-${year}.${format}`, blob);
+      toast.success(`Completed uploads exported (${format.toUpperCase()})`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to export completed uploads report.');
+    }
+  };
+
+  const exportGovernance = async (format) => {
+    if (format === 'pdf') {
+      setPdfExportRequest({ kind: 'area' });
+      return;
+    }
+    try {
+      const blob = await downloadGovernanceByOffice(
+        {
+          year,
+          ...(selectedOfficeId ? { officeId: selectedOfficeId } : {}),
+        },
+        format
+      );
+      const officePart = selectedOfficeName ? toSlug(selectedOfficeName) : 'office';
+      downloadBlob(`governance-by-office-${officePart}-${year}.${format}`, blob);
+      toast.success(`Governance by area exported (${format.toUpperCase()})`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to export governance by area.');
+    }
+  };
+
+  const exportHeatmap = async (format) => {
+    if (format === 'pdf') {
+      setPdfExportRequest({ kind: 'heatmap' });
+      return;
+    }
+    try {
+      const blob = await downloadGovernanceHeatmap({ year }, format);
+      downloadBlob(`governance-heatmap-${year}.${format}`, blob);
+      toast.success(`Heatmap exported (${format.toUpperCase()})`);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'Failed to export heatmap.');
+    }
+  };
+
+  const confirmPdfExport = async () => {
+    if (!pdfExportRequest) return;
+
+    try {
+      setIsGeneratingPdf(true);
+      if (pdfExportRequest.kind === 'area') {
+        const rows = governanceQuery.data?.data || [];
+        const blob = generateGovernancePdfBlob({
+          year,
+          officeName: selectedOfficeName,
+          rows,
+        });
+        downloadBlob(`governance-by-office-${selectedOfficeName ? toSlug(selectedOfficeName) : 'office'}-${year}.pdf`, blob);
+        toast.success('Governance by area PDF exported');
+      } else if (pdfExportRequest.kind === 'heatmap') {
+        const blob = generateHeatmapPdfBlob({
+          year,
+          matrix: heatmapQuery.data?.matrix || [],
+          offices: heatmapQuery.data?.offices || [],
+        });
+        downloadBlob(`governance-heatmap-${year}.pdf`, blob);
+        toast.success('Heatmap PDF exported');
+      } else if (pdfExportRequest.kind === 'completed') {
+        const blob = generateCompletedUploadsPdfBlob({
+          year,
+          officeName: selectedOfficeName,
+          completedByGov,
+        });
+        downloadBlob(`completed-uploads-${selectedOfficeName ? toSlug(selectedOfficeName) : 'office'}-${year}.pdf`, blob);
+        toast.success('Completed uploads PDF exported');
+      }
+      setPdfExportRequest(null);
+    } catch (error) {
+      toast.error(error?.message || 'Failed to generate PDF.');
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const exportDashboard = async (format) => {
     try {
       const blob = await downloadDashboardOverview(
@@ -487,8 +808,24 @@ export default function ReportsPage() {
 
   const canExportCompliance = !complianceQuery.isFetching && Boolean(complianceSnapshot?.totalExpected);
   const canExportMissing = !missingQuery.isFetching && missingList.length > 0;
+  const canExportCompleted = !completedQuery.isFetching && completedList.length > 0;
   const canExportRecent = !overviewQuery.isFetching && recentSubmissions.length > 0;
   const canExportOverview = !overviewQuery.isFetching && Boolean(overviewQuery.data);
+  const canExportArea = !governanceQuery.isFetching && Array.isArray(governanceQuery.data?.data) && governanceQuery.data.data.length > 0;
+  const canExportHeatmap = !heatmapQuery.isFetching && Array.isArray(heatmapQuery.data?.matrix) && heatmapQuery.data.matrix.length > 0;
+
+  // Determine if we have any report data at all for the current context
+  const hasAnyData = Boolean(
+    (overviewQuery.data && ((overviewQuery.data.kpis?.totalSubmissions || 0) > 0 || (overviewQuery.data.recentSubmissions?.length || 0) > 0)) ||
+    (total > 0) ||
+    (complianceSnapshot?.totalExpected > 0) ||
+    (missingList.length > 0) ||
+    (completedList.length > 0) ||
+    (governanceQuery.data?.data?.length > 0) ||
+    (heatmapQuery.data?.matrix?.length > 0)
+  );
+
+  const allQueriesIdle = [overviewQuery, summaryQuery, complianceQuery, missingQuery, completedQuery, governanceQuery, heatmapQuery].every(q => !q.isFetching);
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
@@ -576,10 +913,37 @@ export default function ReportsPage() {
 
               {activeTab === 'missing' && (
                 <>
-                  <DropdownMenuLabel>Missing Uploads Exports</DropdownMenuLabel>
+                  <DropdownMenuLabel>Upload Exports</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={exportMissingCSV}>Missing Uploads (CSV)</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => exportMissing('pdf')}>Missing Uploads (PDF)</DropdownMenuItem>
+                  {uploadView === 'missing' && (
+                    <>
+                      <DropdownMenuItem onClick={exportMissingCSV} disabled={!canExportMissing}>Missing Uploads (CSV)</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportMissing('pdf')} disabled={!canExportMissing}>Missing Uploads (PDF)</DropdownMenuItem>
+                    </>
+                  )}
+                  {uploadView === 'completed' && (
+                    <>
+                      <DropdownMenuItem onClick={() => exportCompleted('csv')} disabled={!canExportCompleted}>Completed Uploads (CSV)</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportCompleted('xlsx')} disabled={!canExportCompleted}>Completed Uploads (XLSX)</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportCompleted('pdf')} disabled={!canExportCompleted}>Completed Uploads (PDF)</DropdownMenuItem>
+                    </>
+                  )}
+                </>
+              )}
+              {activeTab === 'area' && (
+                <>
+                  <DropdownMenuLabel>By Area Exports</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => exportGovernance('csv')} disabled={!canExportArea}>By Area (CSV)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportGovernance('pdf')} disabled={!canExportArea}>By Area (PDF)</DropdownMenuItem>
+                </>
+              )}
+              {activeTab === 'heatmap' && (
+                <>
+                  <DropdownMenuLabel>Heatmap Exports</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => exportHeatmap('csv')} disabled={!canExportHeatmap}>Heatmap (CSV)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportHeatmap('pdf')} disabled={!canExportHeatmap}>Heatmap (PDF)</DropdownMenuItem>
                 </>
               )}
             </DropdownMenuContent>
@@ -598,6 +962,13 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {/* If all queries are idle and there's no data, show a single clear empty message */}
+      {allQueriesIdle && !hasAnyData ? (
+        <div className="py-14">
+          <EmptyState title="No created data yet" sub={`No records found for ${year}${selectedOfficeName ? ` — ${selectedOfficeName}` : ''}.`} />
+        </div>
+      ) : null}
+
       {/* ── Tabs ────────────────────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab} data-tour-id="reports-tabs">
         <TabsList variant="line" className="w-full justify-start border-b pb-0 h-auto rounded-none gap-0">
@@ -611,7 +982,15 @@ export default function ReportsPage() {
           </TabsTrigger>
           <TabsTrigger value="missing" data-tour-tab="missing" className="px-4 py-2.5">
             <FileX className="h-3.5 w-3.5" />
-            Missing Uploads
+            Uploads
+          </TabsTrigger>
+          <TabsTrigger value="area" data-tour-tab="area" className="px-4 py-2.5">
+            <Trophy className="h-3.5 w-3.5" />
+            By Area
+          </TabsTrigger>
+          <TabsTrigger value="heatmap" data-tour-tab="heatmap" className="px-4 py-2.5">
+            <Medal className="h-3.5 w-3.5" />
+            Heatmap
           </TabsTrigger>
         </TabsList>
 
@@ -729,7 +1108,7 @@ export default function ReportsPage() {
                               <Badge variant="outline" className="font-mono text-xs">
                                 {area.governance_code}
                               </Badge>
-                              <span className="truncate max-w-[110px]">{area.governance_name}</span>
+                              <span className="truncate max-w-27.5">{area.governance_name}</span>
                             </div>
                             <span className="font-semibold text-xs shrink-0 ml-2">
                               {area.count.toLocaleString()}
@@ -788,7 +1167,7 @@ export default function ReportsPage() {
                                 {r.governance_code}
                               </Badge>
                             </td>
-                            <td className="px-3 py-2.5 text-muted-foreground max-w-[200px] truncate">
+                            <td className="px-3 py-2.5 text-muted-foreground max-w-50 truncate">
                               {r.item_code && (
                                 <span className="font-mono text-xs mr-1">{r.item_code}</span>
                               )}
@@ -995,16 +1374,34 @@ export default function ReportsPage() {
           <Card>
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                <div>
+                <div className="flex-1">
                   <CardTitle className="flex items-center gap-2">
                     <FileX className="h-5 w-5 text-muted-foreground" />
-                    Missing Uploads
+                    {uploadView === 'missing' ? 'Missing Uploads' : 'Completed Uploads'}
                   </CardTitle>
                   <CardDescription>
                     {selectedOfficeName
-                      ? `Checklist items with no submission for ${selectedOfficeName} in ${year}`
-                      : 'Select an office from the filter above to view missing uploads'}
+                      ? `Checklist items ${uploadView === 'missing' ? 'with no submission' : 'that have been submitted'} for ${selectedOfficeName} in ${year}`
+                      : `Select an office from the filter above to view ${uploadView === 'missing' ? 'missing' : 'completed'} uploads`}
                   </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant={uploadView === 'missing' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setUploadView('missing')}
+                    className="h-8"
+                  >
+                    Missing
+                  </Button>
+                  <Button
+                    variant={uploadView === 'completed' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setUploadView('completed')}
+                    className="h-8"
+                  >
+                    Completed
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -1019,28 +1416,30 @@ export default function ReportsPage() {
               )}
 
               {/* Error state */}
-              {(isOfficeUser || selectedOfficeId) && missingQuery.isError && (
+              {(isOfficeUser || selectedOfficeId) && ((uploadView === 'missing' && missingQuery.isError) || (uploadView === 'completed' && completedQuery.isError)) && (
                 <div className="flex items-center gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
                   <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
                   <span className="flex-1">
-                    {missingQuery.error?.response?.data?.message || 'Failed to load missing uploads.'}
+                    {uploadView === 'missing'
+                      ? missingQuery.error?.response?.data?.message || 'Failed to load missing uploads.'
+                      : completedQuery.error?.response?.data?.message || 'Failed to load completed uploads.'}
                   </span>
-                  <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={() => missingQuery.refetch()}>
+                  <Button variant="outline" size="sm" className="h-8 shrink-0" onClick={() => uploadView === 'missing' ? missingQuery.refetch() : completedQuery.refetch()}>
                     Retry
                   </Button>
                 </div>
               )}
 
               {/* Loading */}
-              {(isOfficeUser || selectedOfficeId) && missingQuery.isFetching && !missingQuery.isError && (
+              {(isOfficeUser || selectedOfficeId) && ((uploadView === 'missing' && missingQuery.isFetching && !missingQuery.isError) || (uploadView === 'completed' && completedQuery.isFetching && !completedQuery.isError)) && (
                 <div className="flex items-center justify-center py-14 text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin mr-3" />
-                  Loading missing uploads…
+                  Loading {uploadView === 'missing' ? 'missing uploads' : 'completed uploads'}…
                 </div>
               )}
 
-              {/* All submitted */}
-              {(isOfficeUser || selectedOfficeId) && !missingQuery.isFetching && !missingQuery.isError && missingQuery.data && missingList.length === 0 && (
+              {/* All submitted (missing view) */}
+              {(isOfficeUser || selectedOfficeId) && uploadView === 'missing' && !missingQuery.isFetching && !missingQuery.isError && missingQuery.data && missingList.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-14 gap-2">
                   <CheckCircle2 className="h-10 w-10 text-green-500" />
                   <p className="font-semibold text-green-700">All checklist items have been submitted!</p>
@@ -1050,8 +1449,19 @@ export default function ReportsPage() {
                 </div>
               )}
 
+              {/* No completed items (completed view) */}
+              {(isOfficeUser || selectedOfficeId) && uploadView === 'completed' && !completedQuery.isFetching && !completedQuery.isError && completedQuery.data && completedList.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-14 gap-2">
+                  <AlertCircle className="h-10 w-10 text-amber-500" />
+                  <p className="font-semibold text-amber-700">No completed uploads yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    No submissions found for {selectedOfficeName} in {year}.
+                  </p>
+                </div>
+              )}
+
               {/* Missing items list */}
-              {(isOfficeUser || selectedOfficeId) && !missingQuery.isFetching && !missingQuery.isError && missingList.length > 0 && (
+              {(isOfficeUser || selectedOfficeId) && uploadView === 'missing' && !missingQuery.isFetching && !missingQuery.isError && missingList.length > 0 && (
                 <div className="space-y-5">
                   {/* Summary banner */}
                   {(() => {
@@ -1137,11 +1547,277 @@ export default function ReportsPage() {
                   </div>
                 </div>
               )}
+
+              {/* Completed items list */}
+              {(isOfficeUser || selectedOfficeId) && uploadView === 'completed' && !completedQuery.isFetching && !completedQuery.isError && completedList.length > 0 && (
+                <div className="space-y-5">
+                  {/* Summary banner */}
+                  {(() => {
+                    const totalLeaves = Object.values(completedByGov).reduce((sum, gov) => {
+                      return sum + gov.items.length;
+                    }, 0);
+                    const statusBreakdown = completedList.reduce((acc, item) => {
+                      acc[item.status] = (acc[item.status] || 0) + 1;
+                      return acc;
+                    }, {});
+                    return (
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-500" />
+                        <div className="flex-1">
+                          <span className="font-semibold">{totalLeaves} submitted item{totalLeaves !== 1 ? 's' : ''}</span>
+                          {' '}across{' '}
+                          <span className="font-semibold">{Object.keys(completedByGov).length}</span>
+                          {' '}governance area{Object.keys(completedByGov).length !== 1 ? 's' : ''} for {selectedOfficeName}
+                          {Object.keys(statusBreakdown).length > 0 && (
+                            <div className="mt-2 flex gap-4 text-xs">
+                              {Object.entries(statusBreakdown).map(([status, count]) => {
+                                const cfg = STATUS_CONFIG[status];
+                                return (
+                                  <div key={status} className="flex items-center gap-1">
+                                    <span className={cn('inline-block h-2 w-2 rounded-full', cfg?.bg || 'bg-muted')} />
+                                    <span>{cfg?.label || status}: {count}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Per-governance-area groups */}
+                  <div className="space-y-4">
+                    {Object.values(completedByGov).map((gov) => {
+                      const itemsByStatus = gov.items.reduce((acc, item) => {
+                        if (!acc[item.status]) acc[item.status] = [];
+                        acc[item.status].push(item);
+                        return acc;
+                      }, {});
+
+                      return (
+                        <div key={gov.code} className="rounded-lg border overflow-hidden">
+                          <div className="flex items-center gap-3 px-4 py-2.5 bg-muted/50 border-b">
+                            <Badge variant="outline" className="font-mono text-xs bg-purple-50 text-purple-800 border-purple-200 shrink-0">
+                              {gov.code}
+                            </Badge>
+                            <span className="text-sm font-semibold flex-1">{gov.name}</span>
+                            <span className="text-xs font-medium shrink-0">
+                              {gov.items.length} submitted
+                            </span>
+                          </div>
+                          <div className="divide-y text-sm">
+                            {Object.entries(itemsByStatus).map(([status, items]) => {
+                              const cfg = STATUS_CONFIG[status];
+                              return (
+                                <div key={status} className="space-y-2 px-4 py-3">
+                                  <div className="flex items-center gap-2 text-xs font-medium">
+                                    {cfg ? (
+                                      <>
+                                        <Badge variant="outline" className={cn('text-xs', cfg.badge)}>
+                                          {cfg.label}
+                                        </Badge>
+                                        <span className="text-muted-foreground">({items.length})</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Badge variant="outline" className="text-xs">{status}</Badge>
+                                        <span className="text-muted-foreground">({items.length})</span>
+                                      </>
+                                    )}
+                                  </div>
+                                  <ul className="space-y-1 text-xs text-muted-foreground">
+                                    {items.map((item) => (
+                                      <li key={item.checklist_item_id} className="flex items-start gap-2">
+                                        <span className="inline-block text-blue-500 mt-0.5">•</span>
+                                        <div className="flex-1">
+                                          <div className="font-mono text-blue-700 text-xs">{item.item_code || 'N/A'}</div>
+                                          <div>{item.item_title}</div>
+                                          <div className="text-xs mt-0.5">
+                                            Submitted: {new Date(item.submitted_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: '2-digit' })}
+                                          </div>
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ══ TAB: By Area (Governance progress per office) ═══════════════════════ */}
+        <TabsContent value="area" className="mt-6">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-muted-foreground" />
+                    Governance Area Progress
+                  </CardTitle>
+                  <CardDescription>
+                    Per-governance completion percentages for {year}. Select an office above to view.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!isOfficeUser && !selectedOfficeId && (
+                <div className="p-6">
+                  <p className="text-sm text-muted-foreground">Select an office above to view per-area progress.</p>
+                </div>
+              )}
+
+              {(isOfficeUser || selectedOfficeId) && governanceQuery.isFetching && (
+                <div className="flex items-center justify-center py-14 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                  Loading governance area metrics…
+                </div>
+              )}
+
+              {(isOfficeUser || selectedOfficeId) && governanceQuery.isFetching && (
+                <div className="flex items-center justify-center py-14 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                  Loading governance area metrics…
+                </div>
+              )}
+
+              {(isOfficeUser || selectedOfficeId) && !governanceQuery.isFetching && governanceQuery.data && Array.isArray(governanceQuery.data.data) && governanceQuery.data.data.length === 0 && (
+                <div className="py-10">
+                  <EmptyState title="No created data yet" sub={`No governance area records for ${year}${selectedOfficeName ? ` — ${selectedOfficeName}` : ''}.`} />
+                </div>
+              )}
+
+              {(isOfficeUser || selectedOfficeId) && governanceQuery.data && governanceQuery.data.data && governanceQuery.data.data.length > 0 && (
+                <div className="overflow-x-auto -mx-6">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/40">
+                        <th className="px-6 py-2.5 text-left font-medium text-xs text-muted-foreground">Area Code</th>
+                        <th className="px-3 py-2.5 text-left font-medium text-xs text-muted-foreground">Area</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-xs text-muted-foreground">Expected</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-xs text-muted-foreground">Reviewed</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-xs text-muted-foreground">Compliant</th>
+                        <th className="px-3 py-2.5 text-right font-medium text-xs text-muted-foreground">Missing</th>
+                        <th className="px-6 py-2.5 text-right font-medium text-xs text-muted-foreground">Completion %</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {governanceQuery.data.data.map((r) => (
+                        <tr key={r.governance_code} className="hover:bg-muted/20 transition-colors">
+                          <td className="px-6 py-2.5 font-mono text-xs">{r.governance_code}</td>
+                          <td className="px-3 py-2.5">{r.governance_name}</td>
+                          <td className="px-3 py-2.5 text-right">{r.totalExpected?.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 text-right">{r.reviewed?.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 text-right">{r.compliant?.toLocaleString()}</td>
+                          <td className="px-3 py-2.5 text-right">{r.missing?.toLocaleString()}</td>
+                          <td className="px-6 py-2.5 text-right text-xs font-semibold">{Number(r.completionPercentage).toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="heatmap" className="mt-6">
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Medal className="h-5 w-5 text-muted-foreground" />
+                    Completion Heatmap
+                  </CardTitle>
+                  <CardDescription>
+                    Completion percentage by office (columns) and governance area (rows) for {year}.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {heatmapQuery.isFetching && (
+                <div className="flex items-center justify-center py-14 text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin mr-3" />
+                  Loading heatmap…
+                </div>
+              )}
+
+              {heatmapQuery.data && (
+                <div className="overflow-x-auto -mx-6">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/40">
+                        <th className="px-4 py-2.5 text-left font-medium text-xs text-muted-foreground">Area</th>
+                        {heatmapQuery.data.offices.map((o) => (
+                          <th key={o.id} className="px-3 py-2.5 text-center font-medium text-xs text-muted-foreground">{o.name}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {heatmapQuery.data.matrix.map((row) => (
+                        <tr key={row.governance_area_id} className="hover:bg-muted/20 transition-colors">
+                          <td className="px-4 py-2.5 font-medium">{row.governance_name} <span className="font-mono text-xs ml-2">{row.governance_code}</span></td>
+                          {row.values.map((v) => {
+                            const pct = Number(v.completionPercentage || 0);
+                            const bgClass = pct >= 80 ? 'bg-green-100 text-green-800' : pct >= 50 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800';
+                            return (
+                              <td key={v.officeId} className="px-3 py-2.5 text-center">
+                                <div className={cn('inline-block px-2 py-1 rounded', bgClass)}>{pct.toFixed(1)}%</div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
       </Tabs>
+
+      <AlertDialog open={Boolean(pdfExportRequest)} onOpenChange={(open) => !open && setPdfExportRequest(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Generate PDF export?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The PDF will be generated in your browser from the currently loaded report data and saved after you confirm.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-lg border bg-muted/40 p-4 text-sm space-y-2">
+            <p className="font-medium text-foreground">
+              {pdfExportRequest?.kind === 'area' ? 'By Area report' : 'Heatmap report'}
+            </p>
+            <p className="text-muted-foreground">
+              Year: {year}
+              {selectedOfficeName ? ` · ${selectedOfficeName}` : ''}
+            </p>
+            <p className="text-muted-foreground">
+              Included: tables, percentages, and color-coded summaries from the current view.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isGeneratingPdf}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPdfExport} disabled={isGeneratingPdf}>
+              {isGeneratingPdf ? 'Generating...' : 'Generate and Save'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <HelpTourOverlay
         buttonLabel="Reports page help"

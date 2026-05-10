@@ -6,9 +6,13 @@ import {
   summaryHandler,
   noUploadHandler,
   noUploadExportHandler,
+  completedUploadsHandler,
+  completedUploadsExportHandler,
   complianceProgressHandler,
   complianceProgressExportHandler,
   dashboardOverviewExportHandler,
+  governanceByOfficeHandler,
+  governanceHeatmapHandler,
 } from "../controllers/reports.controller.js";
 
 const r = Router();
@@ -19,8 +23,12 @@ r.use(requireAuth, checkSessionInactivity);
 r.get("/summary", requireRole("OFFICE", "STAFF", "ADMIN"), shortCache, summaryHandler);
 r.get("/no-upload", requireRole("OFFICE", "STAFF", "ADMIN"), shortCache, noUploadHandler);
 r.get("/no-upload/export", requireRole("OFFICE", "STAFF", "ADMIN"), noUploadExportHandler);
+r.get("/completed-uploads", requireRole("OFFICE", "STAFF", "ADMIN"), shortCache, completedUploadsHandler);
+r.get("/completed-uploads/export", requireRole("OFFICE", "STAFF", "ADMIN"), completedUploadsExportHandler);
 r.get("/dashboard-overview/export", requireRole("OFFICE", "STAFF", "ADMIN"), dashboardOverviewExportHandler);
 r.get("/compliance-progress", requireRole("OFFICE", "STAFF", "ADMIN"), shortCache, complianceProgressHandler);
 r.get("/compliance-progress/export", requireRole("OFFICE", "STAFF", "ADMIN"), complianceProgressExportHandler);
+r.get("/governance-by-office", requireRole("OFFICE", "STAFF", "ADMIN"), governanceByOfficeHandler);
+r.get("/governance-heatmap", requireRole("OFFICE", "STAFF", "ADMIN"), governanceHeatmapHandler);
 
 export default r;
