@@ -10,6 +10,7 @@ import {
   completedUploadsExportHandler,
   complianceProgressHandler,
   complianceProgressExportHandler,
+  deadlineOverviewHandler,
   dashboardOverviewExportHandler,
   governanceByOfficeHandler,
   governanceHeatmapHandler,
@@ -25,6 +26,7 @@ r.get("/no-upload", requireRole("OFFICE", "STAFF", "ADMIN"), shortCache, noUploa
 r.get("/no-upload/export", requireRole("OFFICE", "STAFF", "ADMIN"), noUploadExportHandler);
 r.get("/completed-uploads", requireRole("OFFICE", "STAFF", "ADMIN"), shortCache, completedUploadsHandler);
 r.get("/completed-uploads/export", requireRole("OFFICE", "STAFF", "ADMIN"), completedUploadsExportHandler);
+r.get("/deadline-overview", requireRole("OFFICE", "STAFF", "ADMIN"), shortCache, deadlineOverviewHandler);
 r.get("/dashboard-overview/export", requireRole("OFFICE", "STAFF", "ADMIN"), dashboardOverviewExportHandler);
 r.get("/compliance-progress", requireRole("OFFICE", "STAFF", "ADMIN"), shortCache, complianceProgressHandler);
 r.get("/compliance-progress/export", requireRole("OFFICE", "STAFF", "ADMIN"), complianceProgressExportHandler);

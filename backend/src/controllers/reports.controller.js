@@ -219,6 +219,165 @@ async function buildComplianceProgressDataset({ year, governanceAreaId, officeId
   };
 }
 
+async function buildDeadlineOverviewDataset({ year, governanceAreaId }) {
+  const params = [year];
+  let governanceFilter = "";
+  if (governanceAreaId) {
+    params.push(governanceAreaId);
+    governanceFilter = `AND oga.governance_area_id = $${params.length}`;
+  }
+
+  const { rows } = await pool.query(
+    `WITH latest_submissions AS (
+       SELECT
+         s.id,
+         s.office_id,
+         s.checklist_item_id,
+         s.status,
+         ROW_NUMBER() OVER (
+           PARTITION BY s.office_id, s.checklist_item_id
+           ORDER BY s.updated_at DESC NULLS LAST, s.submitted_at DESC NULLS LAST
+         ) AS row_num
+       FROM submissions s
+       WHERE s.year = $1
+       ${governanceFilter ? `AND s.governance_area_id = $${params.length}` : ""}
+     )
+     SELECT
+       oga.office_id,
+       o.name AS office_name,
+       ga.id AS governance_area_id,
+       ga.code AS governance_code,
+       ga.name AS governance_name,
+       ci.id AS checklist_item_id,
+       ci.item_code,
+       ci.title AS item_title,
+       ci.due_date,
+       ci.reminder_days_before,
+       ls.status AS submission_status,
+       ls.id AS submission_id
+     FROM office_governance_assignments oga
+     JOIN offices o
+       ON o.id = oga.office_id
+      AND o.is_active = TRUE
+     JOIN governance_areas ga
+       ON ga.id = oga.governance_area_id
+      AND ga.is_active = TRUE
+     JOIN checklist_templates ct
+       ON ct.governance_area_id = ga.id
+      AND ct.year = oga.year
+      AND ct.status = 'ACTIVE'
+     JOIN checklist_items ci
+       ON ci.template_id = ct.id
+      AND ci.is_active = TRUE
+      AND ci.due_date IS NOT NULL
+      AND ci.enable_reminder = TRUE
+     LEFT JOIN latest_submissions ls
+       ON ls.office_id = oga.office_id
+      AND ls.checklist_item_id = ci.id
+      AND ls.row_num = 1
+     WHERE oga.year = $1
+       ${governanceFilter}
+     ORDER BY o.name, ci.due_date, ga.sort_order, ci.sort_order, ci.item_code`,
+    params
+  );
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const msPerDay = 24 * 60 * 60 * 1000;
+
+  const officesById = new Map();
+  const urgentItems = [];
+
+  for (const row of rows) {
+    const dueDate = new Date(row.due_date);
+    dueDate.setHours(0, 0, 0, 0);
+    const daysLeft = Math.ceil((dueDate.getTime() - startOfToday.getTime()) / msPerDay);
+    const reminderWindow = Math.max(1, Number(row.reminder_days_before ?? 7));
+    const submissionStatus = String(row.submission_status || "").toUpperCase();
+
+    if (submissionStatus === "APPROVED") continue;
+
+    const overdue = daysLeft < 0;
+    const dueSoon = !overdue && daysLeft <= reminderWindow;
+    if (!overdue && !dueSoon) continue;
+
+    const bucket = overdue ? "overdue" : daysLeft === 0 ? "dueToday" : "dueSoon";
+    const item = {
+      officeId: row.office_id,
+      officeName: row.office_name,
+      governanceAreaId: row.governance_area_id,
+      governanceCode: row.governance_code,
+      governanceName: row.governance_name,
+      checklistItemId: row.checklist_item_id,
+      itemCode: row.item_code,
+      itemTitle: row.item_title,
+      dueDate: row.due_date,
+      submissionId: row.submission_id || null,
+      daysLeft,
+      bucket,
+    };
+
+    urgentItems.push(item);
+
+    if (!officesById.has(row.office_id)) {
+      officesById.set(row.office_id, {
+        officeId: row.office_id,
+        officeName: row.office_name,
+        overdueCount: 0,
+        dueTodayCount: 0,
+        dueSoonCount: 0,
+        totalCount: 0,
+        items: [],
+      });
+    }
+
+    const office = officesById.get(row.office_id);
+    office.totalCount += 1;
+    office.items.push(item);
+    if (bucket === "overdue") office.overdueCount += 1;
+    if (bucket === "dueToday") office.dueTodayCount += 1;
+    if (bucket === "dueSoon") office.dueSoonCount += 1;
+  }
+
+  const sortUrgentItems = (a, b) => {
+    const bucketRank = { overdue: 0, dueToday: 1, dueSoon: 2 };
+    return (
+      (bucketRank[a.bucket] ?? 99) - (bucketRank[b.bucket] ?? 99) ||
+      a.daysLeft - b.daysLeft ||
+      a.officeName.localeCompare(b.officeName) ||
+      String(a.itemCode || "").localeCompare(String(b.itemCode || ""))
+    );
+  };
+
+  const offices = Array.from(officesById.values())
+    .sort((a, b) => (
+      b.overdueCount - a.overdueCount ||
+      b.dueTodayCount - a.dueTodayCount ||
+      b.dueSoonCount - a.dueSoonCount ||
+      b.totalCount - a.totalCount ||
+      a.officeName.localeCompare(b.officeName)
+    ))
+    .map((office) => ({
+      ...office,
+      items: office.items.sort(sortUrgentItems).slice(0, 4),
+    }));
+
+  urgentItems.sort(sortUrgentItems);
+
+  return {
+    year,
+    filters: { governanceAreaId },
+    totals: {
+      overdueItems: urgentItems.filter((item) => item.bucket === "overdue").length,
+      dueTodayItems: urgentItems.filter((item) => item.bucket === "dueToday").length,
+      dueSoonItems: urgentItems.filter((item) => item.bucket === "dueSoon").length,
+      officesWithIssues: offices.length,
+    },
+    offices: offices.slice(0, 6),
+    items: urgentItems.slice(0, 12),
+  };
+}
+
 function safeSlug(value) {
   return String(value || "all-offices")
     .trim()
@@ -503,6 +662,16 @@ export async function summaryHandler(req, res) {
   );
 
   return res.json({ year, governanceAreaId, officeId, breakdown: rows });
+}
+
+export async function deadlineOverviewHandler(req, res) {
+  const year = parseYear(req.query.year);
+  if (!year) return res.status(400).json({ message: "Invalid year" });
+
+  const governanceAreaId = req.query.governanceAreaId || null;
+  const data = await buildDeadlineOverviewDataset({ year, governanceAreaId });
+
+  return res.json(data);
 }
 
 /**

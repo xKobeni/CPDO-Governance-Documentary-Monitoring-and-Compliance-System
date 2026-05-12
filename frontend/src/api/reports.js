@@ -15,6 +15,11 @@ export async function getReportOverview(params = {}) {
   return response.data;
 }
 
+export async function getDeadlineOverview(params = {}) {
+  const response = await api.get('/reports/deadline-overview', { params });
+  return response.data;
+}
+
 export async function getComplianceProgress(params = {}) {
   const response = await api.get('/reports/compliance-progress', { params });
   return response.data;

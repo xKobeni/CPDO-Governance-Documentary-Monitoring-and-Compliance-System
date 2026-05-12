@@ -60,7 +60,7 @@ import { getGovernanceAreasWithStats } from "../api/governance";
 import { getYears } from "../api/years";
 import { getOffices } from "../api/offices";
 import { getUsers } from "../api/users";
-import { downloadDashboardOverview, getReportSummary } from "../api/reports";
+import { downloadDashboardOverview, getDeadlineOverview, getReportSummary } from "../api/reports";
 import { listSubmissions } from "../api/submissions";
 import {
   BarChart, Bar, PieChart, Pie, Cell,
@@ -108,6 +108,41 @@ function downloadBlob(filename, blob) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function buildSubmissionDeepLinkTarget(item, { year, officeId, officeName } = {}) {
+  const submissionId = item?.submission?.id ?? item?.submissionId ?? null;
+
+  if (submissionId) {
+    return {
+      pathname: "/submissions",
+      state: {
+        year: String(year),
+        selectedGovernanceId: item?.governanceAreaId ?? item?.areaId ?? null,
+        selectedOfficeId: officeId ?? null,
+        detailSelection: { kind: "submission", submissionId },
+      },
+    };
+  }
+
+  return {
+    pathname: "/submissions",
+    state: {
+      year: String(year),
+      selectedGovernanceId: item?.governanceAreaId ?? item?.areaId ?? null,
+      selectedOfficeId: officeId ?? null,
+      detailSelection: {
+        kind: "pending",
+        checklistItemId: item?.checklistItemId ?? item?.id ?? null,
+        officeId: officeId ?? null,
+        year: Number(year),
+        governanceCode: item?.governanceCode ?? item?.areaCode ?? "",
+        itemCode: item?.itemCode ?? "",
+        itemTitle: item?.itemTitle ?? item?.title ?? "",
+        officeName: officeName ?? item?.areaName ?? "",
+      },
+    },
+  };
 }
 
 /** Derive a per-item UI status the same way my-checklists-page does */
@@ -176,10 +211,18 @@ function OfficeDashboard({ user }) {
     });
     return leafItems.map((item) => ({
       ...item,
+      areaId: a.id,
+      areaCode: a.code,
       areaName: a.name,
       status: deriveStatus(item.submission, item.dueDate),
     }));
   }), [areas]);
+
+  const todayStart = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
   const total = allItems.length;
   const completed = useMemo(() => allItems.filter((i) => i.status === "completed").length, [allItems]);
@@ -188,17 +231,44 @@ function OfficeDashboard({ user }) {
   const overdue = useMemo(() => allItems.filter((i) => i.status === "overdue").length, [allItems]);
   const completionPct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
+  const reminderItems = useMemo(() => allItems
+    .filter((i) => i.dueDate && i.status !== "completed" && i.enableReminder !== false)
+    .map((i) => {
+      const dueDate = new Date(i.dueDate);
+      dueDate.setHours(0, 0, 0, 0);
+      const daysLeft = Math.floor((dueDate.getTime() - todayStart.getTime()) / msPerDay);
+      const reminderDaysBefore = Number(i.reminderDaysBefore ?? 7);
+      return {
+        ...i,
+        daysLeft,
+        reminderDaysBefore,
+      };
+    })
+    .sort((a, b) => a.daysLeft - b.daysLeft || String(a.title).localeCompare(String(b.title))), [allItems, todayStart]);
+
+  const overdueReminders = useMemo(() => reminderItems.filter((i) => i.daysLeft < 0), [reminderItems]);
+  const dueTodayReminders = useMemo(() => reminderItems.filter((i) => i.daysLeft === 0), [reminderItems]);
+  const dueSoonReminders = useMemo(() => reminderItems.filter((i) => i.daysLeft > 0 && i.daysLeft <= i.reminderDaysBefore), [reminderItems]);
+  const reminderDisabledCount = useMemo(() => allItems.filter((i) => i.dueDate && i.status !== "completed" && i.enableReminder === false).length, [allItems]);
+
   // Upcoming deadlines: not completed + has due date + sort soonest first
-  const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
-  const upcomingDeadlines = useMemo(() => allItems
-    .filter((i) => i.status !== "completed" && i.dueDate)
+  const upcomingDeadlines = useMemo(() => reminderItems
+    .filter((i) => i.daysLeft >= 0)
     .map((i) => ({
-      title: i.title,
+      ...i,
       category: i.areaName,
-      daysLeft: Math.ceil((new Date(i.dueDate) - today) / 86400000),
     }))
-    .sort((a, b) => a.daysLeft - b.daysLeft)
-    .slice(0, 5), [allItems, today]);
+    .sort((a, b) => a.daysLeft - b.daysLeft || String(a.title).localeCompare(String(b.title)))
+    .slice(0, 5), [reminderItems]);
+
+  const openReminderItem = useCallback((item) => {
+    const target = buildSubmissionDeepLinkTarget(item, {
+      year,
+      officeId: user?.officeId ?? null,
+      officeName,
+    });
+    navigate(target.pathname, { state: target.state });
+  }, [navigate, officeName, user?.officeId, year]);
 
   // Recent items: last 5 ordered by due date desc
   const recentItems = useMemo(() => [...allItems]
@@ -385,36 +455,63 @@ function OfficeDashboard({ user }) {
               </CardContent>
             </Card>
 
-            {/* Upcoming Deadlines */}
+            {/* Submission Reminder Overview */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Bell className="h-5 w-5 text-muted-foreground" />
-                  Upcoming Deadlines
+                  Submission Reminder Overview
                 </CardTitle>
-                <CardDescription>Items due soon</CardDescription>
+                <CardDescription>Overdue and due-soon submissions with reminders enabled</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {upcomingDeadlines.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No upcoming deadlines.</p>
-                ) : (
-                  upcomingDeadlines.map((item, idx) => (
-                    <div key={idx} className="flex items-start justify-between gap-2 pb-3 border-b last:border-0 last:pb-0">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{item.title}</p>
-                        <p className="text-xs text-muted-foreground">{item.category}</p>
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className={item.daysLeft <= 0 ? "bg-red-100 text-red-700 shrink-0" : item.daysLeft <= 5 ? "bg-red-100 text-red-700 shrink-0" : "bg-amber-100 text-amber-700 shrink-0"}
+              <CardContent className="space-y-4">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg border border-red-200 bg-red-50/80 p-3">
+                    <p className="text-xs font-medium text-red-700">Overdue</p>
+                    <p className="mt-1 text-2xl font-bold text-red-700">{overdueReminders.length}</p>
+                  </div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3">
+                    <p className="text-xs font-medium text-amber-700">Due today</p>
+                    <p className="mt-1 text-2xl font-bold text-amber-700">{dueTodayReminders.length}</p>
+                  </div>
+                  <div className="rounded-lg border border-blue-200 bg-blue-50/80 p-3">
+                    <p className="text-xs font-medium text-blue-700">Due soon</p>
+                    <p className="mt-1 text-2xl font-bold text-blue-700">{dueSoonReminders.length}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                    <p className="text-xs font-medium text-slate-700">Reminders off</p>
+                    <p className="mt-1 text-2xl font-bold text-slate-700">{reminderDisabledCount}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {upcomingDeadlines.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No overdue or due-soon submissions right now.</p>
+                  ) : (
+                    upcomingDeadlines.map((item, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => openReminderItem(item)}
+                        className="flex w-full items-start justify-between gap-2 rounded-md border-b pb-3 text-left transition-colors hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 last:border-0 last:pb-0"
                       >
-                        {item.daysLeft <= 0 ? "Overdue" : `${item.daysLeft}d left`}
-                      </Badge>
-                    </div>
-                  ))
-                )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{item.title}</p>
+                          <p className="text-xs text-muted-foreground">{item.category}</p>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className={item.daysLeft <= 0 ? "bg-red-100 text-red-700 shrink-0" : item.daysLeft <= 3 ? "bg-amber-100 text-amber-700 shrink-0" : "bg-blue-100 text-blue-700 shrink-0"}
+                        >
+                          {item.daysLeft < 0 ? `${Math.abs(item.daysLeft)}d overdue` : item.daysLeft === 0 ? "Due today" : `${item.daysLeft}d left`}
+                        </Badge>
+                      </button>
+                    ))
+                  )}
+                </div>
+
                 <Button variant="outline" size="sm" className="w-full mt-1" onClick={() => navigate("/my-checklists")}>
-                  See All Deadlines
+                  Open My Checklists
                   <ArrowRight className="ml-2 h-3 w-3" />
                 </Button>
               </CardContent>
@@ -496,6 +593,11 @@ function AdminDashboard({ user }) {
     queryFn:  () => getGovernanceAreasWithStats(year),
     staleTime: 2 * 60 * 1000,
   });
+  const deadlineQuery = useQuery({
+    queryKey: ['deadline-overview-admin', year],
+    queryFn: () => getDeadlineOverview({ year }),
+    staleTime: 2 * 60 * 1000,
+  });
   const officesQuery = useQuery({
     queryKey: ['offices'],
     queryFn:  getOffices,
@@ -512,15 +614,16 @@ function AdminDashboard({ user }) {
     staleTime: 10 * 60 * 1000,
   });
 
-  const loading = areasQuery.isFetching || officesQuery.isFetching || usersQuery.isFetching;
-  const anyErr  = areasQuery.error || officesQuery.error || usersQuery.error;
+  const loading = areasQuery.isFetching || deadlineQuery.isFetching || officesQuery.isFetching || usersQuery.isFetching;
+  const anyErr  = areasQuery.error || deadlineQuery.error || officesQuery.error || usersQuery.error;
   const error   = anyErr?.response?.data?.message || (anyErr ? 'Failed to load dashboard data.' : null);
 
   const loadAll = useCallback(() => {
     areasQuery.refetch();
+    deadlineQuery.refetch();
     officesQuery.refetch();
     usersQuery.refetch();
-  }, [areasQuery, officesQuery, usersQuery]);
+  }, [areasQuery, deadlineQuery, officesQuery, usersQuery]);
 
   // ── Derived data ─────────────────────────────────────────────────────────────
   const areas = useMemo(() => areasQuery.data?.governanceAreas ?? [], [areasQuery.data]);
@@ -565,6 +668,19 @@ function AdminDashboard({ user }) {
   const adminCount  = useMemo(() => users.filter((u) => getRoleCode(u) === 'ADMIN').length,  [users, getRoleCode]);
   const staffCount  = useMemo(() => users.filter((u) => getRoleCode(u) === 'STAFF').length,  [users, getRoleCode]);
   const officeCount = useMemo(() => users.filter((u) => getRoleCode(u) === 'OFFICE').length, [users, getRoleCode]);
+  const deadlineOverview = deadlineQuery.data || null;
+  const deadlineTotals = deadlineOverview?.totals || { overdueItems: 0, dueTodayItems: 0, dueSoonItems: 0, officesWithIssues: 0 };
+  const deadlineOffices = deadlineOverview?.offices || [];
+  const urgentDeadlineItems = deadlineOverview?.items || [];
+
+  const openDeadlineItem = useCallback((item) => {
+    const target = buildSubmissionDeepLinkTarget(item, {
+      year,
+      officeId: item.officeId ?? null,
+      officeName: item.officeName ?? '',
+    });
+    navigate(target.pathname, { state: target.state });
+  }, [navigate, year]);
 
   // ── Chart data ──────────────────────────────────────────────────────────────
   const areaChartData = useMemo(() => activeAreas.map((a) => ({
@@ -739,6 +855,113 @@ function AdminDashboard({ user }) {
                   </CardContent>
                 </Card>
               </div>
+
+              <Card className="border-red-200 bg-red-50/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bell className="h-5 w-5 text-red-600" />
+                    Deadline Watch
+                  </CardTitle>
+                  <CardDescription>Offices and items that are overdue or within the reminder window</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-lg border border-red-200 bg-background/70 p-3">
+                      <p className="text-xs font-medium text-red-700">Overdue items</p>
+                      <p className="mt-1 text-2xl font-bold text-red-700">{deadlineTotals.overdueItems}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-background/70 p-3">
+                      <p className="text-xs font-medium text-amber-700">Due today</p>
+                      <p className="mt-1 text-2xl font-bold text-amber-700">{deadlineTotals.dueTodayItems}</p>
+                    </div>
+                    <div className="rounded-lg border border-blue-200 bg-background/70 p-3">
+                      <p className="text-xs font-medium text-blue-700">Due soon</p>
+                      <p className="mt-1 text-2xl font-bold text-blue-700">{deadlineTotals.dueSoonItems}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-background/70 p-3">
+                      <p className="text-xs font-medium text-slate-700">Offices affected</p>
+                      <p className="mt-1 text-2xl font-bold text-slate-700">{deadlineTotals.officesWithIssues}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Offices with deadline pressure</p>
+                      {deadlineOffices.length === 0 ? (
+                        <p className="text-sm text-muted-foreground rounded-lg border bg-background/60 p-4">No overdue or due-soon items right now.</p>
+                      ) : (
+                        deadlineOffices.map((office) => (
+                          <div key={office.officeId} className="rounded-lg border bg-background/70 p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold truncate">{office.officeName}</p>
+                                <p className="text-xs text-muted-foreground">{office.totalCount} urgent item{office.totalCount === 1 ? '' : 's'}</p>
+                              </div>
+                              <div className="flex flex-wrap justify-end gap-1.5">
+                                {office.overdueCount > 0 && <Badge variant="destructive" className="text-[10px]">{office.overdueCount} overdue</Badge>}
+                                {office.dueTodayCount > 0 && <Badge className="bg-amber-100 text-amber-700 text-[10px]">{office.dueTodayCount} today</Badge>}
+                                {office.dueSoonCount > 0 && <Badge className="bg-blue-100 text-blue-700 text-[10px]">{office.dueSoonCount} soon</Badge>}
+                              </div>
+                            </div>
+                            <div className="space-y-1.5">
+                              {office.items.map((item) => (
+                                <button
+                                  key={`${item.officeId}-${item.itemCode}`}
+                                  type="button"
+                                  onClick={() => openDeadlineItem(item)}
+                                  className="flex w-full items-center justify-between gap-3 rounded-md border-t pt-1.5 text-left text-xs transition-colors hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 first:border-t-0 first:pt-0"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate font-medium">{item.itemTitle}</p>
+                                    <p className="text-muted-foreground truncate">{item.governanceCode} · Due {new Date(item.dueDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}</p>
+                                  </div>
+                                  <Badge
+                                    variant="secondary"
+                                    className={item.bucket === 'overdue' ? 'bg-red-100 text-red-700 shrink-0' : item.bucket === 'dueToday' ? 'bg-amber-100 text-amber-700 shrink-0' : 'bg-blue-100 text-blue-700 shrink-0'}
+                                  >
+                                    {item.bucket === 'overdue' ? `${Math.abs(item.daysLeft)}d late` : item.bucket === 'dueToday' ? 'Due today' : `${item.daysLeft}d left`}
+                                  </Badge>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Most urgent items</p>
+                      {urgentDeadlineItems.length === 0 ? (
+                        <p className="text-sm text-muted-foreground rounded-lg border bg-background/60 p-4">No urgent deadline items found.</p>
+                      ) : (
+                        urgentDeadlineItems.map((item) => (
+                          <button
+                            key={`${item.officeId}-${item.governanceCode}-${item.itemCode}`}
+                            type="button"
+                            onClick={() => openDeadlineItem(item)}
+                            className="flex w-full items-start justify-between gap-3 rounded-lg border bg-background/70 p-3 text-left transition-colors hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold truncate">{item.officeName}</p>
+                              <p className="text-xs text-muted-foreground truncate">{item.governanceCode} · {item.itemCode} · {item.itemTitle}</p>
+                            </div>
+                            <Badge
+                              variant="secondary"
+                              className={item.bucket === 'overdue' ? 'bg-red-100 text-red-700 shrink-0' : item.bucket === 'dueToday' ? 'bg-amber-100 text-amber-700 shrink-0' : 'bg-blue-100 text-blue-700 shrink-0'}
+                            >
+                              {item.bucket === 'overdue' ? `${Math.abs(item.daysLeft)}d late` : item.bucket === 'dueToday' ? 'Due today' : `${item.daysLeft}d left`}
+                            </Badge>
+                          </button>
+                        ))
+                      )}
+                      <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/reports')}>
+                        Open Reports
+                        <ArrowRight className="ml-2 h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
               <div className="grid gap-4 lg:grid-cols-3" data-tour-id="dashboard-main-panels">
                 {/* System Snapshot */}

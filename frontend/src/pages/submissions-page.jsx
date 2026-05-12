@@ -1146,6 +1146,24 @@ export default function SubmissionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canReview, location.search]);
 
+  React.useEffect(() => {
+    const incoming = location.state;
+    if (!incoming) return;
+
+    if (incoming.year && /^\d{4}$/.test(String(incoming.year))) {
+      setYear(String(incoming.year));
+    }
+    if (incoming.selectedGovernanceId) {
+      setSelectedGovernanceId(incoming.selectedGovernanceId);
+    }
+    if (incoming.selectedOfficeId) {
+      setSelectedOfficeId(incoming.selectedOfficeId);
+    }
+    if (incoming.detailSelection) {
+      setDetailSelection(incoming.detailSelection);
+    }
+  }, [location.state]);
+
   const yearNum = year ? Number(year) : undefined;
 
   const governanceQuery = useQuery({
