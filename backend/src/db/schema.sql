@@ -454,4 +454,8 @@ UPDATE users SET email_verified = true WHERE email_verified IS NULL;
 ALTER TABLE users ALTER COLUMN email_verified SET DEFAULT false;
 ALTER TABLE users ALTER COLUMN email_verified SET NOT NULL;
 
+-- Add reminder configuration to checklist items
+ALTER TABLE checklist_items ADD COLUMN IF NOT EXISTS enable_reminder BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE checklist_items ADD COLUMN IF NOT EXISTS reminder_days_before INT NOT NULL DEFAULT 7;
+
 COMMIT;

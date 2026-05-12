@@ -146,6 +146,8 @@ export async function getChecklistItemsForOffice(officeId, year) {
        ci.is_required,
        ci.frequency,
        ci.due_date,
+      ci.enable_reminder,
+      ci.reminder_days_before,
        ci.allowed_file_types,
        ci.max_files,
        ci.sort_order           AS item_sort_order,

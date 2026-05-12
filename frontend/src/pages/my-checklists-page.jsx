@@ -130,6 +130,8 @@ function transformApiChecklist(apiAreas) {
         remarks: item.submission?.officeRemarks ?? null,
         required: item.isRequired,
         frequency: item.frequency ?? null,
+        enableReminder: item.enableReminder ?? true,
+        reminderDaysBefore: Number(item.reminderDaysBefore ?? 7),
         allowedFileTypes: item.allowedFileTypes ?? null,
         maxFiles: item.maxFiles ?? null,
         submissionId: item.submission?.id ?? null,
@@ -179,6 +181,31 @@ function formatDateTime(iso) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function ReminderCell({ item }) {
+  const submissionStatus = String(item?.submissionStatus || "").toUpperCase();
+  if (submissionStatus === "APPROVED" || submissionStatus === "PENDING") {
+    return null;
+  }
+
+  if (!item?.due) {
+    return <span className="text-xs text-muted-foreground">No due date</span>;
+  }
+  if (item.enableReminder === false) {
+    return (
+      <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border">
+        Reminder Off
+      </Badge>
+    );
+  }
+
+  const days = Number(item.reminderDaysBefore || 7);
+  return (
+    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+      {days}d before due
+    </Badge>
+  );
 }
 
 function daysUntil(dateStr) {
@@ -329,6 +356,12 @@ function SubmitDialog({ item, open, onClose, onSubmit }) {
                 <p className="text-xs flex items-center gap-1 pt-1 text-muted-foreground">
                   <Calendar className="h-3 w-3" />
                   Due: {formatDate(item.due)}
+                </p>
+              )}
+              {item?.due && item?.enableReminder !== false && (
+                <p className="text-xs flex items-center gap-1 text-amber-700">
+                  <Clock className="h-3 w-3" />
+                  Reminder starts {item.reminderDaysBefore || 7} day{(item.reminderDaysBefore || 7) === 1 ? "" : "s"} before due date
                 </p>
               )}
             </div>
@@ -1152,6 +1185,7 @@ function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, 
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
                   <TableHead className="font-semibold">Item</TableHead>
                   <TableHead className="font-semibold w-[140px]">Status</TableHead>
+                  <TableHead className="font-semibold w-[160px]">Reminder</TableHead>
                   <TableHead className="font-semibold w-[160px]">Submitted</TableHead>
                   <TableHead className="w-[52px]" />
                 </TableRow>
@@ -1203,6 +1237,7 @@ function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, 
                           </TableCell>
                           <TableCell />
                           <TableCell />
+                          <TableCell />
                           <TableCell>{isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}</TableCell>
                         </TableRow>,
                         ...(isExpanded ? render(item.children, depth + 1, headerCode ?? parentCode) : []),
@@ -1238,10 +1273,18 @@ function ChecklistAreaCard({ area, accentClass = "border-l-blue-500", onSubmit, 
                               </span>
                             )}
                             <p className="text-sm font-medium">{item.title}</p>
+                            {item.due && item.enableReminder !== false && (
+                              <p className="text-[11px] text-amber-700 mt-0.5">
+                                Reminder: {item.reminderDaysBefore || 7} day{(item.reminderDaysBefore || 7) === 1 ? "" : "s"} before deadline
+                              </p>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="py-2.5">
                           <StatusBadge submissionStatus={item.submissionStatus} uiStatus={item.status} />
+                        </TableCell>
+                        <TableCell className="py-2.5">
+                          <ReminderCell item={item} />
                         </TableCell>
                         <TableCell className="py-2.5 text-xs text-muted-foreground">
                           {item.submittedAt ? formatDateTime(item.submittedAt) : "—"}

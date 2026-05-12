@@ -40,6 +40,7 @@ const FREQ_LABEL = {
 const EMPTY_ITEM = {
   parentItemId: '', itemCode: '', title: '', description: '', isRequired: true,
   frequency: 'ANNUAL', dueDate: '', allowedFileTypes: 'pdf,docx', maxFiles: '1', sortOrder: '', isActive: true,
+  enableReminder: true, reminderDaysBefore: '7',
 };
 
 function incrementItemCode(code) {
@@ -372,6 +373,53 @@ function ItemForm({ form, setForm, rawItems }) {
           </label>
         </div>
       </div>
+
+      <div className="h-px bg-border" />
+
+      {/* ── Deadline Reminders ── */}
+      {!isHeader && (
+        <div className="space-y-3 bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <Label className="font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                Deadline Reminders
+              </Label>
+              <p className="text-xs text-muted-foreground">Configure automatic in-app reminders for this deadline</p>
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <Checkbox 
+                checked={form.enableReminder} 
+                onCheckedChange={(v) => setForm({ ...form, enableReminder: Boolean(v) })} 
+              />
+              <span>Enable</span>
+            </label>
+          </div>
+          
+          {form.enableReminder && (
+            <div className="space-y-2">
+              <Label htmlFor="reminder-days" className="text-sm">Days before due date</Label>
+              <div className="flex items-center gap-2">
+                <Input 
+                  id="reminder-days"
+                  type="number" 
+                  min="1" 
+                  max="365" 
+                  value={form.reminderDaysBefore} 
+                  onChange={(e) => setForm({ ...form, reminderDaysBefore: e.target.value })} 
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">days</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {form.reminderDaysBefore && !isNaN(form.reminderDaysBefore) 
+                  ? `Reminders will be sent ${form.reminderDaysBefore} day${form.reminderDaysBefore !== '1' ? 's' : ''} before the deadline`
+                  : 'Set the number of days before the deadline to send a reminder'}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -589,6 +637,8 @@ export default function TemplatesCategoriesPage() {
         maxFiles:         form.maxFiles === '' ? 0 : Number(form.maxFiles),
         sortOrder:        Number(form.sortOrder) || rawItems.length + 1,
         isActive:         form.isActive,
+        enableReminder:   form.enableReminder,
+        reminderDaysBefore: Number(form.reminderDaysBefore) || 7,
       });
       setRawItems((prev) => [...prev, data.item]);
       itemsCache.current[selectedTemplateId] = [...rawItems, data.item];
@@ -616,6 +666,8 @@ export default function TemplatesCategoriesPage() {
       maxFiles:         String(item.max_files),
       sortOrder:        String(item.sort_order),
       isActive:         item.is_active,
+      enableReminder:   item.enable_reminder ?? true,
+      reminderDaysBefore: String(item.reminder_days_before ?? 7),
     });
     setIsEditOpen(true);
   };
@@ -635,6 +687,8 @@ export default function TemplatesCategoriesPage() {
         dueDate:          form.dueDate || null,
         allowedFileTypes: parseFileTypes(form.allowedFileTypes),
         maxFiles:         form.maxFiles === '' ? 0 : Number(form.maxFiles),
+        enableReminder:   form.enableReminder,
+        reminderDaysBefore: Number(form.reminderDaysBefore) || 7,
         sortOrder:        Number(form.sortOrder) || selected.sort_order,
         isActive:         form.isActive,
       });

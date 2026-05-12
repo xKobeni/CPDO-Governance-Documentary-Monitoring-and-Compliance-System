@@ -56,6 +56,8 @@ export const env = {
   /** Origin where this API is reachable (for email links). E.g. https://api.example.com — no path. */
   publicApiUrl: process.env.PUBLIC_API_URL?.trim(),
 
+  reminderWindowDays: parseNumber(process.env.REMINDER_WINDOW_DAYS, 7),
+
   b2KeyId: process.env.B2_KEY_ID?.trim(),
   b2ApplicationKey: process.env.B2_APPLICATION_KEY?.trim(),
   b2BucketName: process.env.B2_BUCKET_NAME?.trim(),

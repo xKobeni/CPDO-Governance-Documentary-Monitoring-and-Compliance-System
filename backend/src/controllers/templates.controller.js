@@ -150,6 +150,8 @@ const itemSchema = z.object({
   maxFiles: z.number().int().min(0).max(20).optional(),
   sortOrder: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
+  enableReminder: z.boolean().optional(),
+  reminderDaysBefore: z.number().int().min(1).max(365).optional(),
 });
 
 export async function createChecklistItemHandler(req, res) {
@@ -180,6 +182,8 @@ export async function createChecklistItemHandler(req, res) {
       maxFiles: parsed.data.maxFiles ?? 1,
       sortOrder: parsed.data.sortOrder ?? 0,
       isActive: parsed.data.isActive ?? true,
+      enableReminder: parsed.data.enableReminder ?? true,
+      reminderDaysBefore: parsed.data.reminderDaysBefore ?? 7,
     });
 
     return res.status(201).json({ item });

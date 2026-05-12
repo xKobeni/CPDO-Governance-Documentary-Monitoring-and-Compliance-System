@@ -87,10 +87,10 @@ const STATUS_BADGE = {
   DENIED: "bg-red-100 text-red-800 border-red-200",
 };
 
-function StatusPill({ status }) {
+function StatusPill({ status, compact = false }) {
   const s = String(status || "PENDING").toUpperCase();
   const label =
-    s === "REVISION_REQUESTED" ? "Pending (revision requested)" :
+    s === "REVISION_REQUESTED" ? (compact ? "Revision requested" : "Pending (revision requested)") :
     s === "APPROVED" ? "Approved" :
     s === "DENIED" ? "Not approved" :
     "Pending";
@@ -100,7 +100,14 @@ function StatusPill({ status }) {
     s === "REVISION_REQUESTED" ? RotateCcw :
     Clock;
   return (
-    <Badge variant="outline" className={cn("gap-1", STATUS_BADGE[s] ?? STATUS_BADGE.PENDING)}>
+    <Badge
+      variant="outline"
+      className={cn(
+        "gap-1 max-w-full whitespace-nowrap",
+        compact && "px-2 py-0.5 text-xs",
+        STATUS_BADGE[s] ?? STATUS_BADGE.PENDING
+      )}
+    >
       <Icon className="h-3 w-3" />
       {label}
     </Badge>
@@ -114,6 +121,31 @@ function NoSubmissionPill() {
       No uploaded
     </Badge>
   );
+}
+
+function ReminderCell({ item, submissionStatus }) {
+  const status = String(submissionStatus || "").toUpperCase();
+  if (status === "APPROVED" || status === "PENDING") {
+    return null;
+  }
+
+  if (!item?.dueDate) {
+    return <span className="text-xs text-muted-foreground">No due date</span>;
+  }
+  if (item?.enableReminder === false) {
+    return <span className="text-xs text-muted-foreground">No reminder</span>;
+  }
+
+  const dueDate = new Date(`${item.dueDate}T23:59:59`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (!Number.isNaN(dueDate.getTime()) && dueDate < today) {
+    return <span className="text-xs font-medium text-red-600">Overdue</span>;
+  }
+
+  const days = Number(item?.reminderDaysBefore || 7);
+  return <span className="text-xs text-amber-700">{days}d before due</span>;
 }
 
 /** Shown on checklist / list rows when the submission has discussion comments */
@@ -1282,6 +1314,9 @@ export default function SubmissionsPage() {
         title: it.title,
         sortOrder: it.sortOrder ?? it.sort_order ?? 0,
         submission: it.submission,
+        dueDate: it.dueDate ?? it.due_date,
+        enableReminder: it.enableReminder ?? it.enable_reminder,
+        reminderDaysBefore: it.reminderDaysBefore ?? it.reminder_days_before,
         children: [],
       };
     });
@@ -1819,12 +1854,13 @@ export default function SubmissionsPage() {
             ) : (
               <div className="rounded-lg border overflow-hidden shadow-sm">
                 <div className="max-h-[62vh] overflow-auto">
-                <Table className="table-fixed w-full min-w-[900px]">
+                <Table className="table-fixed w-full min-w-[1040px]">
                   <TableHeader>
                     <TableRow className="bg-muted/50 hover:bg-muted/50">
-                      <TableHead className="font-semibold w-[65%]">Item</TableHead>
-                      <TableHead className="font-semibold w-[140px]">Status</TableHead>
-                      <TableHead className="font-semibold w-[160px]">Submitted</TableHead>
+                      <TableHead className="font-semibold w-[58%]">Item</TableHead>
+                      <TableHead className="font-semibold w-[180px]">Status</TableHead>
+                      <TableHead className="font-semibold w-[180px]">Reminder</TableHead>
+                      <TableHead className="font-semibold w-[180px]">Submitted</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1839,9 +1875,9 @@ export default function SubmissionsPage() {
                               r.depth === 0 ? "bg-muted/55 border-t border-b border-border/80" : "bg-muted/25"
                             )}
                           >
-                            <TableCell className="min-w-0 py-2.5">
+                            <TableCell className="min-w-0 py-2.5 align-top">
                               <div
-                                className="relative min-w-0 flex items-center gap-2"
+                                className="relative min-w-0 flex items-start gap-2"
                                 style={{ paddingLeft: rowPad }}
                               >
                                 {r.depth > 0 && (
@@ -1857,19 +1893,22 @@ export default function SubmissionsPage() {
                                 <Badge variant="secondary" className="font-mono text-xs font-bold shrink-0">
                                   {r.itemCode}
                                 </Badge>
-                                <p
-                                  className={cn(
-                                    "text-sm truncate block min-w-0",
-                                    r.depth === 0 ? "font-extrabold text-foreground" : "font-semibold text-foreground/90"
-                                  )}
-                                  title={r.title}
-                                >
-                                  {r.title}
-                                </p>
+                                <div className="min-w-0 flex-1 space-y-0.5 pr-1">
+                                  <p
+                                    className={cn(
+                                      "block min-w-0 truncate text-sm leading-5",
+                                      r.depth === 0 ? "font-extrabold text-foreground" : "font-semibold text-foreground/90"
+                                    )}
+                                    title={r.title}
+                                  >
+                                    {r.title}
+                                  </p>
+                                </div>
                               </div>
                             </TableCell>
-                            <TableCell />
-                            <TableCell />
+                            <TableCell className="align-top" />
+                            <TableCell className="align-top" />
+                            <TableCell className="align-top" />
                           </TableRow>
                         );
                       }
@@ -1896,7 +1935,7 @@ export default function SubmissionsPage() {
                             });
                           }}
                         >
-                          <TableCell className="min-w-0 py-2.5">
+                          <TableCell className="min-w-0 py-2.5 align-top">
                             <div
                               className="relative min-w-0 flex items-start gap-2"
                               style={{ paddingLeft: rowPad }}
@@ -1911,12 +1950,12 @@ export default function SubmissionsPage() {
                                   <span className="absolute left-1/2 top-1/2 right-0 h-px bg-border -translate-x-1/2" />
                                 </span>
                               )}
-                              <div className="min-w-0 flex-1 pr-1">
-                                <p className="text-sm font-medium truncate block" title={r.title}>
+                              <div className="min-w-0 flex-1 space-y-0.5 pr-1">
+                                <p className="block min-w-0 truncate text-sm font-medium leading-5" title={r.title}>
                                   {r.title}
                                 </p>
                                 {r.itemCode ? (
-                                  <p className="text-xs text-muted-foreground font-mono truncate" title={r.itemCode}>
+                                  <p className="block min-w-0 truncate text-xs leading-4 text-muted-foreground font-mono" title={r.itemCode}>
                                     {r.itemCode}
                                   </p>
                                 ) : null}
@@ -1924,10 +1963,15 @@ export default function SubmissionsPage() {
                               <SubmissionDiscussionHint count={s?.commentCount} />
                             </div>
                           </TableCell>
-                          <TableCell className="py-2.5">
-                            {s?.status ? <StatusPill status={s.status} /> : <NoSubmissionPill />}
+                          <TableCell className="py-2.5 align-top whitespace-nowrap">
+                            {s?.status ? <StatusPill status={s.status} compact /> : <NoSubmissionPill />}
                           </TableCell>
-                          <TableCell className="py-2.5 text-xs text-muted-foreground">
+                          <TableCell className="py-2.5 align-top whitespace-nowrap text-right">
+                            <div className="inline-flex justify-end min-w-full">
+                              <ReminderCell item={r} submissionStatus={s?.status} />
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-2.5 align-top whitespace-nowrap text-xs text-muted-foreground">
                             {s?.submittedAt ? formatDateTime(s.submittedAt) : "Not submitted"}
                           </TableCell>
                         </TableRow>

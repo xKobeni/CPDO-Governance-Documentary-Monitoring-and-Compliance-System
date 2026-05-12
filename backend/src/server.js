@@ -3,6 +3,7 @@ import { env } from "./config/env.js";
 import { pool, dbHealthcheck } from "./config/db.js";
 import { logger } from "./config/logger.js";
 import { verifyMailTransport } from "./services/maileroo.service.js";
+import { startDeadlineReminderScheduler } from "./services/deadline-reminders.service.js";
 
 const app = createApp();
 
@@ -37,6 +38,8 @@ async function ensureRoles() {
         "SMTP verification failed. Server will continue with email disabled.",
       );
     }
+
+    startDeadlineReminderScheduler({ logger });
 
     app.listen(env.port, () => {
       logger.info({ port: env.port }, "API server running");

@@ -130,6 +130,8 @@ export async function getOfficeChecklistHandler(req, res) {
         isRequired: row.is_required,
         frequency: row.frequency,
         dueDate: row.due_date,
+        enableReminder: row.enable_reminder,
+        reminderDaysBefore: row.reminder_days_before,
         allowedFileTypes: row.allowed_file_types ?? null,
         maxFiles: row.max_files ?? null,
         sortOrder: row.item_sort_order,

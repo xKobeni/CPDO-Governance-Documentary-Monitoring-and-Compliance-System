@@ -272,15 +272,15 @@ export async function createChecklistItem(payload) {
   const {
     templateId, parentItemId, itemCode, title, description,
     isRequired, frequency, dueDate, allowedFileTypes, maxFiles,
-    sortOrder, isActive
+    sortOrder, isActive, enableReminder, reminderDaysBefore
   } = payload;
 
   const { rows } = await pool.query(
     `INSERT INTO checklist_items
       (template_id, parent_item_id, item_code, title, description,
        is_required, frequency, due_date, allowed_file_types, max_files,
-       sort_order, is_active)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       sort_order, is_active, enable_reminder, reminder_days_before)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
      RETURNING *`,
     [
       templateId,
@@ -294,7 +294,9 @@ export async function createChecklistItem(payload) {
       allowedFileTypes ?? null,
       maxFiles ?? 0,
       sortOrder ?? 0,
-      isActive ?? true
+      isActive ?? true,
+      enableReminder ?? true,
+      reminderDaysBefore ?? 7
     ]
   );
 
@@ -316,7 +318,7 @@ export async function updateChecklistItemInTemplate(templateId, id, payload) {
   const {
     parentItemId, itemCode, title, description,
     isRequired, frequency, dueDate, allowedFileTypes, maxFiles,
-    sortOrder, isActive
+    sortOrder, isActive, enableReminder, reminderDaysBefore
   } = payload;
 
   const sets = [];
@@ -333,6 +335,8 @@ export async function updateChecklistItemInTemplate(templateId, id, payload) {
   if (maxFiles      !== undefined) { sets.push(`max_files = $${i++}`);           params.push(maxFiles); }
   if (sortOrder     !== undefined) { sets.push(`sort_order = $${i++}`);          params.push(sortOrder); }
   if (isActive      !== undefined) { sets.push(`is_active = $${i++}`);           params.push(isActive); }
+  if (enableReminder !== undefined) { sets.push(`enable_reminder = $${i++}`);     params.push(enableReminder); }
+  if (reminderDaysBefore !== undefined) { sets.push(`reminder_days_before = $${i++}`); params.push(reminderDaysBefore); }
   if (sets.length === 0) {
     const { rows } = await pool.query(`SELECT * FROM checklist_items WHERE id = $1`, [id]);
     return rows[0] || null;
