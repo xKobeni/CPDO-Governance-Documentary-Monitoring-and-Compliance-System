@@ -224,6 +224,8 @@ function OfficeDashboard({ user }) {
     return d;
   }, []);
 
+  const msPerDay = 24 * 60 * 60 * 1000;
+
   const total = allItems.length;
   const completed = useMemo(() => allItems.filter((i) => i.status === "completed").length, [allItems]);
   const inProgress = useMemo(() => allItems.filter((i) => i.status === "in-progress").length, [allItems]);

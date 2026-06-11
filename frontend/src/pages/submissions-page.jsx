@@ -136,16 +136,27 @@ function ReminderCell({ item, submissionStatus }) {
     return <span className="text-xs text-muted-foreground">No reminder</span>;
   }
 
-  const dueDate = new Date(`${item.dueDate}T23:59:59`);
+  // Use date-only arithmetic like the dashboard so wording and day counts match
+  const dueDate = new Date(item.dueDate);
+  dueDate.setHours(0, 0, 0, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  if (!Number.isNaN(dueDate.getTime()) && dueDate < today) {
-    return <span className="text-xs font-medium text-red-600">Overdue</span>;
+  if (Number.isNaN(dueDate.getTime())) {
+    return <span className="text-xs text-muted-foreground">Invalid due date</span>;
   }
 
-  const days = Number(item?.reminderDaysBefore || 7);
-  return <span className="text-xs text-amber-700">{days}d before due</span>;
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysLeft = Math.floor((dueDate.getTime() - today.getTime()) / msPerDay);
+
+  if (daysLeft < 0) {
+    return <span className="text-xs font-medium text-red-600">{Math.abs(daysLeft)}d overdue</span>;
+  }
+  if (daysLeft === 0) {
+    return <span className="text-xs font-medium text-amber-700">Due today</span>;
+  }
+
+  return <span className="text-xs text-amber-700">{daysLeft}d left</span>;
 }
 
 /** Shown on checklist / list rows when the submission has discussion comments */
@@ -1984,8 +1995,8 @@ export default function SubmissionsPage() {
                           <TableCell className="py-2.5 align-top whitespace-nowrap">
                             {s?.status ? <StatusPill status={s.status} compact /> : <NoSubmissionPill />}
                           </TableCell>
-                          <TableCell className="py-2.5 align-top whitespace-nowrap text-right">
-                            <div className="inline-flex justify-end min-w-full">
+                          <TableCell className="py-2.5 align-top whitespace-nowrap text-left">
+                            <div className="inline-flex items-start justify-start w-full">
                               <ReminderCell item={r} submissionStatus={s?.status} />
                             </div>
                           </TableCell>

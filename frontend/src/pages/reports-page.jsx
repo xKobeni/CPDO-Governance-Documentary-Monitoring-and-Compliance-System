@@ -31,6 +31,7 @@ import {
   Medal,
   ShieldCheck,
   TimerOff,
+  Bell,
 } from 'lucide-react';
 import {
   BarChart,
@@ -54,6 +55,7 @@ import {
   getReportOverview,
   getComplianceProgress,
   getGovernanceByOffice,
+  getDeadlineOverview,
   downloadComplianceProgress,
   downloadMissingUploads,
   downloadCompletedUploads,
@@ -469,6 +471,16 @@ export default function ReportsPage() {
     staleTime: 2 * 60 * 1000,
   });
 
+  const deadlineQuery = useQuery({
+    queryKey: ['report-deadline-overview', year, selectedOfficeId || (isOfficeUser ? '__own__' : null)],
+    queryFn: () =>
+      getDeadlineOverview({
+        year,
+        ...(selectedOfficeId ? { officeId: selectedOfficeId } : {}),
+      }),
+    staleTime: 2 * 60 * 1000,
+  });
+
   const governanceQuery = useQuery({
     queryKey: ['governance-by-office', year, selectedOfficeId || (isOfficeUser ? '__own__' : null)],
     queryFn: () =>
@@ -569,6 +581,11 @@ export default function ReportsPage() {
     [overviewQuery.data]
   );
 
+  const deadlineOverview = deadlineQuery.data || null;
+  const deadlineTotals = deadlineOverview?.totals || { overdueItems: 0, dueTodayItems: 0, dueSoonItems: 0, officesWithIssues: 0 };
+  const deadlineOffices = deadlineOverview?.offices || [];
+  const urgentDeadlineItems = deadlineOverview?.items || [];
+
   // ── Derived: missing uploads ──────────────────────────────────────────────────
   const missingList = missingQuery.data?.missing || [];
   const missingByGov = useMemo(
@@ -607,17 +624,20 @@ export default function ReportsPage() {
     return ts
       ? new Date(ts).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
       : null;
-  }, [activeTab, uploadView, overviewQuery.dataUpdatedAt, complianceQuery.dataUpdatedAt, missingQuery.dataUpdatedAt, completedQuery.dataUpdatedAt]);
+  }, [activeTab, uploadView, overviewQuery.dataUpdatedAt, complianceQuery.dataUpdatedAt, missingQuery.dataUpdatedAt, completedQuery.dataUpdatedAt, deadlineQuery.dataUpdatedAt]);
 
   // ── Refresh ───────────────────────────────────────────────────────────────────
   const isRefreshing =
     overviewQuery.isFetching || summaryQuery.isFetching ||
-    missingQuery.isFetching || completedQuery.isFetching || complianceQuery.isFetching;
+    missingQuery.isFetching || completedQuery.isFetching || complianceQuery.isFetching || deadlineQuery.isFetching;
 
   const handleRefresh = () => {
     if (activeTab === 'overview') { overviewQuery.refetch(); summaryQuery.refetch(); }
     else if (activeTab === 'status') complianceQuery.refetch();
     else if (activeTab === 'missing') { missingQuery.refetch(); completedQuery.refetch(); }
+    else if (activeTab === 'area') governanceQuery.refetch();
+    else if (activeTab === 'heatmap') heatmapQuery.refetch();
+    deadlineQuery.refetch();
   };
 
   // ── CSV exports ───────────────────────────────────────────────────────────────
@@ -822,7 +842,9 @@ export default function ReportsPage() {
     (missingList.length > 0) ||
     (completedList.length > 0) ||
     (governanceQuery.data?.data?.length > 0) ||
-    (heatmapQuery.data?.matrix?.length > 0)
+    (heatmapQuery.data?.matrix?.length > 0) ||
+    (deadlineOffices.length > 0) ||
+    (urgentDeadlineItems.length > 0)
   );
 
   const allQueriesIdle = [overviewQuery, summaryQuery, complianceQuery, missingQuery, completedQuery, governanceQuery, heatmapQuery].every(q => !q.isFetching);
@@ -1188,11 +1210,101 @@ export default function ReportsPage() {
                               })}
                             </td>
                           </tr>
+
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card data-tour-id="reports-deadline-analysis">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Bell className="h-4 w-4 text-red-600" />
+                Submission Deadline Analysis
+              </CardTitle>
+              <CardDescription>Items that are overdue, due today, or due soon for {year}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {deadlineQuery.isFetching && !deadlineQuery.data ? (
+                <div className="flex items-center justify-center py-10 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin mr-3" /> Loading…
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-lg border border-red-200 bg-background/70 p-3">
+                      <p className="text-xs font-medium text-red-700">Overdue items</p>
+                      <p className="mt-1 text-2xl font-bold text-red-700">{deadlineTotals.overdueItems}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-background/70 p-3">
+                      <p className="text-xs font-medium text-amber-700">Due today</p>
+                      <p className="mt-1 text-2xl font-bold text-amber-700">{deadlineTotals.dueTodayItems}</p>
+                    </div>
+                    <div className="rounded-lg border border-blue-200 bg-background/70 p-3">
+                      <p className="text-xs font-medium text-blue-700">Due soon</p>
+                      <p className="mt-1 text-2xl font-bold text-blue-700">{deadlineTotals.dueSoonItems}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-background/70 p-3">
+                      <p className="text-xs font-medium text-slate-700">Offices affected</p>
+                      <p className="mt-1 text-2xl font-bold text-slate-700">{deadlineTotals.officesWithIssues}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Offices with deadline pressure</p>
+                      {deadlineOffices.length === 0 ? (
+                        <p className="text-sm text-muted-foreground rounded-lg border bg-background/60 p-4">No overdue or due-soon items right now.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {deadlineOffices.map((office) => (
+                            <div key={office.officeId} className="rounded-lg border bg-background/70 p-3 space-y-2">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold truncate">{office.officeName}</p>
+                                  <p className="text-xs text-muted-foreground">{office.totalCount} urgent item{office.totalCount === 1 ? '' : 's'}</p>
+                                </div>
+                                <div className="flex flex-wrap justify-end gap-1.5">
+                                  {office.overdueCount > 0 && <Badge variant="destructive" className="text-[10px]">{office.overdueCount} overdue</Badge>}
+                                  {office.dueTodayCount > 0 && <Badge className="bg-amber-100 text-amber-700 text-[10px]">{office.dueTodayCount} today</Badge>}
+                                  {office.dueSoonCount > 0 && <Badge className="bg-blue-100 text-blue-700 text-[10px]">{office.dueSoonCount} soon</Badge>}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Most urgent items</p>
+                      {urgentDeadlineItems.length === 0 ? (
+                        <p className="text-sm text-muted-foreground rounded-lg border bg-background/60 p-4">No urgent deadline items found.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {urgentDeadlineItems.slice(0, 6).map((item) => (
+                            <div key={`${item.officeId}-${item.governanceCode}-${item.itemCode}`} className="flex items-start justify-between gap-3 rounded-lg border bg-background/70 p-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold truncate">{item.officeName}</p>
+                                <p className="text-xs text-muted-foreground truncate">{item.governanceCode} · {item.itemCode} · {item.itemTitle}</p>
+                              </div>
+                              <Badge
+                                variant="secondary"
+                                className={item.bucket === 'overdue' ? 'bg-red-100 text-red-700 shrink-0' : item.bucket === 'dueToday' ? 'bg-amber-100 text-amber-700 shrink-0' : 'bg-blue-100 text-blue-700 shrink-0'}
+                              >
+                                {item.bucket === 'overdue' ? `${Math.abs(item.daysLeft)}d late` : item.bucket === 'dueToday' ? 'Due today' : `${item.daysLeft}d left`}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>

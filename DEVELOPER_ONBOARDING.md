@@ -54,7 +54,7 @@ This guide helps new and existing developers quickly understand, run, and extend
 
 1. `cd backend`
 2. `npm install`
-3. Configure `.env`
+3. Configure `.env` (see `backend/DATABASE_SETUP.md` for DB setup details)
 4. `npm run db:schema`
 5. `npm run seed`
 6. `npm run dev`

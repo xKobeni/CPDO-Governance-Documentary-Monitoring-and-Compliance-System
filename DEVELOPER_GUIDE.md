@@ -111,21 +111,17 @@ VITE_API_URL=http://localhost:5000/api
 
 ## 6) Database Setup
 
-Apply schema:
+See `backend/DATABASE_SETUP.md` for the full guide (creating the database, applying the schema, seeding, troubleshooting).
+
+Quick commands:
 
 ```powershell
 cd backend
 npm run db:schema
-```
-
-Seed admin account (optional but recommended in development):
-
-```powershell
-cd backend
 npm run seed
 ```
 
-Optional seed overrides:
+Optional seed overrides (in `backend/.env`):
 
 ```env
 SEED_ADMIN_EMAIL=cpdc.systems@gmail.com
