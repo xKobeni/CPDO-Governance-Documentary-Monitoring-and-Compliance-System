@@ -58,7 +58,8 @@ import {
 import { toast } from 'react-hot-toast';
 
 // Import API functions
-import { getUsers, createUser, updateUser, deleteUser, setUserActive, getOffices, resetUserPassword, resendUserVerification } from '../api/users';
+import { getUsers, createUser, updateUser, deleteUser, setUserActive, resetUserPassword, resendUserVerification } from '../api/users';
+import { getOffices } from '../api/offices';
 import HelpTourOverlay from '../components/help-tour-overlay';
 
 const roleOptions = [
