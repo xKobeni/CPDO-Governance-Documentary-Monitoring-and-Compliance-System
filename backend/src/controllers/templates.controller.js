@@ -145,7 +145,11 @@ const itemSchema = z.object({
   description: z.string().nullable().optional(),
   isRequired: z.boolean().optional(),
   frequency: z.enum(["ANNUAL", "SEMI_ANNUAL", "QUARTERLY", "MONTHLY", "ONE_TIME"]).optional(),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().refine((val) => {
+    if (!val) return true;
+    const d = new Date(val);
+    return !isNaN(d.getTime()) && d.toISOString().startsWith(val);
+  }, { message: "Invalid date — value does not represent a real calendar date" }),
   allowedFileTypes: z.array(z.string()).nullable().optional(),
   maxFiles: z.number().int().min(0).max(20).optional(),
   sortOrder: z.number().int().min(0).optional(),

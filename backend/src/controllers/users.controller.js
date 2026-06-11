@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { env } from "../config/env.js";
+import { logger } from "../config/logger.js";
 import { hashPassword } from "../utils/password.js";
 import { getRoleByCode } from "../models/roles.model.js";
 import {
@@ -80,7 +81,7 @@ export async function createUserHandler(req, res) {
       payload.verificationDevToken = sendResult.rawToken;
     }
   } catch (e) {
-    console.error("[users] Failed to send verification email", e?.message || e);
+    logger.error({ err: e }, "[users] Failed to send verification email");
     payload.verificationEmailWarning = "Verification email could not be sent. Use resend from user management or ask the user to use Resend on the login page.";
   }
 
@@ -109,7 +110,7 @@ export async function createUserHandler(req, res) {
         "Credential email was not sent because SMTP is not configured in this environment.";
     }
   } catch (e) {
-    console.error("[users] Failed to send credential email", e?.message || e);
+    logger.error({ err: e }, "[users] Failed to send credential email");
     payload.credentialEmailWarning =
       "User was created, but sending the credential email failed. Share the temporary password manually.";
   }
@@ -188,7 +189,7 @@ export async function updateUserHandler(req, res) {
     try {
       await sendUserEmailVerification(userId, updated.email);
     } catch (e) {
-      console.error("[users] Failed to send verification after email change", e?.message || e);
+      logger.error({ err: e }, "[users] Failed to send verification after email change");
     }
   }
 
@@ -236,7 +237,7 @@ export async function resendUserVerificationHandler(req, res) {
       /* ignore */
     }
   } catch (e) {
-    console.error("[users] Admin resend verification failed", e?.message || e);
+    logger.error({ err: e }, "[users] Admin resend verification failed");
     return res.status(500).json({ message: "Failed to send verification email." });
   }
 
@@ -288,7 +289,7 @@ export async function resetUserPasswordHandler(req, res) {
         "Credential email was not sent because SMTP is not configured in this environment.";
     }
   } catch (e) {
-    console.error("[users] Failed to send reset credential email", e?.message || e);
+    logger.error({ err: e }, "[users] Failed to send reset credential email");
     credentialEmailWarning =
       "Password was reset, but sending credential email failed. Please share the password manually.";
   }

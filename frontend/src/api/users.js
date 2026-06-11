@@ -60,11 +60,6 @@ export async function resendUserVerification(userId) {
   return response.data;
 }
 
-export async function getOffices() {
-  const response = await api.get('/offices');
-  return response.data;
-}
-
 // Note: Backend doesn't have user stats endpoint yet, this is placeholder
 export async function getUserStats() {
   const response = await api.get('/analytics/user-stats');

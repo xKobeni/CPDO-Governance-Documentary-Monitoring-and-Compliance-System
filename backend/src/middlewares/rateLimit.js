@@ -24,6 +24,12 @@ export const forgotPasswordLimiter = rateLimit({
   max: 5,                  // 5 requests per window per IP
 });
 
+export const resetPasswordLimiter = rateLimit({
+  ...baseLimiterConfig,
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+});
+
 export const verifyEmailLimiter = rateLimit({
   ...baseLimiterConfig,
   windowMs: 15 * 60 * 1000,

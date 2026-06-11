@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { env } from "../config/env.js";
+import { logger } from "../config/logger.js";
 import { hashPassword, verifyPassword } from "../utils/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/jwt.js";
 import { sha256 } from "../utils/tokenHash.js";
@@ -217,7 +218,7 @@ export async function login(req, res) {
   // create a refresh token AFTER we have a session id
   // Strategy: create session first with placeholder hash, then update by revoking+creating is overkill.
   // Better: create a temporary random sid now:
-  const sid = cryptoRandomId();
+  const sid = nanoid(32);
 
   const refreshPayload = { ...accessPayload, sid };
   const refreshToken = signRefreshToken(refreshPayload);
@@ -259,11 +260,6 @@ export async function login(req, res) {
   });
 }
 
-function cryptoRandomId() {
-  // Use nanoid for cryptographically secure random ID generation
-  return nanoid(32);
-}
-
 export async function refresh(req, res) {
   const token = req.cookies?.refresh_token;
   if (!token) return res.status(401).json({ message: "No refresh token" });
@@ -293,7 +289,7 @@ export async function refresh(req, res) {
     officeId: payload.officeId ?? null,
   };
 
-  const newSid = cryptoRandomId();
+  const newSid = nanoid(32);
   const newRefreshPayload = { ...accessPayload, sid: newSid };
   const newRefreshToken = signRefreshToken(newRefreshPayload);
 
@@ -407,7 +403,7 @@ export async function forgotPassword(req, res) {
         "Email delivery is disabled in this environment. Use the 6-digit code below for local testing.";
     }
   } catch (e) {
-    console.error("[auth] Failed to send password reset email", e?.message || e);
+    logger.error({ err: e }, "[auth] Failed to send password reset email");
   }
 
   try {
@@ -508,10 +504,7 @@ export async function verifyEmail(req, res) {
           html: welcomeEmail.html,
         });
       } catch (mailError) {
-        console.error(
-          "[auth] verifyEmail welcome email send failed",
-          mailError?.message || mailError,
-        );
+        logger.error({ err: mailError }, "[auth] verifyEmail welcome email send failed");
       }
     }
 
@@ -527,7 +520,7 @@ export async function verifyEmail(req, res) {
       /* ignore */
     }
   } catch (e) {
-    console.error("[auth] verifyEmail failed", e?.message || e);
+    logger.error({ err: e }, "[auth] verifyEmail failed");
     return res.redirect(302, frontendLoginPath("?verify=error"));
   }
 
@@ -568,7 +561,7 @@ export async function resendVerification(req, res) {
       /* ignore */
     }
   } catch (e) {
-    console.error("[auth] resendVerification send failed", e?.message || e);
+    logger.error({ err: e }, "[auth] resendVerification send failed");
   }
 
   return res.json(response);

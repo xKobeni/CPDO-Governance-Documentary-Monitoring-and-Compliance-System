@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { loginLimiter, forgotPasswordLimiter, verifyEmailLimiter } from "../middlewares/rateLimit.js";
+import { loginLimiter, forgotPasswordLimiter, resetPasswordLimiter, verifyEmailLimiter } from "../middlewares/rateLimit.js";
 import {
   login,
   refresh,
@@ -21,7 +21,7 @@ const router = Router();
 router.post("/login", loginLimiter, asyncHandler(login));
 router.get("/verify-email", verifyEmailLimiter, asyncHandler(verifyEmail));
 router.post("/forgot-password", forgotPasswordLimiter, asyncHandler(forgotPassword));
-router.post("/reset-password", forgotPasswordLimiter, asyncHandler(resetPassword));
+router.post("/reset-password", resetPasswordLimiter, asyncHandler(resetPassword));
 router.post("/resend-verification", forgotPasswordLimiter, asyncHandler(resendVerification));
 router.post("/refresh", requireCsrf, asyncHandler(refresh));
 router.post("/logout", requireCsrf, audit("LOGOUT", "USER", null, (req) => ({ userAgent: req.headers["user-agent"] })), asyncHandler(logout));

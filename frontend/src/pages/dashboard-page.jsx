@@ -147,14 +147,25 @@ function buildSubmissionDeepLinkTarget(item, { year, officeId, officeName } = {}
 
 /** Derive a per-item UI status the same way my-checklists-page does */
 function deriveStatus(submission, dueDate) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const isPastDue = (date) => {
+    if (!date) return false;
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d < today;
+  };
+
   if (!submission) {
-    if (dueDate && new Date(dueDate) < new Date()) return "overdue";
+    if (isPastDue(dueDate)) return "overdue";
     return "pending";
   }
   const s = submission.status?.toUpperCase();
   if (s === "APPROVED") return "completed";
   if (s === "PENDING") return "in-progress";
-  // DENIED / REVISION_REQUESTED
+  // DENIED / REVISION_REQUESTED — still show overdue if past due
+  if (isPastDue(dueDate)) return "overdue";
   return "pending";
 }
 
@@ -488,7 +499,11 @@ function OfficeDashboard({ user }) {
 
                 <div className="space-y-3">
                   {upcomingDeadlines.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">No overdue or due-soon submissions right now.</p>
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      {overdueReminders.length > 0
+                        ? "All items are overdue — review the Reminder Overview above."
+                        : "No upcoming submissions due right now."}
+                    </p>
                   ) : (
                     upcomingDeadlines.map((item, idx) => (
                       <button

@@ -12,9 +12,12 @@ export function cacheControl(maxAge = 300) {
       // "private" permits browser caching but tells shared caches not to reuse it.
       res.set("Cache-Control", `private, max-age=${maxAge}`);
       // Ensure any intermediate caches separate variants by auth/session context.
-      res.vary("Authorization");
-      res.vary("Cookie");
-      res.vary("x-session-id");
+      const existingVary = res.getHeader("Vary") || "";
+      const varyHeaders = ["Authorization", "Cookie", "x-session-id"];
+      const missing = varyHeaders.filter(v => !existingVary.includes(v));
+      if (missing.length) {
+        res.setHeader("Vary", [existingVary, ...missing].filter(Boolean).join(", "));
+      }
     } else {
       // Don't cache POST/PATCH/DELETE
       res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");

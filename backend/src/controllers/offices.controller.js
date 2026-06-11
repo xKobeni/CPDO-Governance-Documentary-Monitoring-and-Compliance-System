@@ -70,7 +70,7 @@ export async function createOfficeHandler(req, res) {
  */
 export async function listOfficesHandler(req, res) {
   const offices = await listOffices();
-  return res.json({ data: offices, total: offices.length });
+  return res.json({ offices, total: offices.length });
 }
 
 /**

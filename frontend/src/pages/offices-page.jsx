@@ -133,7 +133,7 @@ export default function OfficesPage() {
       const response = await getOffices();
       
       // Handle response format from backend
-      const officesData = response.data || response;
+      const officesData = response.offices || response;
       const formattedOffices = Array.isArray(officesData) ? officesData.map(office => ({
         ...office,
         isActive: office.is_active,

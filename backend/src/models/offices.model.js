@@ -132,9 +132,10 @@ export async function setOfficeActive(officeId, isActive) {
  * @returns {Promise<boolean>} True if deleted, false if not found
  */
 export async function deleteOffice(officeId) {
-  const { rowCount } = await pool.query(
-    `DELETE FROM offices WHERE id = $1`,
+  const { rows } = await pool.query(
+    `DELETE FROM offices WHERE id = $1
+     RETURNING id`,
     [officeId]
   );
-  return rowCount > 0;
+  return rows[0] || null;
 }

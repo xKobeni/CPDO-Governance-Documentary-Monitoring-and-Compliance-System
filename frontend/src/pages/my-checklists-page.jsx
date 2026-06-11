@@ -101,15 +101,26 @@ const STATUS_ICON = {
 
 /** Derive a UI status string from a submission object + dueDate */
 function deriveStatus(submission, dueDate) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const isPastDue = (date) => {
+    if (!date) return false;
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d < today;
+  };
+
   if (!submission) {
-    if (dueDate && new Date(dueDate) < new Date()) return "overdue";
+    if (isPastDue(dueDate)) return "overdue";
     return "no-uploaded";
   }
   const s = submission.status?.toUpperCase();
   if (s === "APPROVED") return "completed";
   if (s === "PENDING") return "in-progress";
-  if (s === "DENIED" || s === "REVISION_REQUESTED") return "not-approved";
-  return "in-progress";
+  // DENIED / REVISION_REQUESTED — still show overdue if past due
+  if (isPastDue(dueDate)) return "overdue";
+  return "not-approved";
 }
 
 /** Transform the API checklist response into the shape the UI expects */
@@ -200,10 +211,36 @@ function ReminderCell({ item }) {
     );
   }
 
-  const days = Number(item.reminderDaysBefore || 7);
+  const dueDate = new Date(item.due);
+  dueDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (Number.isNaN(dueDate.getTime())) {
+    return <span className="text-xs text-muted-foreground">Invalid due date</span>;
+  }
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysLeft = Math.floor((dueDate.getTime() - today.getTime()) / msPerDay);
+
+  if (daysLeft < 0) {
+    return (
+      <Badge variant="outline" className="text-xs bg-red-100 text-red-700 border-red-200">
+        {Math.abs(daysLeft)}d overdue
+      </Badge>
+    );
+  }
+  if (daysLeft === 0) {
+    return (
+      <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 border-amber-200">
+        Due today
+      </Badge>
+    );
+  }
+
   return (
-    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
-      {days}d before due
+    <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 border-amber-200">
+      {daysLeft}d left
     </Badge>
   );
 }
@@ -1481,8 +1518,8 @@ export default function MyChecklistsPage() {
   const visibleItems = filteredAreas.flatMap((a) => flattenLeaves(a.items));
   const totalItems = visibleItems.length;
   const completedItems = visibleItems.filter((i) => i.status === "completed").length;
+  const inProgressItems = visibleItems.filter((i) => i.status === "in-progress").length;
   const overdueItems = visibleItems.filter((i) => i.status === "overdue").length;
-  const noUploadedItems = visibleItems.filter((i) => i.status === "no-uploaded").length;
   const completionPct = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
   // Unfiltered leaf count — used for the progress bar and area filter dropdown availability
@@ -1549,12 +1586,12 @@ export default function MyChecklistsPage() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">No Upload</CardTitle>
-              <Upload className="h-4 w-4 text-amber-600" />
+              <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+              <Clock className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-amber-600">{noUploadedItems}</div>
-              <p className="text-xs text-muted-foreground">Need documents</p>
+              <div className="text-2xl font-bold text-blue-600">{inProgressItems}</div>
+              <p className="text-xs text-muted-foreground">Awaiting review</p>
             </CardContent>
           </Card>
           <Card className={overdueItems > 0 ? "border-red-200 bg-red-50/30" : ""}>
