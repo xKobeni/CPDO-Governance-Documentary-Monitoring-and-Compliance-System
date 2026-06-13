@@ -567,6 +567,10 @@ async function fetchMissingUploads({ year, officeId, governanceAreaId }) {
      FROM checklist_templates t
      JOIN governance_areas ga ON ga.id = t.governance_area_id
      JOIN checklist_items ci ON ci.template_id = t.id
+     JOIN office_governance_assignments oga
+       ON oga.governance_area_id = ga.id
+      AND oga.office_id = $2
+      AND oga.year = $1
      LEFT JOIN submissions s
        ON s.year = $1
       AND s.office_id = $2
@@ -1296,6 +1300,10 @@ async function buildDashboardOverviewDataset({ year, governanceAreaId, officeId,
       `SELECT COUNT(*)::int AS count
        FROM checklist_templates t
        JOIN checklist_items ci ON ci.template_id = t.id
+       JOIN office_governance_assignments oga
+         ON oga.governance_area_id = t.governance_area_id
+        AND oga.office_id = $2
+        AND oga.year = $1
        LEFT JOIN submissions s
          ON s.year = $1
         AND s.office_id = $2
