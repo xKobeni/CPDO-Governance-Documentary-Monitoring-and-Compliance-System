@@ -400,6 +400,7 @@ export default function ReportsPage() {
   const [uploadView, setUploadView] = useState('missing'); // 'missing' or 'completed'
   const [pdfExportRequest, setPdfExportRequest] = useState(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [exporting, setExporting] = useState(null); // 'compliance' | 'missing' | 'completed' | 'governance' | 'heatmap' | 'dashboard' | 'summary' | 'recent'
 
   // ── Queries ──────────────────────────────────────────────────────────────────
   const yearsQuery = useQuery({
@@ -408,12 +409,12 @@ export default function ReportsPage() {
     staleTime: 10 * 60 * 1000,
   });
 
-  // GET /offices is ADMIN-only — silently ignore 403 for STAFF/OFFICE users
+  // GET /offices — ADMIN and STAFF can list offices; OFFICE users are scoped by backend
   const officesQuery = useQuery({
     queryKey: ['offices'],
     queryFn: getOffices,
     staleTime: 5 * 60 * 1000,
-    enabled: user?.role === 'ADMIN',
+    enabled: user?.role !== 'OFFICE',
     retry: false,
   });
 
@@ -506,8 +507,7 @@ export default function ReportsPage() {
   }, [yearsQuery.data, currentYear]);
 
   const offices = useMemo(() => {
-    // officesQuery only runs for ADMIN — data is { data: [...], total: N }
-    const list = Array.isArray(officesQuery.data?.data) ? officesQuery.data.data : [];
+    const list = Array.isArray(officesQuery.data?.offices) ? officesQuery.data.offices : [];
     return list.filter((o) => o.is_active !== false);
   }, [officesQuery.data]);
 
@@ -642,45 +642,60 @@ export default function ReportsPage() {
 
   // ── CSV exports ───────────────────────────────────────────────────────────────
   const exportSummaryCSV = () => {
-    const officePart = selectedOfficeName || 'All Offices';
-    const ctx = buildContextHeader('Submission Status Report', year, officePart);
-    const header = 'Status,Count,Percentage\n';
-    const body = Object.entries(STATUS_CONFIG)
-      .map(([key, cfg]) => {
-        const count = statusMap[key] ?? 0;
-        const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
-        return `"${cfg.label}",${count},${pct}%`;
-      })
-      .join('\n');
-    const slug = selectedOfficeName ? toSlug(selectedOfficeName) : 'all-offices';
-    downloadCSV(`submission-status-${slug}-${year}.csv`, ctx + header + body);
+    setExporting('summary');
+    try {
+      const officePart = selectedOfficeName || 'All Offices';
+      const ctx = buildContextHeader('Submission Status Report', year, officePart);
+      const header = 'Status,Count,Percentage\n';
+      const body = Object.entries(STATUS_CONFIG)
+        .map(([key, cfg]) => {
+          const count = statusMap[key] ?? 0;
+          const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0.0';
+          return `"${cfg.label}",${count},${pct}%`;
+        })
+        .join('\n');
+      const slug = selectedOfficeName ? toSlug(selectedOfficeName) : 'all-offices';
+      downloadCSV(`submission-status-${slug}-${year}.csv`, ctx + header + body);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const exportRecentCSV = () => {
+    setExporting('recent');
+    try {
+      if (!recentSubmissions.length) return;
+      const ctx = buildContextHeader('Recent Submissions', year, selectedOfficeName || 'All Offices');
+      const header = 'Office,Governance Area,Item Code,Item Title,Status,Submitted At\n';
+      const body = recentSubmissions
+        .map((r) =>
+          `"${r.office_name}","${r.governance_code}","${r.item_code}","${r.item_title}","${r.status}","${new Date(r.submitted_at).toLocaleString('en-PH')}"`
+        )
+        .join('\n');
+      downloadCSV(`recent-submissions-${year}.csv`, ctx + header + body);
+    } finally {
+      setExporting(null);
+    }
   };
 
   const exportMissingCSV = () => {
-    if (!missingList.length) return;
-    const officePart = selectedOfficeName || 'office';
-    const ctx = buildContextHeader('Missing Uploads Report', year, officePart);
-    const header = 'Governance Area,Governance Code,Item Code,Item Title\n';
-    const body = missingList
-      .map((r) => `"${r.governance_name}","${r.governance_code}","${r.item_code}","${r.item_title}"`)
-      .join('\n');
-    downloadCSV(`missing-uploads-${toSlug(officePart)}-${year}.csv`, ctx + header + body);
-  };
-
-
-  const exportRecentCSV = () => {
-    if (!recentSubmissions.length) return;
-    const ctx = buildContextHeader('Recent Submissions', year, selectedOfficeName || 'All Offices');
-    const header = 'Office,Governance Area,Item Code,Item Title,Status,Submitted At\n';
-    const body = recentSubmissions
-      .map((r) =>
-        `"${r.office_name}","${r.governance_code}","${r.item_code}","${r.item_title}","${r.status}","${new Date(r.submitted_at).toLocaleString('en-PH')}"`
-      )
-      .join('\n');
-    downloadCSV(`recent-submissions-${year}.csv`, ctx + header + body);
+    setExporting('missing');
+    try {
+      if (!missingList.length) return;
+      const officePart = selectedOfficeName || 'office';
+      const ctx = buildContextHeader('Missing Uploads Report', year, officePart);
+      const header = 'Governance Area,Governance Code,Item Code,Item Title\n';
+      const body = missingList
+        .map((r) => `"${r.governance_name}","${r.governance_code}","${r.item_code}","${r.item_title}"`)
+        .join('\n');
+      downloadCSV(`missing-uploads-${toSlug(officePart)}-${year}.csv`, ctx + header + body);
+    } finally {
+      setExporting(null);
+    }
   };
 
   const exportCompliance = async (format) => {
+    setExporting('compliance');
     try {
       const blob = await downloadComplianceProgress(
         {
@@ -694,10 +709,13 @@ export default function ReportsPage() {
       toast.success(`Compliance report exported (${format.toUpperCase()})`);
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Failed to export compliance report.');
+    } finally {
+      setExporting(null);
     }
   };
 
   const exportMissing = async (format) => {
+    setExporting('missing');
     try {
       const blob = await downloadMissingUploads(
         {
@@ -711,6 +729,8 @@ export default function ReportsPage() {
       toast.success(`Missing uploads exported (${format.toUpperCase()})`);
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Failed to export missing uploads report.');
+    } finally {
+      setExporting(null);
     }
   };
 
@@ -719,6 +739,7 @@ export default function ReportsPage() {
       setPdfExportRequest({ kind: 'completed' });
       return;
     }
+    setExporting('completed');
     try {
       const blob = await downloadCompletedUploads(
         {
@@ -732,6 +753,8 @@ export default function ReportsPage() {
       toast.success(`Completed uploads exported (${format.toUpperCase()})`);
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Failed to export completed uploads report.');
+    } finally {
+      setExporting(null);
     }
   };
 
@@ -740,6 +763,7 @@ export default function ReportsPage() {
       setPdfExportRequest({ kind: 'area' });
       return;
     }
+    setExporting('governance');
     try {
       const blob = await downloadGovernanceByOffice(
         {
@@ -753,6 +777,8 @@ export default function ReportsPage() {
       toast.success(`Governance by area exported (${format.toUpperCase()})`);
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Failed to export governance by area.');
+    } finally {
+      setExporting(null);
     }
   };
 
@@ -761,18 +787,22 @@ export default function ReportsPage() {
       setPdfExportRequest({ kind: 'heatmap' });
       return;
     }
+    setExporting('heatmap');
     try {
       const blob = await downloadGovernanceHeatmap({ year }, format);
       downloadBlob(`governance-heatmap-${year}.${format}`, blob);
       toast.success(`Heatmap exported (${format.toUpperCase()})`);
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Failed to export heatmap.');
+    } finally {
+      setExporting(null);
     }
   };
 
   const confirmPdfExport = async () => {
     if (!pdfExportRequest) return;
 
+    setExporting('pdf');
     try {
       setIsGeneratingPdf(true);
       if (pdfExportRequest.kind === 'area') {
@@ -806,10 +836,12 @@ export default function ReportsPage() {
       toast.error(error?.message || 'Failed to generate PDF.');
     } finally {
       setIsGeneratingPdf(false);
+      setExporting(null);
     }
   };
 
   const exportDashboard = async (format) => {
+    setExporting('dashboard');
     try {
       const blob = await downloadDashboardOverview(
         {
@@ -823,6 +855,8 @@ export default function ReportsPage() {
       toast.success(`Dashboard report exported (${format.toUpperCase()})`);
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Failed to export dashboard report.');
+    } finally {
+      setExporting(null);
     }
   };
 
@@ -833,6 +867,7 @@ export default function ReportsPage() {
   const canExportOverview = !overviewQuery.isFetching && Boolean(overviewQuery.data);
   const canExportArea = !governanceQuery.isFetching && Array.isArray(governanceQuery.data?.data) && governanceQuery.data.data.length > 0;
   const canExportHeatmap = !heatmapQuery.isFetching && Array.isArray(heatmapQuery.data?.matrix) && heatmapQuery.data.matrix.length > 0;
+  const canExportSummary = !summaryQuery.isFetching && total > 0;
 
   // Determine if we have any report data at all for the current context
   const hasAnyData = Boolean(
@@ -903,13 +938,18 @@ export default function ReportsPage() {
                 variant="outline"
                 size="sm"
                 disabled={
+                  Boolean(exporting) ||
                   (activeTab === 'overview' && !canExportOverview) ||
                   (activeTab === 'status' && !canExportCompliance) ||
                   (activeTab === 'missing' && !canExportMissing)
                 }
               >
-                <Download className="h-4 w-4 mr-2" />
-                Download
+                {exporting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                {exporting ? 'Exporting...' : 'Download'}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
@@ -917,6 +957,7 @@ export default function ReportsPage() {
                 <>
                   <DropdownMenuLabel>Overview Exports</DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={exportSummaryCSV} disabled={!canExportSummary}>Summary (CSV)</DropdownMenuItem>
                   <DropdownMenuItem onClick={exportRecentCSV} disabled={!canExportRecent}>Recent Submissions (CSV)</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => exportDashboard('csv')}>Dashboard Summary (CSV)</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => exportDashboard('pdf')}>Dashboard Executive (PDF)</DropdownMenuItem>
@@ -957,6 +998,7 @@ export default function ReportsPage() {
                   <DropdownMenuLabel>By Area Exports</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => exportGovernance('csv')} disabled={!canExportArea}>By Area (CSV)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportGovernance('xlsx')} disabled={!canExportArea}>By Area (XLSX)</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => exportGovernance('pdf')} disabled={!canExportArea}>By Area (PDF)</DropdownMenuItem>
                 </>
               )}
@@ -1033,6 +1075,14 @@ export default function ReportsPage() {
                 </Card>
               ))}
             </div>
+          ) : overviewQuery.isError ? (
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
+              <span className="flex-1">{overviewQuery.error?.response?.data?.message || "Failed to load overview data."}</span>
+              <Button variant="outline" size="sm" className="h-8" onClick={() => overviewQuery.refetch()}>
+                Retry
+              </Button>
+            </div>
           ) : (
             (() => {
               const kpis = overviewQuery.data?.kpis || {};
@@ -1046,10 +1096,10 @@ export default function ReportsPage() {
               return (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" data-tour-id="reports-kpis">
                   <KpiCard label="Total" value={t.toLocaleString()} sub={`submissions in ${year}`} icon={FileText} color="text-foreground" bg="bg-muted" />
-                  <KpiCard label="Approved"      value={app.toLocaleString()} sub={t > 0 ? `${((app/t)*100).toFixed(1)}% of total` : '—'} icon={CheckCircle2} color="text-green-600"  bg="bg-green-100"  accentBar="bg-green-500"  pct={t > 0 ? (app/t)*100 : 0} />
+                  <KpiCard label="Approved"      value={app.toLocaleString()} sub={reviewed_ > 0 ? `${((app/reviewed_)*100).toFixed(1)}% approval` : t > 0 ? 'no reviews yet' : '—'} icon={CheckCircle2} color="text-green-600"  bg="bg-green-100"  accentBar="bg-green-500"  pct={t > 0 ? (app/t)*100 : 0} />
                   <KpiCard label="Pending"        value={pen.toLocaleString()} sub={t > 0 ? `${((pen/t)*100).toFixed(1)}% of total` : '—'} icon={Clock}        color="text-amber-600"  bg="bg-amber-100"  accentBar="bg-amber-400"  pct={t > 0 ? (pen/t)*100 : 0} />
-                  <KpiCard label="Needs Revision" value={rev.toLocaleString()} sub={t > 0 ? `${((rev/t)*100).toFixed(1)}% of total` : '—'} icon={RotateCcw}    color="text-orange-600" bg="bg-orange-100" accentBar="bg-orange-500" pct={t > 0 ? (rev/t)*100 : 0} />
-                  <KpiCard label="Denied"         value={den.toLocaleString()} sub={t > 0 ? `${((den/t)*100).toFixed(1)}% of total` : '—'} icon={XCircle}      color="text-red-600"    bg="bg-red-100"    accentBar="bg-red-500"    pct={t > 0 ? (den/t)*100 : 0} />
+                  <KpiCard label="Needs Revision" value={rev.toLocaleString()} sub={reviewed_ > 0 ? `${((rev/reviewed_)*100).toFixed(1)}% of reviewed` : t > 0 ? 'no reviews yet' : '—'} icon={RotateCcw}    color="text-orange-600" bg="bg-orange-100" accentBar="bg-orange-500" pct={t > 0 ? (rev/t)*100 : 0} />
+                  <KpiCard label="Denied"         value={den.toLocaleString()} sub={reviewed_ > 0 ? `${((den/reviewed_)*100).toFixed(1)}% of reviewed` : t > 0 ? 'no reviews yet' : '—'} icon={XCircle}      color="text-red-600"    bg="bg-red-100"    accentBar="bg-red-500"    pct={t > 0 ? (den/t)*100 : 0} />
                   <KpiCard
                     label="Approval Rate"
                     value={ar}
@@ -1233,6 +1283,14 @@ export default function ReportsPage() {
                 <div className="flex items-center justify-center py-10 text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin mr-3" /> Loading…
                 </div>
+              ) : deadlineQuery.isError ? (
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
+                  <span className="flex-1">{deadlineQuery.error?.response?.data?.message || "Failed to load deadline data."}</span>
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => deadlineQuery.refetch()}>
+                    Retry
+                  </Button>
+                </div>
               ) : (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1324,6 +1382,14 @@ export default function ReportsPage() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          ) : complianceQuery.isError ? (
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
+              <span className="flex-1">{complianceQuery.error?.response?.data?.message || "Failed to load compliance data."}</span>
+              <Button variant="outline" size="sm" className="h-8" onClick={() => complianceQuery.refetch()}>
+                Retry
+              </Button>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -1796,13 +1862,6 @@ export default function ReportsPage() {
                 </div>
               )}
 
-              {(isOfficeUser || selectedOfficeId) && governanceQuery.isFetching && (
-                <div className="flex items-center justify-center py-14 text-muted-foreground">
-                  <Loader2 className="h-6 w-6 animate-spin mr-3" />
-                  Loading governance area metrics…
-                </div>
-              )}
-
               {(isOfficeUser || selectedOfficeId) && !governanceQuery.isFetching && governanceQuery.data && Array.isArray(governanceQuery.data.data) && governanceQuery.data.data.length === 0 && (
                 <div className="py-10">
                   <EmptyState title="No created data yet" sub={`No governance area records for ${year}${selectedOfficeName ? ` — ${selectedOfficeName}` : ''}.`} />
@@ -1866,7 +1925,23 @@ export default function ReportsPage() {
                 </div>
               )}
 
-              {heatmapQuery.data && (
+              {heatmapQuery.isError && !heatmapQuery.isFetching && (
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
+                  <span className="flex-1">{heatmapQuery.error?.response?.data?.message || "Failed to load heatmap data."}</span>
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => heatmapQuery.refetch()}>
+                    Retry
+                  </Button>
+                </div>
+              )}
+
+              {heatmapQuery.data && !heatmapQuery.data.matrix?.length && (
+                <div className="py-10">
+                  <EmptyState title="No heatmap data" sub={`No governance data to display for ${year}.`} />
+                </div>
+              )}
+
+              {heatmapQuery.data?.matrix?.length > 0 && (
                 <div className="overflow-x-auto -mx-6">
                   <table className="w-full text-sm">
                     <thead>

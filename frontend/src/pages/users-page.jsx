@@ -130,10 +130,10 @@ export default function UsersPage() {
       
       // Handle pagination response format
       const usersData = usersResponse.data || usersResponse;
-      const officesData = officesResponse.data || officesResponse;
+      const officesList = officesResponse.offices || officesResponse.data || officesResponse;
       
       setUsers(Array.isArray(usersData) ? usersData : []);
-      setOffices(Array.isArray(officesData) ? officesData : []);
+      setOffices(Array.isArray(officesList) ? officesList : []);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Failed to load users and offices');

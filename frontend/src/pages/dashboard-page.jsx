@@ -1466,6 +1466,7 @@ function StaffDashboard({ user }) {
 
   const {
     data: summaryData, isFetching: summaryFetching,
+    error: summaryError,
     refetch: refetchSummary, dataUpdatedAt: summaryUpdatedAt,
   } = useQuery({
     queryKey: ['report-summary-staff', year],
@@ -1474,8 +1475,8 @@ function StaffDashboard({ user }) {
   });
 
   const { data: submissionsData, isFetching: submissionsFetching, refetch: refetchSubmissions } = useQuery({
-    queryKey: ['submissions-staff-recent'],
-    queryFn: () => listSubmissions({ limit: 10, page: 1 }),
+    queryKey: ['submissions-staff-recent', year],
+    queryFn: () => listSubmissions({ limit: 10, page: 1, year }),
     staleTime: 2 * 60 * 1000,
   });
 
@@ -1601,6 +1602,14 @@ function StaffDashboard({ user }) {
             <div className="flex items-center justify-center py-16 text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin mr-3" />Loading…
             </div>
+          ) : summaryError ? (
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
+              <span className="flex-1">{summaryError?.response?.data?.message || "Failed to load dashboard data."}</span>
+              <Button variant="outline" size="sm" className="h-8" onClick={() => refetchSummary()}>
+                Retry
+              </Button>
+            </div>
           ) : (
             <>
               {/* KPI Strip */}
@@ -1633,7 +1642,7 @@ function StaffDashboard({ user }) {
                   <CardContent>
                     <div className="text-2xl font-bold">{statusMap.APPROVED}</div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {total > 0 ? `${Math.round((statusMap.APPROVED / total) * 100)}% of total` : 'no submissions'}
+                      {reviewed > 0 ? `${Math.round((statusMap.APPROVED / reviewed) * 100)}% approval` : total > 0 ? 'no reviews yet' : 'no submissions'}
                     </p>
                   </CardContent>
                 </Card>
